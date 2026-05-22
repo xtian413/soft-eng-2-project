@@ -1,0 +1,286 @@
+<!DOCTYPE html><html lang="en"><svg class="inline-defs-container" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"></svg><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport">
+<title>Profile - Athletic Zen</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                            "tertiary-fixed-dim": "#f7be1d",
+                            "surface-container": "#e5eeff",
+                            "on-secondary-fixed-variant": "#783200",
+                            "tertiary-container": "#c39400",
+                            "on-error-container": "#93000a",
+                            "secondary-fixed": "#ffdbca",
+                            "secondary-fixed-dim": "#ffb690",
+                            "on-surface": "#0b1c30",
+                            "inverse-surface": "#213145",
+                            "on-secondary": "#ffffff",
+                            "on-primary": "#ffffff",
+                            "primary-fixed": "#c9e6ff",
+                            "surface-bright": "#f8f9ff",
+                            "on-error": "#ffffff",
+                            "inverse-on-surface": "#eaf1ff",
+                            "surface-container-low": "#eff4ff",
+                            "secondary": "#9d4300",
+                            "on-tertiary-fixed-variant": "#5a4300",
+                            "on-surface-variant": "#3e4850",
+                            "surface-container-highest": "#d3e4fe",
+                            "surface-tint": "#006591",
+                            "secondary-container": "#fd761a",
+                            "tertiary": "#785a00",
+                            "on-primary-container": "#003751",
+                            "tertiary-fixed": "#ffdf9a",
+                            "on-secondary-container": "#5c2400",
+                            "on-tertiary-container": "#423000",
+                            "surface-dim": "#cbdbf5",
+                            "on-primary-fixed-variant": "#004c6e",
+                            "outline-variant": "#bec8d2",
+                            "inverse-primary": "#89ceff",
+                            "on-tertiary": "#ffffff",
+                            "background": "#f8f9ff",
+                            "primary-container": "#0ea5e9",
+                            "error-container": "#ffdad6",
+                            "primary-fixed-dim": "#89ceff",
+                            "on-secondary-fixed": "#341100",
+                            "surface-container-lowest": "#ffffff",
+                            "on-primary-fixed": "#001e2f",
+                            "on-background": "#0b1c30",
+                            "outline": "#6e7881",
+                            "surface-variant": "#d3e4fe",
+                            "error": "#ba1a1a",
+                            "on-tertiary-fixed": "#251a00",
+                            "surface": "#f8f9ff",
+                            "primary": "#006591",
+                            "surface-container-high": "#dce9ff"
+                    },
+                    "borderRadius": {
+                            "DEFAULT": "0.25rem",
+                            "lg": "0.5rem",
+                            "xl": "0.75rem",
+                            "full": "9999px"
+                    },
+                    "spacing": {
+                            "lg": "24px",
+                            "xs": "4px",
+                            "gutter": "16px",
+                            "base": "4px",
+                            "sm": "8px",
+                            "md": "16px",
+                            "xl": "32px",
+                            "container-padding": "20px"
+                    },
+                    "fontFamily": {
+                            "headline-lg": ["Inter"],
+                            "label-md": ["Inter"],
+                            "headline-lg-mobile": ["Inter"],
+                            "body-lg": ["Inter"],
+                            "body-md": ["Inter"],
+                            "mono-stats": ["Inter"],
+                            "headline-md": ["Inter"],
+                            "label-sm": ["Inter"],
+                            "display-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                            "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                            "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                            "headline-lg-mobile": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                            "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                            "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                            "mono-stats": ["20px", {"lineHeight": "24px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                            "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                            "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                            "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.04em", "fontWeight": "800"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        /* Custom Utilities for Safe Areas and specific component styling if needed */
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+        .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>@keyframes pulse-shadow {0% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(14, 165, 233, 0); } 100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); } } .animate-pulse-shadow { animation: pulse-shadow 2s infinite; } .nav-dot-transition { transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); }</style></head>
+<body class="bg-background text-on-background font-body-md antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar Shared Component -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-gutter py-md h-16 bg-surface-container-lowest shadow-[0px_10px_25px_rgba(0,0,0,0.04)] pt-safe">
+<div class="flex items-center">
+<!-- Leading Avatar -->
+<div class="w-8 h-8 rounded-full overflow-hidden bg-surface-container mr-sm flex-shrink-0 border border-outline-variant/30">
+<img alt="User Profile Photo" class="w-full h-full object-cover" data-alt="A close up, vibrant professional headshot of an athletic young woman with short dark hair, smiling confidently. The lighting is high-key and bright, characteristic of a clean, modern iOS health application profile photo. The background is a soft, out-of-focus light gray to ensure the subject stands out crisply." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDONEpFd2O9jVRHuHBbTvz7I5ocogGAwql0ri524ZlELvJK0LlRI80KzZJokRHruaT5T6tG4fGs8xSX_QmrNDtAVFqxQ0mPwp3Goa5uwixD1omuqhjC1gROva7TbqqiNgWmndsnAG-myio0wBGK7XqasOw6aEIwql5HnStAQU2AOwNsia2YsRMKap8nFmrhrvhLG1YbPKkSzqXQl6qJut9EQV-rSIRnOVeKhNpGTvPPmOUXmqMnwCq_6Q-Zp1S0UNbiSRi0wczS83uQ">
+</div>
+</div>
+<!-- Headline -->
+<h1 class="font-headline-md-mobile text-headline-md-mobile font-bold text-on-surface">Today</h1>
+<!-- Trailing Icon -->
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors active:scale-95 duration-200">
+<span class="material-symbols-outlined text-outline">notifications</span>
+</button>
+</header>
+<!-- Main Scrollable Canvas -->
+<main class="pt-[88px] pb-[100px] px-container-padding space-y-xl max-w-2xl mx-auto min-h-screen">
+<!-- Profile Header Section -->
+<section class="flex items-center space-x-md">
+<div class="relative w-20 h-20 rounded-full overflow-hidden shadow-[0px_10px_25px_rgba(0,0,0,0.08)] border-2 border-surface-container-lowest">
+<img alt="Large Profile Photo" class="w-full h-full object-cover" data-alt="A vivid, high-resolution portrait of an athletic woman looking confidently toward the camera. The lighting is studio-quality, casting soft, flattering highlights on her face against a pure white background. The aesthetic feels highly professional, energetic, and perfectly suited for a premium fitness tracker application." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCsdX6YOtjRLiOpo0ulf0YC6uO7WNcvCrtfdbYjn6OZkwvfvQfZHMFfUTLvv8YetueH7IxGCxjfYG-lvxjVNVNq7PpuuP1xWEzb6fufVwBSiUlNjS0DkAfRxip8pNEM0cs1Xvh9qhAE-b9CrIXKGau-DN_smTwJRPyZL0Pqgf8eXSW3_ZX-4Ppz5sl4eXwm1KIkRjnfTnMMsPjMb77FewqNDdlATqw3f5tGYfpW6HriTXt5JTdifTdZwEtyQZoRmpZIvAiNZpr-8QqA">
+</div>
+<div class="flex-1">
+<div class="flex items-center space-x-sm mb-xs">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Elena R.</h2>
+<span class="bg-tertiary-fixed-dim text-on-tertiary-fixed-variant font-label-sm text-label-sm px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm">Pro</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant flex items-center">
+<span class="w-2 h-2 rounded-full bg-secondary-container mr-2"></span>
+                    Bulking Phase
+                </p>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-lowest shadow-[0px_10px_25px_rgba(0,0,0,0.04)] hover:bg-surface-container transition-colors active:scale-95">
+<span class="material-symbols-outlined text-on-surface-variant">settings</span>
+</button>
+</section>
+<!-- Stats Bento Grid -->
+<section class="grid grid-cols-2 gap-md">
+<!-- Volume Card -->
+<div class="bg-surface-container-lowest rounded-xl p-md shadow-[0px_10px_25px_rgba(0,0,0,0.04)] flex flex-col justify-between border border-surface-container/50">
+<div class="flex items-center justify-between mb-lg">
+<div class="w-8 h-8 rounded-full bg-primary-container/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[20px]">fitness_center</span>
+</div>
+</div>
+<div>
+<p class="font-display-lg text-display-lg text-on-surface mb-xs">84<span class="text-headline-md text-outline-variant">k</span></p>
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Total Volume</p>
+</div>
+</div>
+<!-- Consistency Card -->
+<div class="bg-surface-container-lowest rounded-xl p-md shadow-[0px_10px_25px_rgba(0,0,0,0.04)] flex flex-col justify-between border border-surface-container/50 relative overflow-hidden">
+<!-- AI Sparkle decorative background element -->
+<div class="absolute -top-6 -right-6 w-24 h-24 bg-tertiary-fixed-dim/10 rounded-full blur-2xl pointer-events-none"></div>
+<div class="flex items-center justify-between mb-lg relative z-10">
+<div class="w-8 h-8 rounded-full bg-secondary/10 flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary text-[20px]">local_fire_department</span>
+</div>
+</div>
+<div class="relative z-10">
+<p class="font-display-lg text-display-lg text-on-surface mb-xs">12</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Week Streak</p>
+</div>
+</div>
+</section>
+<!-- Weight Progress Chart -->
+<section class="bg-surface-container-lowest rounded-xl p-md shadow-[0px_10px_25px_rgba(0,0,0,0.04)] border border-surface-container/50">
+<div class="flex justify-between items-end mb-lg">
+<div>
+<h3 class="font-headline-md-mobile text-headline-md-mobile text-on-surface">Weight Trend</h3>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1">Past 30 Days</p>
+</div>
+<div class="text-right">
+<p class="font-mono-stats text-mono-stats text-primary">68.5 kg</p>
+<p class="font-label-sm text-label-sm text-secondary flex items-center justify-end">
+<span class="material-symbols-outlined text-[14px] mr-1">trending_up</span>
+                        +1.2 kg
+                    </p>
+</div>
+</div>
+<!-- SVG Chart Area -->
+<div class="relative h-40 w-full overflow-visible rounded-lg flex items-end pt-4">
+<svg class="w-full h-full absolute bottom-0 left-0 overflow-visible" preserveAspectRatio="none" viewBox="0 0 100 50">
+<defs>
+<linearGradient id="chartGradient" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.25"></stop> <!-- primary-container mapped approx -->
+<stop offset="100%" stop-color="#0ea5e9" stop-opacity="0"></stop>
+</linearGradient>
+</defs>
+<!-- Fill -->
+<path d="M0,45 Q15,40 30,35 T60,25 T80,15 T100,5 L100,50 L0,50 Z" fill="url(#chartGradient)"></path>
+<!-- Line -->
+<path d="M0,45 Q15,40 30,35 T60,25 T80,15 T100,5" fill="none" stroke="#0ea5e9" stroke-linecap="round" stroke-width="2.5"></path>
+<!-- Data Points -->
+<circle cx="30" cy="35" fill="#ffffff" r="2.5" stroke="#0ea5e9" stroke-width="1.5"></circle>
+<circle cx="60" cy="25" fill="#ffffff" r="2.5" stroke="#0ea5e9" stroke-width="1.5"></circle>
+<circle cx="80" cy="15" fill="#ffffff" r="2.5" stroke="#0ea5e9" stroke-width="1.5"></circle>
+<!-- Current Point with Glow -->
+<g transform="translate(100, 5)">
+<circle cx="0" cy="0" fill="#0ea5e9" opacity="0.2" r="8"></circle>
+<circle cx="0" cy="0" fill="#ffffff" r="3" stroke="#0ea5e9" stroke-width="2"></circle>
+</g>
+</svg>
+<!-- Grid Lines -->
+<div class="absolute bottom-0 w-full border-b border-dashed border-outline-variant/30"></div>
+<div class="absolute bottom-1/2 w-full border-b border-dashed border-outline-variant/30"></div>
+<div class="absolute top-4 w-full border-b border-dashed border-outline-variant/30"></div>
+</div>
+<!-- X-Axis Labels -->
+<div class="flex justify-between mt-sm font-label-sm text-label-sm text-outline px-1">
+<span>Oct 1</span>
+<span>Oct 15</span>
+<span>Oct 31</span>
+</div>
+</section>
+<!-- Training Calendar Section -->
+<section>
+<div class="flex justify-between items-center mb-md">
+<h3 class="font-headline-md-mobile text-headline-md-mobile text-on-surface">Training Calendar</h3>
+<button class="font-label-md text-label-md text-primary hover:text-primary-fixed-dim transition-colors">View All</button>
+</div>
+<div class="flex overflow-x-auto space-x-sm pb-sm -mx-container-padding px-container-padding snap-x [&amp;::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+<!-- Past Card 1 -->
+<div class="flex-shrink-0 w-[76px] bg-surface-container-lowest rounded-xl p-3 shadow-[0px_10px_25px_rgba(0,0,0,0.04)] border border-surface-container/50 flex flex-col items-center snap-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Sun</span>
+<span class="font-headline-md text-headline-md text-on-surface mt-1 mb-2">25</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-outline bg-outline-variant/30 px-2 py-0.5 rounded-full">Rest</span>
+</div>
+<!-- Past Card 2 -->
+<div class="flex-shrink-0 w-[76px] bg-surface-container-lowest rounded-xl p-3 shadow-[0px_10px_25px_rgba(0,0,0,0.04)] border border-surface-container/50 flex flex-col items-center snap-center">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Mon</span>
+<span class="font-headline-md text-headline-md text-on-surface mt-1 mb-2">26</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-secondary bg-secondary-fixed/50 px-2 py-0.5 rounded-full">Push</span>
+</div>
+<!-- Today Card -->
+<div class="relative flex-shrink-0 w-[76px] bg-primary-container/10 rounded-xl p-3 shadow-[0px_10px_25px_rgba(0,0,0,0.04)] border-2 border-primary flex flex-col items-center snap-center">
+<div class="absolute top-2 right-2 w-1.5 h-1.5 bg-primary rounded-full"></div>
+<span class="font-label-sm text-label-sm text-primary uppercase">Tue</span>
+<span class="font-headline-md text-headline-md text-primary mt-1 mb-2">27</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary-fixed/50 px-2 py-0.5 rounded-full">Legs</span>
+</div>
+<!-- Future Card 1 -->
+<div class="flex-shrink-0 w-[76px] bg-surface-container-lowest rounded-xl p-3 shadow-[0px_10px_25px_rgba(0,0,0,0.04)] border border-surface-container/50 flex flex-col items-center snap-center opacity-80">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Wed</span>
+<span class="font-headline-md text-headline-md text-on-surface mt-1 mb-2">28</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-tertiary bg-tertiary-fixed/50 px-2 py-0.5 rounded-full">Pull</span>
+</div>
+<!-- Future Card 2 -->
+<div class="flex-shrink-0 w-[76px] bg-surface-container-lowest rounded-xl p-3 shadow-[0px_10px_25px_rgba(0,0,0,0.04)] border border-surface-container/50 flex flex-col items-center snap-center opacity-80">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Thu</span>
+<span class="font-headline-md text-headline-md text-on-surface mt-1 mb-2">29</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-outline bg-outline-variant/30 px-2 py-0.5 rounded-full">Rest</span>
+</div>
+<!-- Future Card 3 -->
+<div class="flex-shrink-0 w-[76px] bg-surface-container-lowest rounded-xl p-3 shadow-[0px_10px_25px_rgba(0,0,0,0.04)] border border-surface-container/50 flex flex-col items-center snap-center opacity-80">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Fri</span>
+<span class="font-headline-md text-headline-md text-on-surface mt-1 mb-2">30</span>
+<span class="text-[10px] font-bold uppercase tracking-wider text-secondary bg-secondary-fixed/50 px-2 py-0.5 rounded-full">Push</span>
+</div>
+</div>
+</section>
+</main><nav class="md:hidden fixed bottom-6 left-4 right-4 z-50 flex justify-around items-center h-16 bg-white/80 backdrop-blur-[16px] shadow-[0px_8px_32px_rgba(0,0,0,0.08)] rounded-full"><div class="absolute bottom-2 w-1.5 h-1.5 rounded-full bg-[#0EA5E9] left-[90%] -translate-x-1/2 nav-dot-transition"></div><button class="w-12 h-12 flex flex-col items-center justify-center text-[#64748B] hover:text-[#0EA5E9] active:scale-90 transition-all duration-300 z-10"><span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 0;">dashboard</span><span class="font-bold text-[10px] mt-0.5">Home</span></button><button class="w-12 h-12 flex flex-col items-center justify-center text-[#64748B] hover:text-[#0EA5E9] active:scale-90 transition-all duration-300 z-10"><span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 0;">restaurant</span><span class="font-bold text-[10px] mt-0.5">Food</span></button><button class="relative -top-3 flex flex-col items-center justify-center text-white bg-gradient-to-br from-[#0EA5E9] to-[#0284C7] rounded-full w-14 h-14 active:scale-90 transition-all duration-300 animate-pulse-shadow z-20"><span class="material-symbols-outlined text-[28px]" style="font-variation-settings: 'FILL' 1;">auto_awesome</span></button><button class="w-12 h-12 flex flex-col items-center justify-center text-[#64748B] hover:text-[#0EA5E9] active:scale-90 transition-all duration-300 z-10"><span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 0;">fitness_center</span><span class="font-bold text-[10px] mt-0.5">Lift</span></button><button class="w-12 h-12 flex flex-col items-center justify-center text-[#0EA5E9] active:scale-90 transition-all duration-300 z-10"><span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">person</span><span class="font-bold text-[10px] mt-0.5">Profile</span></button></nav>nav&gt;
+<!-- BottomNavBar Shared Component -->
+</body></html>

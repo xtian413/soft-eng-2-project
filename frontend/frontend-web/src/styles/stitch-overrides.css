@@ -1,0 +1,43 @@
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+}
+
+.circular-progress {
+  transform: rotate(-90deg);
+}
+
+.ai-glow {
+  box-shadow: 0 0 40px rgba(14, 165, 233, 0.15);
+}
+
+.ai-gradient-bg {
+  background: linear-gradient(135deg, #f8fafc 0%, rgba(139, 92, 246, 0.05) 100%);
+}
+
+@keyframes pulse-shadow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 15px rgba(14, 165, 233, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(14, 165, 233, 0);
+  }
+}
+
+.animate-pulse-shadow {
+  animation: pulse-shadow 2s infinite;
+}
+
+.nav-dot-transition {
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stitch-screen {
+  min-height: 100vh;
+}
+
+.stitch-screen__body {
+  min-height: 100vh;
+}

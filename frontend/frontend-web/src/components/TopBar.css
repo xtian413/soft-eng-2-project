@@ -1,0 +1,28 @@
+.top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.top-bar h1 {
+  margin: 0;
+  font-size: 32px;
+  color: var(--text-primary);
+}
+
+.top-bar__eyebrow {
+  margin: 0 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.top-bar__subtitle {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  max-width: 420px;
+}

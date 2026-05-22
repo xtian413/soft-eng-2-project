@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --color-background: #f8f9ff;
+  --color-surface: #ffffff;
+  --color-surface-alt: #e5eeff;
+  --color-primary: #0ea5e9;
+  --color-primary-ink: #003751;
+  --color-secondary: #f97316;
+  --color-tertiary: #eab308;
+  --color-ai: #8b5cf6;
+  --text-primary: #0b1c30;
+  --text-secondary: #3e4850;
+  --text-muted: #64748b;
+  --outline: #bec8d2;
+  --shadow-card: 0px 10px 25px rgba(0, 0, 0, 0.04);
+  --shadow-elevated: 0px 20px 40px rgba(0, 0, 0, 0.08);
+  --shadow-ai: 0px 20px 40px rgba(14, 165, 233, 0.1);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 24px;
+  --radius-pill: 9999px;
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}

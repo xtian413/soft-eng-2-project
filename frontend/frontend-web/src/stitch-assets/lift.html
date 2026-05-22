@@ -1,0 +1,366 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport">
+<title>Active Workout - Lift</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed-dim": "#f7be1d",
+                        "surface-container": "#e5eeff",
+                        "on-secondary-fixed-variant": "#783200",
+                        "tertiary-container": "#c39400",
+                        "on-error-container": "#93000a",
+                        "secondary-fixed": "#ffdbca",
+                        "secondary-fixed-dim": "#ffb690",
+                        "on-surface": "#0b1c30",
+                        "inverse-surface": "#213145",
+                        "on-secondary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "primary-fixed": "#c9e6ff",
+                        "surface-bright": "#f8f9ff",
+                        "on-error": "#ffffff",
+                        "inverse-on-surface": "#eaf1ff",
+                        "surface-container-low": "#eff4ff",
+                        "secondary": "#9d4300",
+                        "on-tertiary-fixed-variant": "#5a4300",
+                        "on-surface-variant": "#3e4850",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface-tint": "#006591",
+                        "secondary-container": "#fd761a",
+                        "tertiary": "#785a00",
+                        "on-primary-container": "#003751",
+                        "tertiary-fixed": "#ffdf9a",
+                        "on-secondary-container": "#5c2400",
+                        "on-tertiary-container": "#423000",
+                        "surface-dim": "#cbdbf5",
+                        "on-primary-fixed-variant": "#004c6e",
+                        "outline-variant": "#bec8d2",
+                        "inverse-primary": "#89ceff",
+                        "on-tertiary": "#ffffff",
+                        "background": "#f8f9ff",
+                        "primary-container": "#0ea5e9",
+                        "error-container": "#ffdad6",
+                        "primary-fixed-dim": "#89ceff",
+                        "on-secondary-fixed": "#341100",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-fixed": "#001e2f",
+                        "on-background": "#0b1c30",
+                        "outline": "#6e7881",
+                        "surface-variant": "#d3e4fe",
+                        "error": "#ba1a1a",
+                        "on-tertiary-fixed": "#251a00",
+                        "surface": "#f8f9ff",
+                        "primary": "#006591",
+                        "surface-container-high": "#dce9ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "lg": "24px",
+                        "xs": "4px",
+                        "gutter": "16px",
+                        "base": "4px",
+                        "sm": "8px",
+                        "md": "16px",
+                        "xl": "32px",
+                        "container-padding": "20px",
+                        "safe-bottom": "env(safe-area-inset-bottom)"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "mono-stats": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "display-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "mono-stats": ["20px", {"lineHeight": "24px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.04em", "fontWeight": "800"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .pb-safe { padding-bottom: calc(env(safe-area-inset-bottom) + 80px); }
+        .pt-safe { padding-top: env(safe-area-inset-top); }
+        
+        /* Ambient Shadow Layering */
+        .card-level-2 { box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04); }
+        .modal-level-3 { box-shadow: 0px 20px 40px rgba(0, 0, 0, 0.08); }
+        .ai-glow { box-shadow: 0px 8px 24px rgba(14, 165, 233, 0.15); }
+        
+        /* AI Gradient */
+        .bg-ai-gradient { background: linear-gradient(135deg, #F8FAFC 0%, rgba(139, 92, 246, 0.08) 100%); }
+        
+        /* Input Reset & Focus */
+        .stat-input {
+            appearance: textfield;
+            border: 2px solid transparent;
+            transition: border-color 0.2s ease;
+        }
+        .stat-input::-webkit-outer-spin-button,
+        .stat-input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .stat-input:focus {
+            outline: none;
+            border-color: #0EA5E9;
+            background-color: #ffffff;
+        }
+
+        /* Checkbox Customization */
+        .set-checkbox {
+            appearance: none;
+            width: 28px;
+            height: 28px;
+            border: 2px solid #bec8d2;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: white;
+        }
+        .set-checkbox:checked {
+            background-color: #0EA5E9;
+            border-color: #0EA5E9;
+        }
+        .set-checkbox:checked::after {
+            content: "";
+            width: 6px;
+            height: 12px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+            margin-bottom: 2px;
+        }
+        .set-completed { background-color: #eff4ff; opacity: 0.7; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+@keyframes pulse-shadow {
+    0% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.4); }
+    70% { box-shadow: 0 0 0 15px rgba(14, 165, 233, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
+}
+.animate-pulse-shadow {
+    animation: pulse-shadow 2s infinite;
+}
+.nav-dot-transition {
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+</style></head>
+<body class="bg-background text-on-background antialiased min-h-screen pt-safe pb-safe selection:bg-primary-container selection:text-white">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-gutter py-md h-16 bg-surface-container-lowest shadow-[0px_10px_25px_rgba(0,0,0,0.04)]">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-primary-container/20 flex items-center justify-center text-primary font-bold font-label-md text-label-md overflow-hidden">
+<img alt="User Profile Photo" class="w-full h-full object-cover" data-alt="A macro photography shot of a pristine, circular user avatar containing a stylized silhouette icon. The avatar sits against a bright white background, illuminated by soft, diffused studio lighting that creates a gentle drop shadow. The overall aesthetic is ultra-modern, clean, and optimistic, adhering to a high-end spatial UI design style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBB6_kCa2hK7n-nO3e2j4MxNoGmvyJRk8Y13ZhLhWG5YSwKCb2iZK-f9mfdWYv7RKWLkPFIp0AZHdcubuw5RIsJezpw0w-R7CE8wkn_FxRE1PMSdS88ylQBiIRkZRaALkvcVozJPX_TRkdVFcpuwgJ3ngnybk07oLFai1YN1XvAI9on9CNYD6KNAry81UjGm4sAHHtyEBWN4MK_zQxoh9rg4Q0pBjn2FT0hRh0ga3sCdMuV0hmOOEB4QlFDSjJTmbmSKW8E-IB7NSW6">
+</div>
+</div>
+<h1 class="font-headline-md-mobile text-headline-md-mobile font-bold text-on-surface">Leg Day</h1>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors text-outline active:scale-95 transition-transform duration-200">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+</button>
+</header>
+<!-- Main Canvas -->
+<main class="px-container-padding pt-24 max-w-lg mx-auto flex flex-col gap-xl">
+<!-- Session Timer Widget -->
+<section class="flex flex-col items-center justify-center py-sm">
+<span class="font-label-md text-label-md text-outline uppercase tracking-wider mb-xs">Session Time</span>
+<div class="font-display-lg text-display-lg text-primary tabular-nums tracking-tight">00:42:15</div>
+</section>
+<!-- Active Exercise Canvas -->
+<section class="bg-surface-container-lowest rounded-[20px] p-gutter card-level-2 flex flex-col gap-md">
+<!-- Exercise Header -->
+<div class="flex justify-between items-start">
+<div>
+<span class="inline-block bg-surface-container text-primary font-label-sm text-label-sm px-3 py-1 rounded-full mb-2">Lower Body</span>
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile text-on-surface">Back Squat</h2>
+</div>
+<div class="flex bg-surface-container-low rounded-lg p-1">
+<button class="font-label-sm text-label-sm px-3 py-1 rounded bg-surface-container-lowest shadow-sm text-on-surface">lbs</button>
+<button class="font-label-sm text-label-sm px-3 py-1 rounded text-outline-variant hover:text-on-surface transition-colors">kg</button>
+</div>
+</div>
+<!-- Current Set Inputs (High Target Areas) -->
+<div class="grid grid-cols-3 gap-sm mt-sm">
+<!-- Weight -->
+<div class="flex flex-col items-center bg-surface-bright rounded-xl p-3">
+<label class="font-label-sm text-label-sm text-outline mb-1">Weight</label>
+<input class="stat-input w-full bg-transparent text-center font-mono-stats text-mono-stats text-on-surface py-2 rounded-lg" inputmode="decimal" placeholder="0" type="number" value="225">
+</div>
+<!-- Reps -->
+<div class="flex flex-col items-center bg-surface-bright rounded-xl p-3">
+<label class="font-label-sm text-label-sm text-outline mb-1">Reps</label>
+<input class="stat-input w-full bg-transparent text-center font-mono-stats text-mono-stats text-on-surface py-2 rounded-lg" inputmode="numeric" placeholder="0" type="number" value="8">
+</div>
+<!-- RPE/RIR -->
+<div class="flex flex-col items-center bg-surface-bright rounded-xl p-3">
+<label class="font-label-sm text-label-sm text-outline mb-1">RIR</label>
+<input class="stat-input w-full bg-transparent text-center font-mono-stats text-mono-stats text-on-surface py-2 rounded-lg" inputmode="numeric" placeholder="0" type="number" value="1">
+</div>
+</div>
+<!-- Log Button -->
+<button class="w-full bg-primary-container text-white font-label-md text-label-md py-4 rounded-xl shadow-md hover:bg-primary transition-colors active:scale-[0.98]" id="logSetBtn">
+                Log Set
+            </button>
+<!-- AI Contextual Whisper -->
+<div class="bg-ai-gradient border border-[#8B5CF6]/10 rounded-xl p-md flex gap-sm items-start ai-glow mt-xs">
+<span class="material-symbols-outlined text-[#8B5CF6] mt-1" style="font-variation-settings: 'FILL' 1;">temp_preferences_custom</span>
+<div>
+<h4 class="font-label-md text-label-md text-on-surface mb-1">Insight</h4>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm">Your RIR is hitting 0 earlier than last week. Consider dropping the weight by 5 lbs for the next set.</p>
+</div>
+</div>
+<hr class="border-surface-container my-sm">
+<!-- Set History List -->
+<div class="flex flex-col gap-2">
+<!-- Header Row -->
+<div class="grid grid-cols-12 gap-2 px-2 font-label-sm text-label-sm text-outline mb-1">
+<div class="col-span-2 text-center">Set</div>
+<div class="col-span-3 text-center">Previous</div>
+<div class="col-span-5 text-center">Lbs x Reps</div>
+<div class="col-span-2 text-center"><span class="material-symbols-outlined text-[16px]">check</span></div>
+</div>
+<!-- Set 1 (Completed) -->
+<div class="grid grid-cols-12 gap-2 items-center bg-surface-container-low rounded-lg p-2 set-completed">
+<div class="col-span-2 text-center font-label-md text-label-md text-on-surface">1</div>
+<div class="col-span-3 text-center font-body-md text-body-md text-outline text-sm">225 x 10</div>
+<div class="col-span-5 text-center font-mono-stats text-mono-stats text-on-surface text-[16px]">225 x 10</div>
+<div class="col-span-2 flex justify-center"><input checked="" class="set-checkbox" disabled="" type="checkbox"></div>
+</div>
+<!-- Set 2 (Completed) -->
+<div class="grid grid-cols-12 gap-2 items-center bg-surface-container-low rounded-lg p-2 set-completed">
+<div class="col-span-2 text-center font-label-md text-label-md text-on-surface">2</div>
+<div class="col-span-3 text-center font-body-md text-body-md text-outline text-sm">225 x 9</div>
+<div class="col-span-5 text-center font-mono-stats text-mono-stats text-on-surface text-[16px]">225 x 9</div>
+<div class="col-span-2 flex justify-center"><input checked="" class="set-checkbox" disabled="" type="checkbox"></div>
+</div>
+<!-- Set 3 (Active/Just Logged scenario) -->
+<div class="grid grid-cols-12 gap-2 items-center bg-surface-container-lowest border border-primary-container/30 rounded-lg p-2 shadow-sm">
+<div class="col-span-2 text-center font-label-md text-label-md text-on-surface">3</div>
+<div class="col-span-3 text-center font-body-md text-body-md text-outline text-sm">225 x 8</div>
+<div class="col-span-5 text-center font-mono-stats text-mono-stats text-on-surface text-[16px]">225 x 8</div>
+<div class="col-span-2 flex justify-center"><input checked="" class="set-checkbox" type="checkbox"></div>
+</div>
+<!-- Set 4 (Upcoming) -->
+<div class="grid grid-cols-12 gap-2 items-center rounded-lg p-2 hover:bg-surface-bright transition-colors cursor-pointer">
+<div class="col-span-2 text-center font-label-md text-label-md text-outline">4</div>
+<div class="col-span-3 text-center font-body-md text-body-md text-outline text-sm">225 x 8</div>
+<div class="col-span-5 text-center font-mono-stats text-mono-stats text-outline-variant text-[16px]">-</div>
+<div class="col-span-2 flex justify-center"><input class="set-checkbox" type="checkbox"></div>
+</div>
+</div>
+<button class="text-primary font-label-md text-label-md py-2 mt-2 flex items-center justify-center gap-1 hover:bg-surface-container-low rounded-lg transition-colors">
+<span class="material-symbols-outlined text-[18px]">add</span> Add Set
+            </button>
+</section>
+</main>
+<!-- Rest Timer Overlay (Modal Style) - Hidden by default, shown via JS for demo -->
+<div class="fixed inset-0 z-[60] bg-inverse-surface/40 backdrop-blur-md hidden flex-col justify-end pb-[100px] px-container-padding transition-opacity opacity-0" id="restTimerOverlay">
+<div class="bg-surface-container-lowest w-full max-w-lg mx-auto rounded-3xl p-xl flex flex-col items-center modal-level-3 transform translate-y-full transition-transform duration-300" id="restTimerModal">
+<h3 class="font-label-md text-label-md text-outline uppercase tracking-wider mb-sm">Resting</h3>
+<div class="font-display-lg text-display-lg text-on-surface tabular-nums tracking-tight mb-md">01:30</div>
+<!-- Progress Ring (Simulated with SVG) -->
+<div class="relative w-48 h-48 mb-xl">
+<svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+<circle cx="50" cy="50" fill="none" r="45" stroke="#e5eeff" stroke-width="8"></circle>
+<circle cx="50" cy="50" fill="none" r="45" stroke="#0EA5E9" stroke-dasharray="283" stroke-dashoffset="141.5" stroke-linecap="round" stroke-width="8"></circle>
+</svg>
+<div class="absolute inset-0 flex items-center justify-center flex-col">
+<button class="w-16 h-16 bg-surface-container rounded-full flex items-center justify-center text-primary hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+<span class="font-label-sm text-label-sm text-outline mt-2">+30s</span>
+</div>
+</div>
+<div class="w-full flex gap-md">
+<button class="flex-1 bg-surface-container-low text-on-surface font-label-md text-label-md py-3 rounded-xl hover:bg-surface-container transition-colors" id="skipRestBtn">Skip</button>
+<button class="flex-1 bg-secondary-container text-on-secondary-container font-label-md text-label-md py-3 rounded-xl hover:opacity-90 transition-opacity">Finish Rest</button>
+</div>
+</div>
+</div>
+<!-- BottomNavBar -->
+<nav class="md:hidden fixed bottom-6 left-4 right-4 z-50 flex justify-around items-center h-16 bg-white/80 backdrop-blur-[16px] shadow-[0px_8px_32px_rgba(0,0,0,0.08)] rounded-full">
+<!-- Active Indicator Dot (Under Lift) -->
+<div class="absolute bottom-2 w-1.5 h-1.5 rounded-full bg-[#0EA5E9] left-[61%] -translate-x-1/2 nav-dot-transition"></div>
+<button class="w-12 h-12 flex flex-col items-center justify-center text-[#64748B] hover:text-[#0EA5E9] active:scale-90 transition-all duration-300 z-10">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 0;">dashboard</span>
+<span class="font-bold text-[10px] mt-0.5">Dashboard</span>
+</button>
+<button class="w-12 h-12 flex flex-col items-center justify-center text-[#64748B] hover:text-[#0EA5E9] active:scale-90 transition-all duration-300 z-10">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 0;">restaurant</span>
+<span class="font-bold text-[10px] mt-0.5">Food</span>
+</button>
+<!-- AI Coach (Center) -->
+<button class="relative -top-3 flex flex-col items-center justify-center text-white bg-gradient-to-br from-[#0EA5E9] to-[#0284C7] rounded-full w-14 h-14 active:scale-90 transition-all duration-300 animate-pulse-shadow z-20">
+<span class="material-symbols-outlined text-[28px]" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</button>
+<button class="w-12 h-12 flex flex-col items-center justify-center text-[#0EA5E9] active:scale-90 transition-all duration-300 z-10">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">fitness_center</span>
+<span class="font-bold text-[10px] mt-0.5">Lift</span>
+</button>
+<button class="w-12 h-12 flex flex-col items-center justify-center text-[#64748B] hover:text-[#0EA5E9] active:scale-90 transition-all duration-300 z-10">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 0;">person</span>
+<span class="font-bold text-[10px] mt-0.5">Profile</span>
+</button>
+</nav>
+<script>
+        // Simple micro-interaction script to show/hide the rest timer modal
+        document.addEventListener('DOMContentLoaded', () => {
+            const logBtn = document.getElementById('logSetBtn');
+            const overlay = document.getElementById('restTimerOverlay');
+            const modal = document.getElementById('restTimerModal');
+            const skipBtn = document.getElementById('skipRestBtn');
+
+            function showModal() {
+                overlay.classList.remove('hidden');
+                // Trigger reflow
+                void overlay.offsetWidth;
+                overlay.classList.remove('opacity-0');
+                modal.classList.remove('translate-y-full');
+            }
+
+            function hideModal() {
+                overlay.classList.add('opacity-0');
+                modal.classList.add('translate-y-full');
+                setTimeout(() => {
+                    overlay.classList.add('hidden');
+                }, 300); // match transition duration
+            }
+
+            logBtn.addEventListener('click', showModal);
+            skipBtn.addEventListener('click', hideModal);
+        });
+    </script>
+</body></html>
