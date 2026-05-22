@@ -9,10 +9,15 @@ interface AuthState {
   user: User | null;
   isLoading: boolean;
   initializeAuth: () => Promise<void>;
-  signIn: (email: string, password: string) => Promise<string | null>;
-  signUp: (email: string, password: string) => Promise<string | null>;
+  signIn: (email: string, password: string) => Promise<AuthError | null>;
+  signUp: (email: string, password: string) => Promise<AuthError | null>;
   signOut: () => Promise<void>;
 }
+
+type AuthError = {
+  code?: string;
+  message: string;
+};
 
 let authSubscription: { unsubscribe: () => void } | null = null;
 
@@ -47,7 +52,7 @@ export const useAuthStore = create<AuthState>()(
           password,
         });
 
-        return error ? error.message : null;
+        return error ? { code: error.code ?? undefined, message: error.message } : null;
       },
       signUp: async (email: string, password: string) => {
         const { error } = await supabase.auth.signUp({
@@ -55,7 +60,7 @@ export const useAuthStore = create<AuthState>()(
           password,
         });
 
-        return error ? error.message : null;
+        return error ? { code: error.code ?? undefined, message: error.message } : null;
       },
       signOut: async () => {
         await supabase.auth.signOut();

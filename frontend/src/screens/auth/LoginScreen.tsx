@@ -16,6 +16,15 @@ type LoginForm = z.infer<typeof schema>;
 
 type LoginNavigation = StackNavigationProp<AuthStackParamList, 'Login'>;
 
+const getLoginErrorMessage = (code?: string, fallback?: string) => {
+  switch (code) {
+    case 'email_not_confirmed':
+      return 'Please confirm your email before logging in.';
+    default:
+      return fallback ?? 'Login failed. Please try again.';
+  }
+};
+
 /** Renders the login screen. */
 export default function LoginScreen() {
   const navigation = useNavigation<LoginNavigation>();
@@ -32,7 +41,10 @@ export default function LoginScreen() {
   const onSubmit = async (values: LoginForm) => {
     const error = await signIn(values.email, values.password);
     if (error) {
-      Alert.alert('Login failed', error);
+      Alert.alert(
+        'Login failed',
+        getLoginErrorMessage(error.code, error.message)
+      );
     }
   };
 

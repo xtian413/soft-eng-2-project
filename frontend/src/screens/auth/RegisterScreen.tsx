@@ -22,6 +22,17 @@ type RegisterForm = z.infer<typeof schema>;
 
 type RegisterNavigation = StackNavigationProp<AuthStackParamList, 'Register'>;
 
+const getSignupErrorMessage = (code?: string, fallback?: string) => {
+  switch (code) {
+    case 'signup_disabled':
+      return 'Signups are disabled in Supabase. Enable "Allow new users to sign up" in Auth settings.';
+    case 'over_email_send_rate_limit':
+      return 'Too many signup attempts. Wait a few minutes and try again.';
+    default:
+      return fallback ?? 'Sign up failed. Please try again.';
+  }
+};
+
 /** Renders the registration screen. */
 export default function RegisterScreen() {
   const navigation = useNavigation<RegisterNavigation>();
@@ -38,7 +49,10 @@ export default function RegisterScreen() {
   const onSubmit = async (values: RegisterForm) => {
     const error = await signUp(values.email, values.password);
     if (error) {
-      Alert.alert('Sign up failed', error);
+      Alert.alert(
+        'Sign up failed',
+        getSignupErrorMessage(error.code, error.message)
+      );
       return;
     }
 
