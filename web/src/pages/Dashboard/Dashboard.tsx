@@ -52,16 +52,15 @@ export function Dashboard() {
   // Targets based on goals
   const targetCalories = goal === 'build_muscle' ? 2800 : goal === 'lose_weight' ? 2000 : 2400;
   const targetProtein = goal === 'build_muscle' ? 180 : goal === 'lose_weight' ? 160 : 140;
-  const targetCarbs = goal === 'build_muscle' ? 320 : goal === 'lose_weight' ? 180 : 260;
-  const targetFats = goal === 'build_muscle' ? 80 : goal === 'lose_weight' ? 60 : 70;
+  const targetCarbs = goal === 'build_muscle' ? 300 : goal === 'lose_weight' ? 200 : 250;
+  const targetFats = goal === 'build_muscle' ? 75 : goal === 'lose_weight' ? 60 : 70;
 
   // Derived current calories
   const currentCalories = (proteinTotal * 4) + (carbsTotal * 4) + (fatsTotal * 9);
   const caloriesRemaining = Math.max(0, targetCalories - currentCalories);
 
-  // SVG Progress Ring calculations
-  const radius = 45;
-  const circumference = 2 * Math.PI * radius;
+  // SVG Progress Ring calculations matching stitch 282 circumference exactly
+  const circumference = 282;
   const percentComplete = Math.min(100, (currentCalories / targetCalories) * 100);
   const strokeDashoffset = circumference - (percentComplete / 100) * circumference;
 
@@ -99,7 +98,7 @@ export function Dashboard() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // Handle Quick Log Macro Shortcut
+  // Handle Quick Log Snack Macro Shortcut
   const handleQuickLog = () => {
     const randomFoods = [
       { name: 'Peanut Butter Toast', protein: 8, carbs: 24, fats: 12, calories: 240 },
@@ -159,6 +158,18 @@ export function Dashboard() {
     }, 1200);
   };
 
+  // Calculate Indicator Dot positions for bottom mobile navigation
+  const getDotLeft = () => {
+    switch (activeTab) {
+      case 'dashboard': return '10%';
+      case 'food': return '30%';
+      case 'chat': return '50%';
+      case 'lift': return '70%';
+      case 'profile': return '90%';
+      default: return '10%';
+    }
+  };
+
   return (
     <div className="lumina-dashboard-page">
       {/* Top Header Appbar */}
@@ -166,7 +177,7 @@ export function Dashboard() {
         <div className="lumina-header-user">
           <div className="lumina-user-avatar">
             <img 
-              alt="User profile" 
+              alt="User Profile Photo" 
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3vRdcAG9t6iFC5DAgdJAW_2xrU33Y5jWF3VTnvuT6g1_txVlo9IKcYRWZLDe7MgGQ4oDQoa78iHbt7RNXwIIUtmdbkDEcD-JTsxkq64qt13q97fhxO8p8ZzBn_Ri15-QgWhsW3f0QAjI-nrChR0yjI4vx5cRkmb0rrzVL6_yHAG9p1-9IaKUzooqUs3icFjuaw9qGLIw6vyp2WQ-MyxyQFwBxT7Cm9LLm1oLZR-pvMeHoR0IkOXnyWvrVn2O1W-3JerDeNtItYgrg" 
             />
           </div>
@@ -181,7 +192,7 @@ export function Dashboard() {
           className="lumina-notification-btn" 
           onClick={() => alert('All on-device notifications are fully synchronized and quiet.')}
         >
-          <span className="material-symbols-outlined">notifications</span>
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>notifications</span>
         </button>
       </header>
 
@@ -191,28 +202,28 @@ export function Dashboard() {
           className={`lumina-desktop-nav-btn ${activeTab === 'dashboard' ? 'lumina-desktop-nav-btn-active' : ''}`}
           onClick={() => setActiveTab('dashboard')}
         >
-          <span className="material-symbols-outlined">dashboard</span>
-          <span>Today</span>
-        </button>
-        <button 
-          className={`lumina-desktop-nav-btn ${activeTab === 'food' ? 'lumina-desktop-nav-btn-active' : ''}`}
-          onClick={() => setActiveTab('food')}
-        >
-          <span className="material-symbols-outlined">restaurant</span>
-          <span>Food</span>
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'dashboard' ? "'FILL' 1" : "'FILL' 0" }}>dashboard</span>
+          <span>Dashboard</span>
         </button>
         <button 
           className={`lumina-desktop-nav-btn ${activeTab === 'lift' ? 'lumina-desktop-nav-btn-active' : ''}`}
           onClick={() => setActiveTab('lift')}
         >
-          <span className="material-symbols-outlined">fitness_center</span>
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'lift' ? "'FILL' 1" : "'FILL' 0" }}>fitness_center</span>
           <span>Lift</span>
+        </button>
+        <button 
+          className={`lumina-desktop-nav-btn ${activeTab === 'food' ? 'lumina-desktop-nav-btn-active' : ''}`}
+          onClick={() => setActiveTab('food')}
+        >
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'food' ? "'FILL' 1" : "'FILL' 0" }}>restaurant</span>
+          <span>Food</span>
         </button>
         <button 
           className={`lumina-desktop-nav-btn ${activeTab === 'chat' ? 'lumina-desktop-nav-btn-active' : ''}`}
           onClick={() => setActiveTab('chat')}
         >
-          <span className="material-symbols-outlined">auto_awesome</span>
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'chat' ? "'FILL' 1" : "'FILL' 0" }}>auto_awesome</span>
           <span>Coach</span>
         </button>
         <button 
@@ -220,46 +231,48 @@ export function Dashboard() {
           onClick={() => setActiveTab('profile')}
           style={{ marginTop: 'auto' }}
         >
-          <span className="material-symbols-outlined">person</span>
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'profile' ? "'FILL' 1" : "'FILL' 0" }}>person</span>
           <span>Profile</span>
         </button>
       </nav>
 
-      {/* Main Responsive Body Container */}
+      {/* Main Container Layout */}
       <main className="lumina-dashboard-main">
         {activeTab === 'dashboard' && (
           <>
             {/* Bento Grid */}
             <section className="lumina-bento-grid">
-              {/* Calories progress ring */}
-              <div className="lumina-calories-card lumina-macro-card" style={{ borderLeft: 'none' }}>
+              {/* Calories Card */}
+              <div className="lumina-calories-card">
                 <div>
                   <h2 className="lumina-card-label">Calories Remaining</h2>
                   <div className="lumina-calories-value">
                     <span className="lumina-cals-num">{caloriesRemaining.toLocaleString()}</span>
-                    <span className="lumina-cals-total">/ {targetCalories} kcal</span>
+                    <span className="lumina-cals-total">/ {targetCalories.toLocaleString()} kcal</span>
                   </div>
                 </div>
                 
                 <div className="lumina-progress-container">
                   <svg className="lumina-circular-progress" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" className="lumina-progress-bg" />
+                    <circle cx="50" cy="50" r="45" fill="none" className="lumina-progress-bg" />
                     <circle 
                       cx="50" 
                       cy="50" 
+                      r="45"
+                      fill="none"
                       className="lumina-progress-bar"
                       strokeDasharray={circumference}
                       strokeDashoffset={strokeDashoffset}
                     />
                   </svg>
                   <div className="lumina-progress-center-text">
-                    <span className="material-symbols-outlined lumina-progress-icon">local_fire_department</span>
-                    <span className="lumina-progress-desc">{currentCalories} eaten</span>
+                    <span className="material-symbols-outlined lumina-progress-icon" style={{ fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
+                    <span className="lumina-progress-desc">{currentCalories.toLocaleString()} eaten</span>
                   </div>
                 </div>
               </div>
 
-              {/* Protein stats */}
+              {/* Protein Card */}
               <div className="lumina-macro-card lumina-macro-card-protein">
                 <h3 className="lumina-macro-title">Protein</h3>
                 <div className="lumina-macro-val-row">
@@ -274,7 +287,7 @@ export function Dashboard() {
                 </div>
               </div>
 
-              {/* Carbs stats */}
+              {/* Carbs Card */}
               <div className="lumina-macro-card lumina-macro-card-carbs">
                 <h3 className="lumina-macro-title">Carbs</h3>
                 <div className="lumina-macro-val-row">
@@ -289,7 +302,7 @@ export function Dashboard() {
                 </div>
               </div>
 
-              {/* Fats stats */}
+              {/* Fats Card */}
               <div className="lumina-macro-card lumina-macro-card-fats">
                 <h3 className="lumina-macro-title">Fats</h3>
                 <div className="lumina-macro-val-row">
@@ -304,11 +317,11 @@ export function Dashboard() {
                 </div>
               </div>
 
-              {/* Add Macro shortcut button */}
+              {/* Add Snack Log Card */}
               <div className="lumina-quick-log-card" onClick={handleQuickLog}>
                 <div className="lumina-quick-log-content">
                   <div className="lumina-quick-log-icon-box">
-                    <span className="material-symbols-outlined">add</span>
+                    <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 0" }}>add</span>
                   </div>
                   <span className="lumina-quick-log-text">Quick Log</span>
                 </div>
@@ -319,25 +332,26 @@ export function Dashboard() {
             <section className="lumina-ai-insight-card">
               <div className="lumina-ai-badge-row">
                 <div className="lumina-ai-badge">
-                  <span className="material-symbols-outlined">auto_awesome</span>
-                  Gemma
+                  <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+                  Whisper
                 </div>
-                <span className="lumina-ai-label">AI Coach Recovery Insight</span>
+                <span className="lumina-ai-label">AI Recovery Insight</span>
               </div>
               <p className="lumina-ai-text">
                 "You've been hitting high RPEs all week; consider a deload day to optimize CNS recovery."
               </p>
-              <button className="lumina-quick-log-icon-box" style={{ width: 'auto', padding: '0 16px', height: '36px', color: '#ffffff', backgroundColor: '#0ea5e9', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600 }} onClick={() => setActiveTab('chat')}>
-                Ask Coach
+              <button className="lumina-ai-btn" onClick={() => setActiveTab('chat')}>
+                Adjust Plan
               </button>
+              <div className="lumina-ai-deco" />
             </section>
 
-            {/* Weekly Streak Review */}
+            {/* Weekly Review & Streak */}
             <section className="lumina-weekly-card">
               <div className="lumina-weekly-header">
                 <h2 className="lumina-weekly-title">Weekly Review</h2>
                 <div className="lumina-streak-badge">
-                  <span className="material-symbols-outlined">local_fire_department</span>
+                  <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>local_fire_department</span>
                   14 Day Streak
                 </div>
               </div>
@@ -351,7 +365,7 @@ export function Dashboard() {
                       idx === 4 ? 'lumina-streak-circle-workout' : 'lumina-streak-circle-empty'
                     }`}>
                       {idx < 4 ? (
-                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>check</span>
+                        <span className="material-symbols-outlined" style={{ fontSize: '16px', fontVariationSettings: "'FILL' 1" }}>check</span>
                       ) : idx === 4 ? (
                         <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>fitness_center</span>
                       ) : null}
@@ -424,15 +438,15 @@ export function Dashboard() {
             <div className="lumina-weekly-card">
               <h2 className="lumina-weekly-title" style={{ marginBottom: '16px' }}>Nutritional Diary</h2>
               <div className="lumina-nutrition-progress">
-                <div className="lumina-profile-stat-box" style={{ borderLeft: '4px solid #0ea5e9' }}>
+                <div className="lumina-profile-stat-box" style={{ borderLeft: '4px solid var(--primary-container)' }}>
                   <div className="lumina-profile-stat-val">{proteinTotal}g / {targetProtein}g</div>
                   <div className="lumina-profile-stat-lbl">Protein</div>
                 </div>
-                <div className="lumina-profile-stat-box" style={{ borderLeft: '4px solid #f7be1d' }}>
+                <div className="lumina-profile-stat-box" style={{ borderLeft: '4px solid var(--tertiary-fixed-dim)' }}>
                   <div className="lumina-profile-stat-val">{carbsTotal}g / {targetCarbs}g</div>
                   <div className="lumina-profile-stat-lbl">Carbs</div>
                 </div>
-                <div className="lumina-profile-stat-box" style={{ borderLeft: '4px solid #fd761a' }}>
+                <div className="lumina-profile-stat-box" style={{ borderLeft: '4px solid var(--secondary-container)' }}>
                   <div className="lumina-profile-stat-val">{fatsTotal}g / {targetFats}g</div>
                   <div className="lumina-profile-stat-lbl">Fats</div>
                 </div>
@@ -440,8 +454,8 @@ export function Dashboard() {
 
               <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                 <button 
-                  className="lumina-quick-log-icon-box" 
-                  style={{ flex: 1, padding: '16px', height: 'auto', display: 'flex', flexDirection: 'row', gap: '8px', color: '#ffffff', backgroundColor: '#0ea5e9', border: 'none', borderRadius: '12px', cursor: 'pointer', justifyContent: 'center', fontWeight: 600 }}
+                  className="lumina-ai-btn" 
+                  style={{ flex: 1, padding: '16px', height: 'auto', display: 'flex', flexDirection: 'row', gap: '8px', color: '#ffffff', backgroundColor: 'var(--primary-container)', border: 'none', borderRadius: '12px', cursor: 'pointer', justifyContent: 'center', fontWeight: 600 }}
                   onClick={handleQuickLog}
                 >
                   <span className="material-symbols-outlined">add</span>
@@ -496,7 +510,7 @@ export function Dashboard() {
             <div className="lumina-profile-card">
               <div className="lumina-profile-avatar-large">
                 <img 
-                  alt="User large profile" 
+                  alt="User Profile Photo" 
                   src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3vRdcAG9t6iFC5DAgdJAW_2xrU33Y5jWF3VTnvuT6g1_txVlo9IKcYRWZLDe7MgGQ4oDQoa78iHbt7RNXwIIUtmdbkDEcD-JTsxkq64qt13q97fhxO8p8ZzBn_Ri15-QgWhsW3f0QAjI-nrChR0yjI4vx5cRkmb0rrzVL6_yHAG9p1-9IaKUzooqUs3icFjuaw9qGLIw6vyp2WQ-MyxyQFwBxT7Cm9LLm1oLZR-pvMeHoR0IkOXnyWvrVn2O1W-3JerDeNtItYgrg" 
                 />
               </div>
@@ -525,7 +539,7 @@ export function Dashboard() {
               </div>
 
               <button 
-                className="lumina-quick-log-icon-box" 
+                className="lumina-ai-btn" 
                 style={{ width: '100%', padding: '12px', height: 'auto', border: '1px solid #ba1a1a', color: '#ba1a1a', background: 'none', borderRadius: '12px', cursor: 'pointer', fontWeight: 600 }}
                 onClick={() => navigate('/login')}
               >
@@ -535,16 +549,16 @@ export function Dashboard() {
 
             <div className="lumina-weekly-card">
               <h3 className="lumina-weekly-title" style={{ fontSize: '16px', marginBottom: '16px' }}>On-Device Privacy Profile</h3>
-              <p style={{ fontSize: '14px', lineHeight: '22px', color: '#3e4850', margin: '0 0 16px 0' }}>
+              <p style={{ fontSize: '14px', lineHeight: '22px', color: 'var(--on-surface-variant)', margin: '0 0 16px 0' }}>
                 Your Lumina profile resides strictly in your offline browser sandboxed storage. Your personal information, fitness logs, and AI conversations never touch the cloud, honoring strict data dignity policies.
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'center', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#3e4850' }}>Gemma AI Weights</span>
+                <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'center', padding: '12px', backgroundColor: 'var(--surface-bright)', borderRadius: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--on-surface-variant)' }}>Gemma AI Weights</span>
                   <span style={{ fontSize: '12px', color: '#059669', fontWeight: 700 }}>Active Local (2.2B)</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'center', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#3e4850' }}>Data Encryption</span>
+                <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'center', padding: '12px', backgroundColor: 'var(--surface-bright)', borderRadius: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--on-surface-variant)' }}>Data Encryption</span>
                   <span style={{ fontSize: '12px', color: '#059669', fontWeight: 700 }}>AES-GCM Local</span>
                 </div>
               </div>
@@ -553,43 +567,46 @@ export function Dashboard() {
         )}
       </main>
 
-      {/* Floating Bottom Nav Menu (Mobile Only) */}
+      {/* Floating Bottom Nav (Mobile Only) */}
       <nav className="lumina-bottom-nav">
+        {/* Dynamic active indicator dot */}
+        <div className="lumina-nav-indicator" style={{ left: getDotLeft() }} />
+
         <button 
           className={`lumina-nav-btn ${activeTab === 'dashboard' ? 'lumina-nav-btn-active' : ''}`}
           onClick={() => setActiveTab('dashboard')}
         >
-          <span className="material-symbols-outlined">dashboard</span>
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'dashboard' ? "'FILL' 1" : "'FILL' 0" }}>dashboard</span>
           <span>Home</span>
         </button>
         <button 
           className={`lumina-nav-btn ${activeTab === 'food' ? 'lumina-nav-btn-active' : ''}`}
           onClick={() => setActiveTab('food')}
         >
-          <span className="material-symbols-outlined">restaurant</span>
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'food' ? "'FILL' 1" : "'FILL' 0" }}>restaurant</span>
           <span>Food</span>
         </button>
         
-        {/* Centered Premium auto-awesome AI coach shortcut */}
+        {/* Glowing AI Center Action Button */}
         <button 
-          className="lumina-ai-coach-nav-btn pulse-shadow-glow"
+          className="lumina-ai-coach-nav-btn"
           onClick={() => setActiveTab('chat')}
         >
-          <span className="material-symbols-outlined">auto_awesome</span>
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
         </button>
 
         <button 
           className={`lumina-nav-btn ${activeTab === 'lift' ? 'lumina-nav-btn-active' : ''}`}
           onClick={() => setActiveTab('lift')}
         >
-          <span className="material-symbols-outlined">fitness_center</span>
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'lift' ? "'FILL' 1" : "'FILL' 0" }}>fitness_center</span>
           <span>Lift</span>
         </button>
         <button 
           className={`lumina-nav-btn ${activeTab === 'profile' ? 'lumina-nav-btn-active' : ''}`}
           onClick={() => setActiveTab('profile')}
         >
-          <span className="material-symbols-outlined">person</span>
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: activeTab === 'profile' ? "'FILL' 1" : "'FILL' 0" }}>person</span>
           <span>Profile</span>
         </button>
       </nav>

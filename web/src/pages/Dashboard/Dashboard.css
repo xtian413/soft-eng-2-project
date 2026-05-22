@@ -1,37 +1,94 @@
-/* Dashboard Page Stylesheet - Vanilla CSS */
+/* Premium Stitch Design System Variables */
+:root {
+  --tertiary-fixed-dim: #f7be1d;
+  --surface-container: #e5eeff;
+  --on-secondary-fixed-variant: #783200;
+  --tertiary-container: #c39400;
+  --on-error-container: #93000a;
+  --secondary-fixed: #ffdbca;
+  --secondary-fixed-dim: #ffb690;
+  --on-surface: #0b1c30;
+  --inverse-surface: #213145;
+  --on-secondary: #ffffff;
+  --on-primary: #ffffff;
+  --primary-fixed: #c9e6ff;
+  --surface-bright: #f8f9ff;
+  --on-error: #ffffff;
+  --inverse-on-surface: #eaf1ff;
+  --surface-container-low: #eff4ff;
+  --secondary: #9d4300;
+  --on-tertiary-fixed-variant: #5a4300;
+  --on-surface-variant: #3e4850;
+  --surface-container-highest: #d3e4fe;
+  --surface-tint: #006591;
+  --secondary-container: #fd761a;
+  --tertiary: #785a00;
+  --on-primary-container: #003751;
+  --tertiary-fixed: #ffdf9a;
+  --on-secondary-container: #5c2400;
+  --on-tertiary-container: #423000;
+  --surface-dim: #cbdbf5;
+  --on-primary-fixed-variant: #004c6e;
+  --outline-variant: #bec8d2;
+  --inverse-primary: #89ceff;
+  --on-tertiary: #ffffff;
+  --background: #f8f9ff;
+  --primary-container: #0ea5e9;
+  --error-container: #ffdad6;
+  --primary-fixed-dim: #89ceff;
+  --on-secondary-fixed: #341100;
+  --surface-container-lowest: #ffffff;
+  --on-primary-fixed: #001e2f;
+  --on-background: #0b1c30;
+  --outline: #6e7881;
+  --surface-variant: #d3e4fe;
+  --error: #ba1a1a;
+  --on-tertiary-fixed: #251a00;
+  --surface: #f8f9ff;
+  --primary: #006591;
+  --surface-container-high: #dce9ff;
+}
+
+/* Base Body Alignment */
 .lumina-dashboard-page {
   display: flex;
   min-height: 100vh;
   width: 100%;
-  background-color: #f8f9ff;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  color: #0b1c30;
+  background-color: var(--background);
+  color: var(--on-background);
+  font-family: 'Inter', sans-serif;
   box-sizing: border-box;
+  padding-top: 64px;
 }
 
-/* Header Styling */
+@media (max-width: 767px) {
+  .lumina-dashboard-page {
+    padding-bottom: 96px; /* Space for bottom mobile nav */
+  }
+}
+
+/* Header (TopAppBar) */
 .lumina-dashboard-header {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 64px;
-  background-color: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background-color: var(--surface-container-lowest);
   border-bottom: 1px solid rgba(190, 200, 210, 0.2);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 20px;
-  z-index: 40;
-  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.02);
+  padding: 0 16px;
+  z-index: 50;
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
 }
 
 .lumina-header-user {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .lumina-user-avatar {
@@ -39,21 +96,21 @@
   height: 40px;
   border-radius: 9999px;
   overflow: hidden;
-  border: 2px solid #ffffff;
-  box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.08);
-  background-color: #dce9ff;
+  border: 2px solid var(--surface-container-lowest);
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.08);
+  background-color: var(--surface-container-high);
 }
 
 .lumina-user-avatar img {
   width: 100%;
   height: 100%;
-  object-cover: cover;
+  object-fit: cover;
 }
 
 .lumina-header-title {
   font-size: 20px;
   font-weight: 700;
-  color: #0b1c30;
+  color: var(--on-surface);
   margin: 0;
 }
 
@@ -66,87 +123,98 @@
   border-radius: 9999px;
   background: none;
   border: none;
-  color: #006591;
+  color: var(--primary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s, transform 0.2s;
 }
 
 .lumina-notification-btn:hover {
-  background-color: rgba(0, 101, 145, 0.06);
+  background-color: var(--surface-container-high);
 }
 
 .lumina-notification-btn:active {
   transform: scale(0.95);
 }
 
-/* Main Container Layout */
+/* Main Responsive Layout */
 .lumina-dashboard-main {
   flex: 1;
-  padding: 88px 20px 100px;
+  padding: 24px 20px;
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
 }
 
-/* Dashboard Bento Grid Layout */
+@media (min-width: 768px) {
+  .lumina-dashboard-main {
+    padding-left: calc(96px + 20px); /* Side nav spacing */
+  }
+}
+
+/* Bento Grid */
 .lumina-bento-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
+  gap: 16px;
   width: 100%;
-  margin-bottom: 24px;
 }
 
 @media (min-width: 768px) {
   .lumina-bento-grid {
     grid-template-columns: repeat(4, 1fr);
   }
-  
-  .lumina-dashboard-main {
-    padding-left: calc(96px + 20px); /* Side nav adjustment */
-    padding-bottom: 32px;
-  }
 }
 
-/* Calories Card (2x2 grid span) */
+/* Calories Card (2x2 span) */
 .lumina-calories-card {
   grid-column: span 2;
   grid-row: span 2;
+  background-color: var(--surface-container-lowest);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 240px;
+  min-height: 280px;
   position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 
 .lumina-card-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: #6e7881;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 8px;
+  text-align: center;
 }
 
 .lumina-calories-value {
   display: flex;
   align-items: baseline;
+  justify-content: center;
   gap: 4px;
-  margin-top: 4px;
 }
 
 .lumina-cals-num {
-  font-size: 40px;
+  font-size: 48px;
   font-weight: 800;
-  color: #006591;
-  letter-spacing: -0.03em;
+  color: var(--primary);
+  letter-spacing: -0.04em;
+  line-height: 56px;
 }
 
 .lumina-cals-total {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: #6e7881;
+  color: var(--outline);
 }
 
 .lumina-progress-container {
@@ -154,13 +222,13 @@
   justify-content: center;
   align-items: center;
   position: relative;
-  margin-top: 16px;
+  margin-top: 24px;
 }
 
 .lumina-circular-progress {
   transform: rotate(-90deg);
-  width: 150px;
-  height: 150px;
+  width: 160px;
+  height: 160px;
 }
 
 .lumina-circular-progress circle {
@@ -173,9 +241,9 @@
 }
 
 .lumina-progress-bar {
-  stroke: #006591;
+  stroke: var(--primary);
   stroke-linecap: round;
-  transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .lumina-progress-center-text {
@@ -184,42 +252,49 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  inset: 0;
 }
 
 .lumina-progress-icon {
-  font-size: 32px;
-  color: #0ea5e9;
+  font-size: 30px;
+  color: var(--primary);
 }
 
 .lumina-progress-desc {
   font-size: 12px;
-  font-weight: 600;
-  color: #3e4850;
-  margin-top: 2px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+  margin-top: 4px;
 }
 
 /* Macro Stats Cards */
 .lumina-macro-card {
-  background-color: #ffffff;
-  border-radius: 16px;
+  background-color: var(--surface-container-lowest);
+  border-radius: 12px;
   padding: 16px;
-  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.03);
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 110px;
-  border-left: 4px solid #bec8d2;
+  align-items: center;
+  text-align: center;
+  min-height: 120px;
+  border-left: 4px solid var(--outline-variant);
   box-sizing: border-box;
 }
 
-.lumina-macro-card-protein { border-left-color: #0ea5e9; }
-.lumina-macro-card-carbs { border-left-color: #f7be1d; }
-.lumina-macro-card-fats { border-left-color: #fd761a; }
+.lumina-macro-card-protein { border-left-color: var(--primary-container); grid-column: span 1; }
+.lumina-macro-card-carbs { border-left-color: var(--tertiary-fixed-dim); grid-column: span 1; }
+.lumina-macro-card-fats { border-left-color: var(--secondary-container); grid-column: span 2; }
+
+@media (min-width: 768px) {
+  .lumina-macro-card-fats { grid-column: span 1; }
+}
 
 .lumina-macro-title {
   font-size: 12px;
-  font-weight: 600;
-  color: #6e7881;
+  font-weight: 500;
+  color: var(--on-surface-variant);
   margin: 0;
 }
 
@@ -230,53 +305,68 @@
 .lumina-macro-current {
   font-size: 20px;
   font-weight: 700;
-  color: #0b1c30;
+  color: var(--on-surface);
   letter-spacing: -0.02em;
 }
 
 .lumina-macro-goal {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
-  color: #6e7881;
+  color: var(--outline);
   display: block;
 }
 
 .lumina-macro-bar-container {
   width: 100%;
-  height: 6px;
-  background-color: rgba(190, 200, 210, 0.2);
+  height: 8px;
+  background-color: rgba(14, 165, 233, 0.12); /* base background */
   border-radius: 9999px;
-  margin-top: 12px;
+  margin-top: 16px;
   overflow: hidden;
+}
+
+.lumina-macro-card-carbs .lumina-macro-bar-container {
+  background-color: rgba(247, 190, 29, 0.12);
+}
+
+.lumina-macro-card-fats .lumina-macro-bar-container {
+  background-color: rgba(253, 118, 26, 0.12);
 }
 
 .lumina-macro-bar-fill {
   height: 100%;
   border-radius: 9999px;
-  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.lumina-macro-fill-protein { background-color: #0ea5e9; }
-.lumina-macro-fill-carbs { background-color: #f7be1d; }
-.lumina-macro-fill-fats { background-color: #fd761a; }
+.lumina-macro-fill-protein { background-color: var(--primary-container); }
+.lumina-macro-fill-carbs { background-color: var(--tertiary-fixed-dim); }
+.lumina-macro-fill-fats { background-color: var(--secondary-container); }
 
-/* Quick Log Card */
+/* Add Snack Quick Log */
 .lumina-quick-log-card {
-  background-color: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.03);
+  grid-column: span 2;
+  background-color: var(--surface-container-lowest);
+  border-radius: 12px;
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  min-height: 110px;
-  border: 1px dashed rgba(190, 200, 210, 0.6);
+  transition: background-color 0.2s, transform 0.2s;
+  min-height: 120px;
+  box-sizing: border-box;
+}
+
+@media (min-width: 768px) {
+  .lumina-quick-log-card {
+    grid-column: span 1;
+  }
 }
 
 .lumina-quick-log-card:hover {
-  background-color: rgba(14, 165, 233, 0.04);
-  border-color: #0ea5e9;
+  background-color: var(--surface-container-high);
 }
 
 .lumina-quick-log-card:active {
@@ -287,96 +377,128 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  color: #006591;
-  gap: 4px;
+  color: var(--primary);
 }
 
 .lumina-quick-log-icon-box {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 9999px;
   background-color: rgba(14, 165, 233, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-bottom: 4px;
 }
 
 .lumina-quick-log-text {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
 }
 
-/* AI Recovery Insight Card */
+/* Whisper AI Recovery Insight Card */
 .lumina-ai-insight-card {
-  background: linear-gradient(135deg, #ffffff 0%, rgba(139, 92, 246, 0.03) 100%);
-  border: 1px solid rgba(14, 165, 233, 0.1);
-  box-shadow: 0 0 40px rgba(14, 165, 233, 0.08);
+  background: linear-gradient(135deg, #F8FAFC 0%, rgba(139, 92, 246, 0.05) 100%);
+  border: 1px solid rgba(190, 200, 210, 0.2);
+  box-shadow: 0 0 40px rgba(14, 165, 233, 0.15);
   border-radius: 20px;
   padding: 24px;
   position: relative;
   overflow: hidden;
-  margin-bottom: 24px;
+  box-sizing: border-box;
 }
 
 .lumina-ai-badge-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  position: relative;
+  z-index: 10;
 }
 
 .lumina-ai-badge {
-  background: linear-gradient(135deg, #0ea5e9, #0284c7);
-  color: #ffffff;
+  background-color: var(--primary-container);
+  color: var(--on-primary);
   padding: 4px 12px;
   border-radius: 9999px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
 .lumina-ai-badge span {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .lumina-ai-label {
   font-size: 12px;
-  font-weight: 600;
-  color: #6e7881;
+  font-weight: 500;
+  color: var(--on-surface-variant);
 }
 
 .lumina-ai-text {
-  font-size: 20px;
-  line-height: 28px;
+  font-size: 24px;
+  line-height: 32px;
   font-weight: 600;
-  color: #0b1c30;
+  color: var(--on-surface);
   margin: 0 0 16px 0;
   letter-spacing: -0.01em;
+  position: relative;
+  z-index: 10;
+}
+
+.lumina-ai-btn {
+  background-color: rgba(14, 165, 233, 0.1);
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  position: relative;
+  z-index: 10;
+}
+
+.lumina-ai-btn:hover {
+  background-color: rgba(14, 165, 233, 0.2);
+}
+
+.lumina-ai-deco {
+  position: absolute;
+  right: -40px;
+  bottom: -40px;
+  width: 160px;
+  height: 160px;
+  background-color: rgba(14, 165, 233, 0.05);
+  border-radius: 9999px;
+  filter: blur(40px);
 }
 
 /* Weekly Summary Card */
 .lumina-weekly-card {
-  background-color: #ffffff;
+  background-color: var(--surface-container-lowest);
   border-radius: 20px;
   padding: 24px;
-  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.03);
-  margin-bottom: 24px;
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
 }
 
 .lumina-weekly-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .lumina-weekly-title {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--on-surface);
   margin: 0;
 }
 
@@ -384,11 +506,11 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  background-color: rgba(253, 118, 26, 0.08);
-  color: #fd761a;
+  background-color: rgba(253, 118, 26, 0.1);
+  color: var(--secondary-container);
   padding: 4px 12px;
   border-radius: 9999px;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -400,25 +522,25 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .lumina-streak-day-col {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .lumina-streak-day-label {
   font-size: 12px;
-  font-weight: 600;
-  color: #6e7881;
+  font-weight: 500;
+  color: var(--outline);
 }
 
 .lumina-streak-day-label-active {
-  color: #0ea5e9;
-  font-weight: 800;
+  color: var(--primary);
+  font-weight: 700;
 }
 
 .lumina-streak-day-circle {
@@ -433,52 +555,52 @@
 }
 
 .lumina-streak-circle-checked {
-  background-color: #0ea5e9;
-  color: #ffffff;
+  background-color: var(--primary-container);
+  color: var(--on-primary);
 }
 
 .lumina-streak-circle-workout {
-  border: 2px solid #0ea5e9;
-  background-color: rgba(14, 165, 233, 0.05);
-  color: #0ea5e9;
+  border: 2px solid var(--primary-container);
+  background-color: rgba(14, 165, 233, 0.1);
+  color: var(--primary);
 }
 
 .lumina-streak-circle-empty {
-  background-color: #eff4ff;
-  color: #bec8d2;
+  background-color: var(--surface-container);
+  color: var(--outline);
 }
 
 .lumina-streak-desc-box {
-  background-color: #f8f9ff;
-  border: 1px solid rgba(190, 200, 210, 0.2);
-  border-radius: 12px;
+  background-color: var(--surface-bright);
+  border: 1px solid var(--surface-container);
+  border-radius: 8px;
   padding: 16px;
 }
 
 .lumina-streak-desc-text {
-  font-size: 14px;
-  line-height: 22px;
-  color: #3e4850;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--on-surface-variant);
   margin: 0;
 }
 
-/* Bottom Nav Menu (Mobile Only) */
+/* Floating Bottom Nav (Mobile Only) */
 .lumina-bottom-nav {
   position: fixed;
   bottom: 24px;
   left: 16px;
   right: 16px;
   height: 64px;
-  background-color: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   box-shadow: 0px 8px 32px rgba(0, 0, 0, 0.08);
   border-radius: 9999px;
   display: flex;
   justify-content: space-around;
   align-items: center;
   z-index: 50;
-  border: 1px solid rgba(190, 200, 210, 0.2);
+  box-sizing: border-box;
 }
 
 .lumina-nav-btn {
@@ -494,7 +616,7 @@
   height: 48px;
   border-radius: 9999px;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  z-index: 2;
+  z-index: 10;
 }
 
 .lumina-nav-btn span:first-child {
@@ -502,24 +624,24 @@
 }
 
 .lumina-nav-btn span:last-child {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   margin-top: 2px;
 }
 
 .lumina-nav-btn-active {
-  color: #0ea5e9;
+  color: var(--primary-container);
 }
 
-/* AI Center Button */
+/* Glowing AI Center Action Button */
 .lumina-ai-coach-nav-btn {
   position: relative;
   top: -12px;
   width: 56px;
   height: 56px;
   border-radius: 9999px;
-  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--primary-container) 0%, #0284c7 100%);
+  color: var(--on-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -527,7 +649,8 @@
   cursor: pointer;
   border: none;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  z-index: 5;
+  z-index: 20;
+  animation: pulse-shadow 2s infinite;
 }
 
 .lumina-ai-coach-nav-btn:hover {
@@ -543,33 +666,41 @@
   font-size: 28px;
 }
 
-.pulse-shadow-glow {
-  animation: pulseShadow 2s infinite;
-}
-
-@keyframes pulseShadow {
+@keyframes pulse-shadow {
   0% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.4); }
   70% { box-shadow: 0 0 0 15px rgba(14, 165, 233, 0); }
   100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
 }
 
-/* Desktop Sidebar Nav Rail */
+/* Active Dot navigation indicator */
+.lumina-nav-indicator {
+  position: absolute;
+  bottom: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: var(--primary-container);
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(-50%);
+  z-index: 5;
+}
+
+/* Desktop Side Navigation Rail */
 .lumina-desktop-nav {
   display: none;
   position: fixed;
   top: 64px;
   left: 0;
   height: calc(100vh - 64px);
-  width: 88px;
-  background-color: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(20px);
-  border-right: 1px solid rgba(190, 200, 210, 0.2);
-  display: none; /* Controlled by display: flex under md query */
+  width: 96px;
+  background-color: var(--surface-container-lowest);
+  border-right: 1px solid var(--surface-container);
   flex-direction: column;
   align-items: center;
   padding: 32px 0;
-  gap: 24px;
-  z-index: 30;
+  gap: 32px;
+  z-index: 40;
+  box-sizing: border-box;
 }
 
 @media (min-width: 768px) {
@@ -581,45 +712,45 @@
 .lumina-desktop-nav-btn {
   background: none;
   border: none;
-  width: 60px;
-  height: 60px;
-  border-radius: 14px;
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #6e7881;
+  color: var(--outline);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .lumina-desktop-nav-btn:hover {
-  background-color: rgba(14, 165, 233, 0.05);
-  color: #0b1c30;
+  background-color: var(--surface-container-high);
+  color: var(--primary);
 }
 
 .lumina-desktop-nav-btn-active {
   background-color: rgba(14, 165, 233, 0.1);
-  color: #006591;
-  font-weight: 700;
+  color: var(--primary);
+  font-weight: 600;
 }
 
 .lumina-desktop-nav-btn span:first-child {
   font-size: 24px;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .lumina-desktop-nav-btn span:last-child {
   font-size: 10px;
 }
 
-/* AI COACH CHAT SCREEN TAB STYLING */
+/* COACH AI CHAT TAB */
 .lumina-chat-container {
   display: flex;
   flex-direction: column;
-  background-color: #ffffff;
+  background-color: var(--surface-container-lowest);
   border-radius: 20px;
-  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.03);
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04);
   height: calc(100vh - 180px);
   min-height: 480px;
   overflow: hidden;
@@ -633,7 +764,7 @@
 }
 
 .lumina-chat-header {
-  background-color: #eff4ff;
+  background-color: var(--surface-container-low);
   padding: 16px 20px;
   border-bottom: 1px solid rgba(190, 200, 210, 0.2);
   display: flex;
@@ -642,14 +773,14 @@
 }
 
 .lumina-chat-coach-avatar {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   border-radius: 9999px;
-  background: linear-gradient(135deg, #0ea5e9 0%, #a855f7 100%);
+  background: linear-gradient(135deg, var(--primary-container) 0%, #a855f7 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
+  color: var(--on-primary);
   box-shadow: 0px 4px 12px rgba(14, 165, 233, 0.25);
 }
 
@@ -665,7 +796,7 @@
 .lumina-chat-coach-name {
   font-size: 16px;
   font-weight: 700;
-  color: #0b1c30;
+  color: var(--on-surface);
 }
 
 .lumina-chat-coach-status {
@@ -705,23 +836,23 @@
 }
 
 .lumina-chat-bubble-assistant {
-  background-color: #f1f5f9;
-  color: #0b1c30;
+  background-color: var(--surface-container-low);
+  color: var(--on-surface);
   align-self: flex-start;
   border-bottom-left-radius: 4px;
 }
 
 .lumina-chat-bubble-user {
-  background: linear-gradient(135deg, #0ea5e9, #0284c7);
-  color: #ffffff;
+  background: linear-gradient(135deg, var(--primary-container), #0284c7);
+  color: var(--on-primary);
   align-self: flex-end;
   border-bottom-right-radius: 4px;
 }
 
 .lumina-chat-coach-typing {
   align-self: flex-start;
-  background-color: #f1f5f9;
-  color: #6e7881;
+  background-color: var(--surface-container-low);
+  color: var(--on-surface-variant);
   padding: 12px 20px;
   border-radius: 16px;
   border-bottom-left-radius: 4px;
@@ -733,7 +864,7 @@
   width: 6px;
   height: 6px;
   border-radius: 9999px;
-  background-color: #6e7881;
+  background-color: var(--outline);
   animation: typingBounce 1.4s infinite ease-in-out both;
 }
 
@@ -751,12 +882,12 @@
   display: flex;
   gap: 12px;
   align-items: center;
-  background-color: #ffffff;
+  background-color: var(--surface-container-lowest);
 }
 
 .lumina-chat-input {
   flex: 1;
-  border: 1px solid #bec8d2;
+  border: 1px solid var(--outline-variant);
   border-radius: 9999px;
   padding: 12px 20px;
   font-size: 14px;
@@ -765,7 +896,7 @@
 }
 
 .lumina-chat-input:focus {
-  border-color: #0ea5e9;
+  border-color: var(--primary-container);
   box-shadow: 0px 0px 0px 3px rgba(14, 165, 233, 0.15);
 }
 
@@ -773,26 +904,25 @@
   width: 44px;
   height: 44px;
   border-radius: 9999px;
-  background-color: #0ea5e9;
-  color: #ffffff;
+  background-color: var(--primary-container);
+  color: var(--on-primary);
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.2s;
 }
 
 .lumina-chat-send-btn:hover {
   background-color: #0284c7;
-  transform: translateY(-1px);
 }
 
 .lumina-chat-send-btn:active {
   transform: scale(0.95);
 }
 
-/* LIFT / WORKOUT TAB STYLING */
+/* LIFT TAB */
 .lumina-workout-grid {
   display: flex;
   flex-direction: column;
@@ -800,10 +930,10 @@
 }
 
 .lumina-workout-card {
-  background-color: #ffffff;
-  border-radius: 16px;
+  background-color: var(--surface-container-lowest);
+  border-radius: 12px;
   padding: 20px;
-  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.03);
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04);
   border: 1px solid rgba(190, 200, 210, 0.1);
   display: flex;
   justify-content: space-between;
@@ -820,8 +950,8 @@
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background-color: #eff6ff;
-  color: #006591;
+  background-color: var(--surface-container-low);
+  color: var(--primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -840,25 +970,25 @@
 .lumina-workout-name {
   font-size: 16px;
   font-weight: 700;
-  color: #0b1c30;
+  color: var(--on-surface);
 }
 
 .lumina-workout-sets {
   font-size: 13px;
-  color: #6e7881;
+  color: var(--on-surface-variant);
   font-weight: 500;
 }
 
 .lumina-workout-rpe-badge {
-  background-color: #f7be1d;
-  color: #423000;
+  background-color: var(--tertiary-fixed-dim);
+  color: var(--on-tertiary-container);
   font-size: 12px;
   font-weight: 700;
   padding: 4px 10px;
   border-radius: 8px;
 }
 
-/* NUTRITION FOOD TAB STYLING */
+/* FOOD TAB */
 .lumina-nutrition-progress {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -867,9 +997,9 @@
 }
 
 .lumina-food-item {
-  background-color: #ffffff;
-  border-radius: 14px;
-  padding: 14px 18px;
+  background-color: var(--surface-container-lowest);
+  border-radius: 12px;
+  padding: 16px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -890,17 +1020,17 @@
 
 .lumina-food-macros {
   font-size: 12px;
-  color: #6e7881;
+  color: var(--on-surface-variant);
   font-weight: 500;
 }
 
 .lumina-food-calories {
   font-size: 15px;
   font-weight: 800;
-  color: #006591;
+  color: var(--primary);
 }
 
-/* PROFILE TAB STYLING */
+/* PROFILE TAB */
 .lumina-profile-layout {
   display: grid;
   grid-template-columns: 1fr;
@@ -914,10 +1044,10 @@
 }
 
 .lumina-profile-card {
-  background-color: #ffffff;
+  background-color: var(--surface-container-lowest);
   border-radius: 20px;
   padding: 24px;
-  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.03);
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -929,28 +1059,28 @@
   height: 96px;
   border-radius: 9999px;
   overflow: hidden;
-  border: 4px solid #ffffff;
+  border: 4px solid var(--surface-container-lowest);
   box-shadow: 0px 8px 24px rgba(0, 0, 0, 0.1);
-  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  background: linear-gradient(135deg, var(--primary-container) 0%, #0284c7 100%);
   margin-bottom: 16px;
 }
 
 .lumina-profile-avatar-large img {
   width: 100%;
   height: 100%;
-  object-cover: cover;
+  object-fit: cover;
 }
 
 .lumina-profile-name {
   font-size: 22px;
   font-weight: 700;
-  color: #0b1c30;
+  color: var(--on-surface);
   margin: 0;
 }
 
 .lumina-profile-email {
   font-size: 14px;
-  color: #6e7881;
+  color: var(--on-surface-variant);
   margin: 4px 0 20px 0;
 }
 
@@ -963,22 +1093,22 @@
 }
 
 .lumina-profile-stat-box {
-  background-color: #f8fafc;
+  background-color: var(--surface-bright);
   padding: 12px;
   border-radius: 12px;
   text-align: center;
-  border: 1px solid rgba(190, 200, 210, 0.2);
+  border: 1px solid var(--surface-container);
 }
 
 .lumina-profile-stat-val {
   font-size: 16px;
   font-weight: 700;
-  color: #0b1c30;
+  color: var(--on-surface);
 }
 
 .lumina-profile-stat-lbl {
   font-size: 11px;
-  color: #6e7881;
+  color: var(--outline);
   margin-top: 2px;
   text-transform: uppercase;
   font-weight: 600;
