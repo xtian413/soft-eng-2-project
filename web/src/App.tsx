@@ -78,7 +78,7 @@ function App() {
                 </h1>
                 
                 <p className="lumina-auth-subtitle" style={{ marginBottom: '32px' }}>
-                  Welcome to <strong>Lumina AI Fitness</strong>, <span style={{ color: '#0ea5e9' }}>{registeredData?.fullName || userEmail}</span>. Your on-device personal training coach is initialized and ready to customize your local fitness plan.
+                  Welcome to <strong>Gemi</strong>, <span style={{ color: '#0ea5e9' }}>{registeredData?.fullName || userEmail}</span>. Your on-device personal training coach is initialized and ready to customize your local fitness plan.
                 </p>
 
                 {registeredData && (

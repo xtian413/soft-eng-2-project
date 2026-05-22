@@ -1113,3 +1113,1498 @@
   text-transform: uppercase;
   font-weight: 600;
 }
+
+/* Stitch Food Hub Specific Styles */
+.lumina-food-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 480px; /* Mobile viewport constraints matching standard Stitch preview */
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.lumina-food-summary-card {
+  background-color: var(--surface-container-lowest);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  border: 1px solid rgba(190, 200, 210, 0.1);
+}
+
+.lumina-food-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.lumina-food-summary-left h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--on-surface);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.lumina-food-summary-left p {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--outline);
+  margin: 2px 0 0 0;
+}
+
+.lumina-food-summary-right {
+  text-align: right;
+}
+
+.lumina-food-summary-right p:first-child {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.lumina-food-summary-right p:last-child {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--outline);
+  margin: 2px 0 0 0;
+}
+
+.lumina-food-macro-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lumina-food-macro-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lumina-food-macro-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.lumina-food-macro-name {
+  color: var(--on-surface);
+}
+
+.lumina-food-macro-value {
+  color: var(--outline);
+}
+
+.lumina-food-macro-progress {
+  height: 8px;
+  width: 100%;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.lumina-food-macro-progress.protein-bg {
+  background-color: rgba(0, 101, 145, 0.12);
+}
+
+.lumina-food-macro-progress.carbs-bg {
+  background-color: rgba(195, 148, 0, 0.2);
+}
+
+.lumina-food-macro-progress.fats-bg {
+  background-color: rgba(253, 118, 26, 0.2);
+}
+
+.lumina-food-macro-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lumina-food-macro-fill.protein-fill {
+  background-color: var(--primary);
+}
+
+.lumina-food-macro-fill.carbs-fill {
+  background-color: var(--tertiary-container);
+}
+
+.lumina-food-macro-fill.fats-fill {
+  background-color: var(--secondary-container);
+}
+
+/* AI Quick Log Wrapper and Premium Glow */
+.lumina-food-ai-log-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.lumina-food-ai-log-glow {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.25) 0%, rgba(211, 228, 254, 0.5) 100%);
+  border-radius: 20px;
+  filter: blur(8px);
+  opacity: 0.5;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.lumina-food-ai-log-card {
+  position: relative;
+  background-color: var(--surface-container-lowest);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--surface-container-high);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 2;
+}
+
+.lumina-food-ai-log-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.lumina-food-ai-log-header span:first-child {
+  font-size: 18px;
+  color: var(--primary-container);
+}
+
+.lumina-food-ai-log-header span:last-child {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+  letter-spacing: 0.02em;
+}
+
+.lumina-food-ai-log-row {
+  display: flex;
+  gap: 8px;
+}
+
+.lumina-food-ai-log-input {
+  flex: 1;
+  background-color: var(--surface-bright);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--on-surface);
+  padding: 10px 14px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.lumina-food-ai-log-input::placeholder {
+  color: var(--outline);
+}
+
+.lumina-food-ai-log-input:focus {
+  background-color: var(--surface-container-lowest);
+  border-color: var(--primary-container);
+  box-shadow: 0px 0px 0px 3px rgba(14, 165, 233, 0.15);
+}
+
+.lumina-food-ai-log-btn {
+  background-color: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  padding: 10px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 101, 145, 0.15);
+}
+
+.lumina-food-ai-log-btn:hover {
+  background-color: var(--surface-tint);
+}
+
+.lumina-food-ai-log-btn:active {
+  transform: scale(0.95);
+}
+
+/* Meals List */
+.lumina-food-meals-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lumina-food-meals-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--on-surface);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.lumina-food-meal-card {
+  background-color: var(--surface-container-lowest);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(190, 200, 210, 0.05);
+}
+
+.lumina-food-meal-card:hover {
+  background-color: var(--surface-container-low);
+}
+
+.lumina-food-meal-card:active {
+  transform: scale(0.98);
+}
+
+.lumina-food-meal-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.lumina-food-meal-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 9999px;
+  background-color: var(--surface-container);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lumina-food-meal-icon-box span {
+  font-size: 22px;
+}
+
+.lumina-food-meal-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lumina-food-meal-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.lumina-food-meal-desc {
+  font-size: 12px;
+  color: var(--outline);
+}
+
+.lumina-food-meal-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.lumina-food-meal-cals {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--on-surface);
+  font-family: 'Inter', sans-serif;
+}
+
+.lumina-food-meal-cals.logged {
+  color: var(--on-surface);
+}
+
+.lumina-food-meal-cals.unlogged {
+  color: var(--outline);
+}
+
+.lumina-food-meal-action-icon {
+  font-size: 24px;
+  color: var(--outline);
+  transition: color 0.2s ease;
+}
+
+.lumina-food-meal-card:hover .lumina-food-meal-action-icon {
+  color: var(--primary);
+}
+
+/* Water & Sleep Cards */
+.lumina-food-grid-cols-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.lumina-food-mini-card {
+  background-color: var(--surface-container-lowest);
+  border-radius: 16px;
+  padding: 18px 16px;
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px solid rgba(190, 200, 210, 0.05);
+  box-sizing: border-box;
+}
+
+.lumina-food-mini-card.clickable {
+  cursor: pointer;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.lumina-food-mini-card.clickable:hover {
+  background-color: var(--surface-container-low);
+}
+
+.lumina-food-mini-card.clickable:active {
+  transform: scale(0.95);
+}
+
+.lumina-food-mini-icon {
+  font-size: 32px;
+}
+
+.lumina-food-mini-icon.water {
+  color: var(--primary-container);
+}
+
+.lumina-food-mini-icon.sleep {
+  color: var(--inverse-surface);
+}
+
+.lumina-food-mini-details {
+  text-align: center;
+}
+
+.lumina-food-mini-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--outline);
+  margin: 0;
+}
+
+.lumina-food-mini-val {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--on-surface);
+  margin: 4px 0 0 0;
+  letter-spacing: -0.02em;
+}
+
+.lumina-food-mini-unit {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--outline);
+}
+
+/* Privacy Note */
+.lumina-food-privacy-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--outline);
+  padding: 16px 0;
+}
+
+.lumina-food-privacy-note span:first-child {
+  font-size: 16px;
+}
+
+.lumina-food-privacy-note span:last-child {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* --- Gemi Advanced Food Logging & Carousel System Styles --- */
+.gemi-carousel-container {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--surface-container-lowest);
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0px 10px 30px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(190, 200, 210, 0.08);
+  margin-bottom: 24px;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.gemi-carousel-slide {
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+  display: none;
+  width: 100%;
+}
+
+.gemi-carousel-slide.active {
+  opacity: 1;
+  display: block;
+}
+
+/* Slide 1: Energy Summary Rings */
+.gemi-energy-rings-row {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.gemi-ring-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  flex: 1;
+}
+
+.gemi-ring-svg {
+  width: 76px;
+  height: 76px;
+  transform: rotate(-90deg);
+}
+
+.gemi-ring-bg {
+  stroke: var(--surface-container-high);
+  stroke-width: 6px;
+}
+
+.gemi-ring-fill {
+  stroke-width: 6px;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease-in-out;
+}
+
+.gemi-ring-fill.consumed {
+  stroke: #3b82f6; /* Premium light blue */
+}
+
+.gemi-ring-fill.expenditure {
+  stroke: #10b981; /* Premium emerald green */
+}
+
+.gemi-ring-fill.remaining {
+  stroke: #8b5cf6; /* Premium violet purple */
+}
+
+.gemi-ring-center-text {
+  position: absolute;
+  top: 38px;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.gemi-ring-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--on-surface);
+  line-height: 1;
+}
+
+.gemi-ring-unit {
+  font-size: 8px;
+  color: var(--outline);
+  font-weight: 500;
+  margin-top: 1px;
+}
+
+.gemi-ring-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--outline);
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* Slide 3: Micronutrients Grid */
+.gemi-micros-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.gemi-micro-card {
+  background: var(--surface-container-low);
+  padding: 10px 12px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid rgba(190, 200, 210, 0.05);
+}
+
+.gemi-micro-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.gemi-micro-name {
+  color: var(--on-surface);
+}
+
+.gemi-micro-values {
+  color: var(--outline);
+}
+
+.gemi-micro-progress {
+  width: 100%;
+  height: 6px;
+  background-color: var(--surface-container-high);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.gemi-micro-fill {
+  height: 100%;
+  background-color: #06b6d4; /* Teal-cyan color */
+  border-radius: 3px;
+  transition: width 0.4s ease-out;
+}
+
+/* Carousel Pagination Header */
+.gemi-carousel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  width: 100%;
+}
+
+.gemi-carousel-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--on-surface);
+  letter-spacing: -0.01em;
+}
+
+.gemi-carousel-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gemi-carousel-arrow {
+  background: none;
+  border: none;
+  color: var(--outline);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.gemi-carousel-arrow:hover {
+  background-color: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.gemi-carousel-dots {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.gemi-carousel-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--outline-variant);
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.2s;
+}
+
+.gemi-carousel-dot.active {
+  background-color: var(--primary);
+  transform: scale(1.2);
+}
+
+/* Overlay & Modals */
+.gemi-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(10, 15, 25, 0.45);
+  backdrop-filter: blur(12px);
+  z-index: 10000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  transition: opacity 0.3s ease;
+}
+
+@media (min-width: 600px) {
+  .gemi-modal-overlay {
+    align-items: center;
+  }
+}
+
+.gemi-modal-sheet {
+  background-color: var(--surface-container-lowest);
+  width: 100%;
+  max-width: 500px;
+  border-radius: 28px 28px 0 0;
+  padding: 24px;
+  box-shadow: 0px -10px 40px rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+  animation: gemiSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid rgba(190, 200, 210, 0.08);
+}
+
+@media (min-width: 600px) {
+  .gemi-modal-sheet {
+    border-radius: 24px;
+    max-height: 80vh;
+    animation: gemiScaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+}
+
+@keyframes gemiSlideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes gemiScaleUp {
+  from { transform: scale(0.95) translateY(20px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* Options Modal Grid */
+.gemi-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.gemi-option-card {
+  background-color: var(--surface-container-low);
+  border: 1px solid rgba(190, 200, 210, 0.05);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.gemi-option-card:hover {
+  background-color: var(--surface-container-high);
+  border-color: var(--primary-container);
+}
+
+.gemi-option-card:active {
+  transform: scale(0.97);
+}
+
+.gemi-option-icon {
+  font-size: 36px;
+  color: var(--primary);
+}
+
+.gemi-option-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+
+.gemi-option-subtitle {
+  font-size: 11px;
+  color: var(--outline);
+  text-align: center;
+}
+
+/* Database Search View */
+.gemi-search-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gemi-search-bar-row {
+  display: flex;
+  gap: 12px;
+  position: relative;
+}
+
+.gemi-search-input-container {
+  position: relative;
+  flex: 1;
+}
+
+.gemi-search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--outline);
+  font-size: 20px;
+}
+
+.gemi-search-field {
+  width: 100%;
+  padding: 12px 36px 12px 42px;
+  background-color: var(--surface-container-low);
+  border: 1px solid rgba(190, 200, 210, 0.1);
+  border-radius: 9999px;
+  color: var(--on-surface);
+  font-size: 14px;
+  font-weight: 500;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.gemi-search-field:focus {
+  border-color: var(--primary);
+  background-color: var(--surface-container-lowest);
+  outline: none;
+}
+
+.gemi-filter-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.gemi-filter-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.gemi-filter-pill {
+  padding: 6px 16px;
+  background-color: var(--surface-container-low);
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--outline);
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.gemi-filter-pill.active {
+  background-color: var(--primary-container);
+  color: var(--on-primary-container);
+  border-color: rgba(190, 200, 210, 0.15);
+}
+
+/* Database Search Results */
+.gemi-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 350px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.gemi-result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: var(--surface-container-low);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.15s;
+  border: 1px solid rgba(190, 200, 210, 0.03);
+}
+
+.gemi-result-row:hover {
+  background-color: var(--surface-container-high);
+}
+
+.gemi-result-row:active {
+  transform: scale(0.99);
+}
+
+.gemi-result-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.gemi-result-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--on-surface);
+  line-height: 1.3;
+}
+
+.gemi-result-category {
+  font-size: 11px;
+  color: var(--outline);
+  font-weight: 500;
+}
+
+.gemi-result-nutrition {
+  font-size: 11px;
+  color: var(--outline);
+  display: flex;
+  gap: 8px;
+}
+
+.gemi-result-cals-badge {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.gemi-result-cals-num {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+
+.gemi-result-cals-label {
+  font-size: 9px;
+  color: var(--outline);
+  font-weight: 500;
+}
+
+/* Detail view configurator */
+.gemi-config-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.gemi-config-back {
+  background: none;
+  border: none;
+  color: var(--outline);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gemi-config-back:hover {
+  background-color: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.gemi-config-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--on-surface);
+}
+
+.gemi-meal-selector-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.gemi-meal-selector-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 8px;
+  background-color: var(--surface-container-low);
+  border-radius: 12px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s, transform 0.15s;
+}
+
+.gemi-meal-selector-btn:hover {
+  background-color: var(--surface-container-high);
+}
+
+.gemi-meal-selector-btn.active {
+  background-color: var(--primary-container);
+  border-color: var(--primary);
+  color: var(--on-primary-container);
+}
+
+.gemi-meal-selector-icon {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.gemi-meal-selector-label {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.gemi-portion-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.gemi-multiplier-box {
+  width: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gemi-multiplier-input {
+  width: 100%;
+  padding: 10px;
+  background-color: var(--surface-container-low);
+  border: 1px solid rgba(190, 200, 210, 0.1);
+  border-radius: 12px;
+  color: var(--on-surface);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.gemi-multiplier-input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.gemi-unit-chips-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gemi-unit-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gemi-unit-chip {
+  padding: 8px 12px;
+  background-color: var(--surface-container-low);
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--on-surface);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.gemi-unit-chip:hover {
+  background-color: var(--surface-container-high);
+}
+
+.gemi-unit-chip.active {
+  background-color: var(--inverse-surface);
+  color: var(--inverse-on-surface);
+}
+
+.gemi-config-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.gemi-summary-box {
+  background-color: var(--surface-container-low);
+  padding: 10px;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.gemi-summary-box.cals {
+  background-color: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+}
+
+.gemi-summary-num {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--on-surface);
+}
+
+.gemi-summary-label {
+  font-size: 9px;
+  color: var(--outline);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* Micro accordion / scroll list inside detail sheet */
+.gemi-detail-micros-section {
+  border-top: 1px solid var(--outline-variant);
+  padding-top: 16px;
+  margin-bottom: 24px;
+}
+
+.gemi-detail-micros-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--on-surface);
+  margin-bottom: 12px;
+}
+
+.gemi-detail-micros-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 150px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.gemi-detail-micro-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(190, 200, 210, 0.03);
+}
+
+.gemi-detail-micro-name {
+  color: var(--outline);
+}
+
+.gemi-detail-micro-value {
+  color: var(--on-surface);
+  font-weight: 700;
+}
+
+.gemi-modal-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.gemi-action-btn {
+  flex: 1;
+  padding: 14px;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+  border: none;
+}
+
+.gemi-action-btn:active {
+  transform: scale(0.98);
+}
+
+.gemi-action-btn.secondary {
+  background-color: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.gemi-action-btn.primary {
+  background-color: var(--primary);
+  color: var(--on-primary);
+}
+
+/* Barcode Viewfinder */
+.gemi-scanner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 0;
+}
+
+.gemi-scanner-viewfinder {
+  position: relative;
+  width: 260px;
+  height: 180px;
+  border-radius: 20px;
+  overflow: hidden;
+  background-color: #0b0f19;
+  border: 2px solid var(--outline-variant);
+  box-shadow: inset 0 0 30px rgba(0,0,0,0.8);
+}
+
+.gemi-scanner-laser {
+  position: absolute;
+  width: 100%;
+  height: 3px;
+  background-color: #10b981;
+  box-shadow: 0 0 10px #10b981, 0 0 20px #10b981;
+  animation: laserScan 2s infinite ease-in-out;
+}
+
+@keyframes laserScan {
+  0% { top: 0%; }
+  50% { top: 100%; }
+  100% { top: 0%; }
+}
+
+.gemi-scanner-corner {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 4px solid var(--primary);
+}
+
+.gemi-scanner-corner.tl { top: 12px; left: 12px; border-right: none; border-bottom: none; border-radius: 4px 0 0 0; }
+.gemi-scanner-corner.tr { top: 12px; right: 12px; border-left: none; border-bottom: none; border-radius: 0 4px 0 0; }
+.gemi-scanner-corner.bl { bottom: 12px; left: 12px; border-right: none; border-top: none; border-radius: 0 0 0 4px; }
+.gemi-scanner-corner.br { bottom: 12px; right: 12px; border-left: none; border-top: none; border-radius: 0 0 4px 0; }
+
+.gemi-scanner-overlay-text {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--primary);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.gemi-scanner-manual {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gemi-scanner-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--outline);
+}
+
+.gemi-scanner-row {
+  display: flex;
+  gap: 12px;
+}
+
+.gemi-scanner-input {
+  flex: 1;
+  padding: 12px 16px;
+  background-color: var(--surface-container-low);
+  border: 1px solid rgba(190, 200, 210, 0.1);
+  border-radius: 12px;
+  color: var(--on-surface);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.gemi-scanner-input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+/* ── WELLNESS CARDS (Water + Sleep) ─────────────────────────────── */
+.gemi-wellness-card {
+  background-color: var(--surface-container-lowest);
+  border: 1px solid rgba(190, 200, 210, 0.15);
+  border-radius: 20px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+}
+
+.gemi-wellness-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.gemi-wellness-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+
+.gemi-wellness-summary {
+  font-size: 13px;
+  color: var(--on-surface-variant);
+}
+
+.gemi-wellness-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0 0;
+}
+
+/* ── WATER GLASS BUTTONS ─────────────────────────────────────────── */
+.gemi-water-glasses-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gemi-water-glass-btn {
+  min-width: 44px;
+  min-height: 44px; /* WCAG touch target minimum */
+  width: calc((100% - 6px * 7) / 8);
+  max-width: 54px;
+  border-radius: 12px;
+  border: 2px solid var(--outline-variant);
+  background-color: var(--surface-container-low);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+  color: var(--outline);
+  flex-shrink: 0;
+}
+
+.gemi-water-glass-btn:hover {
+  border-color: #0ea5e9;
+  background-color: rgba(14, 165, 233, 0.08);
+  transform: scale(1.05);
+}
+
+.gemi-water-glass-btn.filled {
+  background-color: rgba(14, 165, 233, 0.15);
+  border-color: #0ea5e9;
+  color: #0ea5e9;
+}
+
+.gemi-water-glass-btn:active {
+  transform: scale(0.88);
+  transition: transform 0.08s;
+}
+
+/* Hydration goal inline editor */
+.gemi-hydration-goal-editor {
+  background-color: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fadeInDown 0.2s ease;
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── SLEEP TIME PICKERS ──────────────────────────────────────────── */
+.gemi-sleep-pickers {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.gemi-sleep-picker-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gemi-sleep-picker-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--outline);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.gemi-sleep-divider {
+  display: flex;
+  align-items: center;
+  padding-bottom: 12px;
+  color: var(--outline);
+}
+
+.gemi-time-input {
+  width: 100%;
+  padding: 10px 12px;
+  background-color: var(--surface-container-low);
+  border: 1.5px solid var(--outline-variant);
+  border-radius: 12px;
+  color: var(--on-surface);
+  font-size: 15px;
+  font-weight: 700;
+  font-family: 'Inter', sans-serif;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.gemi-time-input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.gemi-sleep-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gemi-sleep-progress-bg {
+  flex: 1;
+  height: 6px;
+  background-color: var(--surface-container-high);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.gemi-sleep-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.5s ease, background-color 0.3s;
+}
+
+/* ── CUSTOM FOOD FORM ────────────────────────────────────────────── */
+.gemi-custom-food-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.gemi-custom-food-hint {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  line-height: 1.5;
+  margin: 0;
+  padding: 10px 14px;
+  background-color: rgba(0, 101, 145, 0.06);
+  border-radius: 10px;
+  border-left: 3px solid var(--primary);
+}
+
+.gemi-custom-form-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background-color: rgba(186, 26, 26, 0.08);
+  border: 1px solid rgba(186, 26, 26, 0.2);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--error);
+}
+
+.gemi-custom-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.gemi-custom-form-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--outline);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.gemi-custom-form-input {
+  width: 100%;
+  padding: 10px 14px;
+  background-color: var(--surface-container-low);
+  border: 1.5px solid var(--outline-variant);
+  border-radius: 12px;
+  color: var(--on-surface);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.gemi-custom-form-input:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.gemi-custom-form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.gemi-custom-form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.gemi-custom-form-divider {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--outline);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 6px 0 2px;
+  border-top: 1px solid var(--outline-variant);
+  margin-top: 4px;
+}
+
+/* ── LOADING SPINNER ─────────────────────────────────────────────── */
+.gemi-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--surface-container-high);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

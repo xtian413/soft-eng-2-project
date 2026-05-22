@@ -1,4 +1,4 @@
-# AGENT.md — Smart Fitness AI
+# AGENT.md — Gemi
 ## AI Instruction Manual for Coding Sessions
 
 > This file is the single source of truth for all AI-assisted development on this project.
@@ -10,7 +10,7 @@
 
 | Field | Value |
 |---|---|
-| App Name | Smart Fitness AI |
+| App Name | Gemi |
 | Type | Mobile Application (iOS + Android) |
 | Purpose | Workout, diet, and body weight tracking with on-device AI-generated insights |
 | Author | Christian Gamos |
@@ -56,7 +56,7 @@
 ## 3. Repository Structure
 
 ```
-smart-fitness-ai/
+soft-eng-2-project/
 ├── AGENT.md                     ← You are here
 ├── .gitignore
 ├── README.md

@@ -1,0 +1,348 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<title>Gym Tracker Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-fixed-dim": "#f7be1d",
+                    "surface-container": "#e5eeff",
+                    "on-secondary-fixed-variant": "#783200",
+                    "tertiary-container": "#c39400",
+                    "on-error-container": "#93000a",
+                    "secondary-fixed": "#ffdbca",
+                    "secondary-fixed-dim": "#ffb690",
+                    "on-surface": "#0b1c30",
+                    "inverse-surface": "#213145",
+                    "on-secondary": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "primary-fixed": "#c9e6ff",
+                    "surface-bright": "#f8f9ff",
+                    "on-error": "#ffffff",
+                    "inverse-on-surface": "#eaf1ff",
+                    "surface-container-low": "#eff4ff",
+                    "secondary": "#9d4300",
+                    "on-tertiary-fixed-variant": "#5a4300",
+                    "on-surface-variant": "#3e4850",
+                    "surface-container-highest": "#d3e4fe",
+                    "surface-tint": "#006591",
+                    "secondary-container": "#fd761a",
+                    "tertiary": "#785a00",
+                    "on-primary-container": "#003751",
+                    "tertiary-fixed": "#ffdf9a",
+                    "on-secondary-container": "#5c2400",
+                    "on-tertiary-container": "#423000",
+                    "surface-dim": "#cbdbf5",
+                    "on-primary-fixed-variant": "#004c6e",
+                    "outline-variant": "#bec8d2",
+                    "inverse-primary": "#89ceff",
+                    "on-tertiary": "#ffffff",
+                    "background": "#f8f9ff",
+                    "primary-container": "#0ea5e9",
+                    "error-container": "#ffdad6",
+                    "primary-fixed-dim": "#89ceff",
+                    "on-secondary-fixed": "#341100",
+                    "surface-container-lowest": "#ffffff",
+                    "on-primary-fixed": "#001e2f",
+                    "on-background": "#0b1c30",
+                    "outline": "#6e7881",
+                    "surface-variant": "#d3e4fe",
+                    "error": "#ba1a1a",
+                    "on-tertiary-fixed": "#251a00",
+                    "surface": "#f8f9ff",
+                    "primary": "#006591",
+                    "surface-container-high": "#dce9ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "lg": "24px",
+                    "xs": "4px",
+                    "gutter": "16px",
+                    "base": "4px",
+                    "sm": "8px",
+                    "md": "16px",
+                    "xl": "32px",
+                    "container-padding": "20px"
+            },
+            "fontFamily": {
+                    "headline-lg": ["Inter"],
+                    "label-md": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "body-md": ["Inter"],
+                    "mono-stats": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "display-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "mono-stats": ["20px", {"lineHeight": "24px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.04em", "fontWeight": "800"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        .circular-progress {
+            transform: rotate(-90deg);
+        }
+        .ai-glow {
+            box-shadow: 0 0 40px rgba(14, 165, 233, 0.15);
+        }
+        .ai-gradient-bg {
+            background: linear-gradient(135deg, #F8FAFC 0%, rgba(139, 92, 246, 0.05) 100%);
+        }
+        @keyframes pulse-shadow {
+            0% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(14, 165, 233, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
+        }
+        .animate-pulse-shadow {
+            animation: pulse-shadow 2s infinite;
+        }
+        .nav-dot-transition {
+            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen pb-24 md:pb-0 pt-20">
+<!-- TopAppBar -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-gutter py-md h-16 bg-surface-container-lowest shadow-[0px_10px_25px_rgba(0,0,0,0.04)]">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-container-high border-2 border-surface-container-lowest shadow-sm">
+<img alt="User Profile Photo" class="w-full h-full object-cover" data-alt="A professional, high-quality headshot of an athletic individual smiling softly, suitable for a fitness app profile picture. The lighting is bright and even, highlighting healthy skin tones against a neutral, slightly blurred background. The style is clean, modern, and aspirational, fitting seamlessly into a pristine, high-end digital interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3vRdcAG9t6iFC5DAgdJAW_2xrU33Y5jWF3VTnvuT6g1_txVlo9IKcYRWZLDe7MgGQ4oDQoa78iHbt7RNXwIIUtmdbkDEcD-JTsxkq64qt13q97fhxO8p8ZzBn_Ri15-QgWhsW3f0QAjI-nrChR0yjI4vx5cRkmb0rrzVL6_yHAG9p1-9IaKUzooqUs3icFjuaw9qGLIw6vyp2WQ-MyxyQFwBxT7Cm9LLm1oLZR-pvMeHoR0IkOXnyWvrVn2O1W-3JerDeNtItYgrg">
+</div>
+<h1 class="font-headline-md-mobile text-headline-md-mobile font-bold text-on-surface">Today</h1>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-primary hover:bg-surface-container-high transition-colors active:scale-95 transition-transform duration-200">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+</button>
+</header>
+<main class="max-w-7xl mx-auto px-container-padding space-y-xl mt-md md:mt-xl">
+<!-- Summary Dashboard (Macros & Cals) - Bento Layout -->
+<section class="grid grid-cols-2 md:grid-cols-4 gap-md">
+<!-- Calories Main Card -->
+<div class="col-span-2 row-span-2 bg-surface-container-lowest rounded-xl p-lg shadow-[0px_10px_25px_rgba(0,0,0,0.04)] flex flex-col justify-between relative overflow-hidden">
+<div class="z-10">
+<h2 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Calories Remaining</h2>
+<div class="mt-sm flex items-baseline gap-xs">
+<span class="font-display-lg text-display-lg text-primary">1,240</span>
+<span class="font-label-md text-label-md text-outline">/ 2,800 kcal</span>
+</div>
+</div>
+<div class="mt-lg flex items-center justify-center z-10 relative">
+<!-- Progress Ring Representation -->
+<svg class="w-40 h-40 circular-progress" viewBox="0 0 100 100">
+<circle cx="50" cy="50" fill="none" r="45" stroke="#e5eeff" stroke-width="8"></circle>
+<circle class="transition-all duration-1000 ease-out" cx="50" cy="50" fill="none" r="45" stroke="#006591" stroke-dasharray="282" stroke-dashoffset="125" stroke-linecap="round" stroke-width="8"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-xs">1,560 eaten</span>
+</div>
+</div>
+</div>
+<!-- Protein Card -->
+<div class="col-span-1 bg-surface-container-lowest rounded-xl p-md shadow-[0px_10px_25px_rgba(0,0,0,0.04)] flex flex-col justify-between border-l-4 border-primary-container">
+<h3 class="font-label-sm text-label-sm text-on-surface-variant">Protein</h3>
+<div class="mt-sm">
+<span class="font-mono-stats text-mono-stats text-on-surface">120g</span>
+<span class="font-label-sm text-label-sm text-outline block">/ 180g</span>
+</div>
+<div class="w-full h-2 bg-primary-container/12 rounded-full mt-md overflow-hidden">
+<div class="h-full bg-primary-container rounded-full" style="width: 66%"></div>
+</div>
+</div>
+<!-- Carbs Card -->
+<div class="col-span-1 bg-surface-container-lowest rounded-xl p-md shadow-[0px_10px_25px_rgba(0,0,0,0.04)] flex flex-col justify-between border-l-4 border-tertiary-fixed-dim">
+<h3 class="font-label-sm text-label-sm text-on-surface-variant">Carbs</h3>
+<div class="mt-sm">
+<span class="font-mono-stats text-mono-stats text-on-surface">210g</span>
+<span class="font-label-sm text-label-sm text-outline block">/ 300g</span>
+</div>
+<div class="w-full h-2 bg-tertiary-fixed-dim/12 rounded-full mt-md overflow-hidden">
+<div class="h-full bg-tertiary-fixed-dim rounded-full" style="width: 70%"></div>
+</div>
+</div>
+<!-- Fats Card -->
+<div class="col-span-2 md:col-span-1 bg-surface-container-lowest rounded-xl p-md shadow-[0px_10px_25px_rgba(0,0,0,0.04)] flex flex-col justify-between border-l-4 border-secondary-container">
+<h3 class="font-label-sm text-label-sm text-on-surface-variant">Fats</h3>
+<div class="mt-sm">
+<span class="font-mono-stats text-mono-stats text-on-surface">45g</span>
+<span class="font-label-sm text-label-sm text-outline block">/ 75g</span>
+</div>
+<div class="w-full h-2 bg-secondary-container/12 rounded-full mt-md overflow-hidden">
+<div class="h-full bg-secondary-container rounded-full" style="width: 60%"></div>
+</div>
+</div>
+<!-- Add Macro Button (Contextual Secondary) -->
+<div class="col-span-2 md:col-span-1 bg-surface-container-lowest rounded-xl shadow-[0px_10px_25px_rgba(0,0,0,0.04)] flex items-center justify-center p-md cursor-pointer hover:bg-surface-container-high transition-colors">
+<div class="flex flex-col items-center text-primary">
+<div class="w-10 h-10 rounded-full bg-primary-container/10 flex items-center justify-center mb-xs">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">add</span>
+</div>
+<span class="font-label-sm text-label-sm">Quick Log</span>
+</div>
+</div>
+</section>
+<!-- AI Insight Card -->
+<section class="ai-gradient-bg rounded-[20px] p-lg ai-glow relative overflow-hidden border border-outline-variant/20">
+<div class="flex items-center gap-sm mb-md relative z-10">
+<div class="bg-primary-container text-on-primary font-label-sm text-label-sm px-3 py-1 rounded-full flex items-center gap-xs">
+<span class="material-symbols-outlined text-[14px]" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+                    Whisper
+                </div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">AI Recovery Insight</span>
+</div>
+<p class="font-headline-md text-headline-md text-on-surface relative z-10 leading-tight">
+                "You've been hitting high RPEs all week; consider a deload day to optimize CNS recovery."
+            </p>
+<div class="mt-md flex gap-sm relative z-10">
+<button class="bg-primary-container/10 text-primary font-label-md text-label-md px-4 py-2 rounded-lg hover:bg-primary-container/20 transition-colors">
+                    Adjust Plan
+                </button>
+</div>
+<!-- Decorative background elements -->
+<div class="absolute -right-10 -bottom-10 w-40 h-40 bg-primary-container/5 rounded-full blur-2xl"></div>
+</section>
+<!-- Weekly Summary & Streak -->
+<section class="bg-surface-container-lowest rounded-[20px] p-lg shadow-[0px_10px_25px_rgba(0,0,0,0.04)]">
+<div class="flex justify-between items-center mb-lg">
+<h2 class="font-headline-md-mobile text-headline-md-mobile text-on-surface font-semibold">Weekly Review</h2>
+<div class="flex items-center gap-xs text-secondary-container bg-secondary-container/10 px-3 py-1 rounded-full">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">local_fire_department</span>
+<span class="font-label-md text-label-md">14 Day Streak</span>
+</div>
+</div>
+<!-- Streak Visualizer -->
+<div class="flex justify-between items-center mb-lg">
+<!-- Days M-S -->
+<div class="flex flex-col items-center gap-xs">
+<span class="font-label-sm text-label-sm text-outline">M</span>
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+</div>
+<div class="flex flex-col items-center gap-xs">
+<span class="font-label-sm text-label-sm text-outline">T</span>
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+</div>
+<div class="flex flex-col items-center gap-xs">
+<span class="font-label-sm text-label-sm text-outline">W</span>
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+</div>
+<div class="flex flex-col items-center gap-xs">
+<span class="font-label-sm text-label-sm text-outline">T</span>
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+</div>
+<div class="flex flex-col items-center gap-xs">
+<span class="font-label-sm text-label-sm text-primary font-bold">F</span>
+<div class="w-8 h-8 rounded-full border-2 border-primary-container text-primary flex items-center justify-center bg-primary-container/10">
+<span class="material-symbols-outlined text-[16px]">fitness_center</span>
+</div>
+</div>
+<div class="flex flex-col items-center gap-xs">
+<span class="font-label-sm text-label-sm text-outline">S</span>
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-outline">
+</div>
+</div>
+<div class="flex flex-col items-center gap-xs">
+<span class="font-label-sm text-label-sm text-outline">S</span>
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-outline">
+</div>
+</div>
+</div>
+<!-- Deep Dive Text -->
+<div class="bg-surface-bright rounded-lg p-md border border-surface-container">
+<p class="font-body-md text-body-md text-on-surface-variant">
+                    Great job this week! You hit your protein goals 6 out of 7 days, maintaining a solid anabolic state. Your average caloric intake is tracking perfectly with your slight surplus target.
+                </p>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-6 left-4 right-4 z-50 flex justify-around items-center h-16 bg-white/80 backdrop-blur-[16px] shadow-[0px_8px_32px_rgba(0,0,0,0.08)] rounded-full">
+<!-- Active Indicator Dot -->
+<div class="absolute bottom-2 w-1.5 h-1.5 rounded-full bg-[#0EA5E9] left-[10%] -translate-x-1/2 nav-dot-transition"></div>
+<button class="w-12 h-12 flex flex-col items-center justify-center text-[#0EA5E9] active:scale-90 transition-all duration-300 z-10">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-bold text-[10px] mt-0.5">Home</span>
+</button>
+<button class="w-12 h-12 flex flex-col items-center justify-center text-[#64748B] hover:text-[#0EA5E9] active:scale-90 transition-all duration-300 z-10">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 0;">restaurant</span>
+<span class="font-bold text-[10px] mt-0.5">Food</span>
+</button>
+<!-- AI Coach (Center) -->
+<button class="relative -top-3 flex flex-col items-center justify-center text-white bg-gradient-to-br from-[#0EA5E9] to-[#0284C7] rounded-full w-14 h-14 active:scale-90 transition-all duration-300 animate-pulse-shadow z-20">
+<span class="material-symbols-outlined text-[28px]" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</button>
+<button class="w-12 h-12 flex flex-col items-center justify-center text-[#64748B] hover:text-[#0EA5E9] active:scale-90 transition-all duration-300 z-10">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 0;">fitness_center</span>
+<span class="font-bold text-[10px] mt-0.5">Lift</span>
+</button>
+<button class="w-12 h-12 flex flex-col items-center justify-center text-[#64748B] hover:text-[#0EA5E9] active:scale-90 transition-all duration-300 z-10">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 0;">person</span>
+<span class="font-bold text-[10px] mt-0.5">Profile</span>
+</button>
+</nav>
+<!-- Desktop Navigation Side Rail (Visible md and up) -->
+<nav class="hidden md:flex fixed top-16 left-0 h-[calc(100vh-4rem)] w-24 bg-surface-container-lowest border-r border-surface-container flex-col items-center py-xl gap-xl z-40">
+<button class="flex flex-col items-center justify-center text-primary bg-primary-container/10 rounded-xl p-3 w-16 h-16 transition-all">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-label-sm text-label-sm text-[10px]">Dashboard</span>
+</button>
+<button class="flex flex-col items-center justify-center text-outline hover:text-primary hover:bg-surface-container-high rounded-xl p-3 w-16 h-16 transition-all">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">fitness_center</span>
+<span class="font-label-sm text-label-sm text-[10px]">Lift</span>
+</button>
+<button class="flex flex-col items-center justify-center text-outline hover:text-primary hover:bg-surface-container-high rounded-xl p-3 w-16 h-16 transition-all">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">restaurant</span>
+<span class="font-label-sm text-label-sm text-[10px]">Food</span>
+</button>
+<button class="flex flex-col items-center justify-center text-outline hover:text-primary hover:bg-surface-container-high rounded-xl p-3 w-16 h-16 transition-all mt-auto mb-md">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">person</span>
+<span class="font-label-sm text-label-sm text-[10px]">Profile</span>
+</button>
+</nav>
+<!-- Adjust main container padding for desktop sidenav -->
+<style>
+        @media (min-width: 768px) {
+            main {
+                padding-left: calc(6rem + 20px); /* w-24 + container-padding */
+            }
+        }
+    </style>
+
+
+</body></html>
