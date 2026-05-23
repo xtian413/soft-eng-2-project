@@ -1,6 +1,6 @@
 # context.md — Project-Wide Context & Notes
 ## Gemi
-**Last Updated**: 2026-05-23T10:09:00+08:00
+**Last Updated**: 2026-05-23T10:47:00+08:00
 
 ---
 
@@ -41,11 +41,11 @@ soft-eng-2-project/
         ├── pages/
         │   ├── Auth/     ← Login.tsx, Register.tsx, Auth.css
         │   └── Dashboard/ ← Dashboard.tsx, Dashboard.css, types.ts
-        │       ├── AIChat/ ← AIChat.tsx, hooks/useAIChat.ts
+        │       ├── AIChat/ ← AIChat.tsx, AIChat.css, hooks/useAIChat.ts
         │       ├── Food/ ← Food.tsx, Food.css, hooks/useFood.ts, subcomponents/FoodModal.tsx
         │       ├── Home/ ← Home.tsx
-        │       ├── Lift/ ← Lift.tsx
-        │       └── Profile/ ← Profile.tsx
+        │       ├── Lift/ ← Lift.tsx, Lift.css
+        │       └── Profile/ ← Profile.tsx, Profile.css
         ├── App.tsx       ← Route definitions
         └── main.tsx      ← BrowserRouter entry point
 ```
