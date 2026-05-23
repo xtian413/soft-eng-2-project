@@ -5,9 +5,7 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { errorHandler } from './middleware/errorHandler.js';
-import dietRoutes from './routes/diet.routes.js';
-import progressRoutes from './routes/progress.routes.js';
-import workoutRoutes from './routes/workout.routes.js';
+import { dietRoutes, foodRoutes, progressRoutes, workoutRoutes } from './routes/index.js';
 
 const app = express();
 
@@ -29,6 +27,7 @@ app.get('/health', (req, res) => {
 app.use('/api/workouts', workoutRoutes);
 app.use('/api/diet', dietRoutes);
 app.use('/api/progress', progressRoutes);
+app.use('/api/foods', foodRoutes);
 
 app.use(errorHandler);
 

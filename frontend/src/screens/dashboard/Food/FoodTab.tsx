@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -16,7 +16,7 @@ import {
 import Svg, { Circle } from 'react-native-svg';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing } from '@/theme/typography';
-import { fetchLocalFoodDatabase, type GemiFoodItem } from '@/data/foodAdapter';
+import { searchFoodDatabase, type GemiFoodItem } from '@/api/foodDatabaseApi';
 import type { FoodLogEntry, MacroTargets, MealId } from '@/screens/dashboard/types';
 import {
   Coffee,
@@ -128,6 +128,7 @@ export function FoodTab({
   const [configQuantity, setConfigQuantity] = useState(1);
   const [configUnit, setConfigUnit] = useState('portion');
   const [configWeight, setConfigWeight] = useState(100);
+  const latestSearchRef = useRef(0);
 
   // Viewing Logged Item Detail Modal State
   const [viewingLoggedItem, setViewingLoggedItem] = useState<FoodLogEntry | null>(null);
@@ -141,21 +142,39 @@ export function FoodTab({
   const [customUnit, setCustomUnit] = useState('serving');
   const [customWeight, setCustomWeight] = useState('100');
 
-  // Load local USDA database on demand
-  const loadDatabase = useCallback(async () => {
-    if (dbList.length > 0 || isLoadingDb) return;
+  // Load USDA database results from the backend
+  const loadFoodResults = useCallback(async (query: string) => {
+    const requestId = ++latestSearchRef.current;
     setIsLoadingDb(true);
     try {
-      const list = await fetchLocalFoodDatabase();
-      if (list && list.length > 0) {
+      const trimmedQuery = query.trim();
+      const list = await searchFoodDatabase({
+        query: trimmedQuery || undefined,
+        limit: trimmedQuery ? 50 : 15,
+      });
+      if (requestId === latestSearchRef.current) {
         setDbList(list);
       }
     } catch (err) {
-      console.error('[Gemi] Food database loading error:', err);
+      if (requestId === latestSearchRef.current) {
+        console.error('[Gemi] Food database loading error:', err);
+        setDbList([]);
+      }
     } finally {
-      setIsLoadingDb(false);
+      if (requestId === latestSearchRef.current) {
+        setIsLoadingDb(false);
+      }
     }
-  }, [dbList.length, isLoadingDb]);
+  }, []);
+
+  useEffect(() => {
+    if (!isModalOpen || selectedCategory === 'Custom') return;
+    const delay = searchQuery.trim() ? 250 : 0;
+    const timer = setTimeout(() => {
+      loadFoodResults(searchQuery);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [isModalOpen, searchQuery, selectedCategory, loadFoodResults]);
 
   // Derived macros totals
   const proteinTotal = Number(foodLogs.reduce((acc, f) => acc + f.protein, 0).toFixed(1));
@@ -229,23 +248,7 @@ export function FoodTab({
   const handleOpenSearchModal = (meal: MealId) => {
     setActiveMealId(meal);
     setIsModalOpen(true);
-    loadDatabase();
   };
-
-  // Search filter
-  const filteredFoodsList = useMemo(() => {
-    let list = dbList;
-    if (selectedCategory !== 'All') {
-      list = list.filter((f) => f.category.toLowerCase().includes(selectedCategory.toLowerCase()));
-    }
-    if (searchQuery.trim() !== '') {
-      const q = searchQuery.toLowerCase();
-      list = list.filter((f) => f.name.toLowerCase().includes(q) || f.category.toLowerCase().includes(q));
-    } else if (selectedCategory === 'All') {
-      return list.slice(0, 15);
-    }
-    return list;
-  }, [dbList, searchQuery, selectedCategory]);
 
   const handleSelectSearchItem = (item: GemiFoodItem) => {
     setSelectedItem(item);
@@ -758,7 +761,7 @@ export function FoodTab({
         <View style={styles.privacyWrap}>
           <View style={styles.privacyRow}>
             <Lock size={12} color={Colors.outline} style={{ marginRight: 6 }} />
-            <Text style={styles.privacyText}>Your Gemi nutrition and metrics data never leaves this phone.</Text>
+            <Text style={styles.privacyText}>Food search results are fetched from the backend. Logged entries stay on this device.</Text>
           </View>
         </View>
       </ScrollView>
@@ -792,7 +795,7 @@ export function FoodTab({
                   <View style={styles.searchBarContainer}>
                     <TextInput
                       style={styles.searchBarInput}
-                      placeholder="Search USDA local database..."
+                      placeholder="Search USDA database..."
                       value={searchQuery}
                       onChangeText={setSearchQuery}
                       placeholderTextColor={Colors.outline}
@@ -804,7 +807,7 @@ export function FoodTab({
                     <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
                   ) : (
                     <FlatList
-                      data={filteredFoodsList}
+                      data={dbList}
                       keyExtractor={(item) => item.id}
                       renderItem={({ item }) => (
                         <TouchableOpacity

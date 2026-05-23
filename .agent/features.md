@@ -161,6 +161,19 @@
 
 ---
 
+### [F-020] Mobile Gemma Native Bridge Scaffolding
+- **Date**: 2026-05-23
+- **Branch**: master
+- **Commit**: (not committed yet)
+- **Description**: Added the mobile on-device Gemma prompt builder, offline context bridge, and Kotlin native module/package skeletons for LiteRT LLM inference.
+- **Files**:
+  - `frontend/src/ai/prompts.ts`
+  - `frontend/src/ai/gemmaService.ts`
+  - `frontend/android/app/src/main/java/com/frontend/gemma/GemmaModule.kt`
+  - `frontend/android/app/src/main/java/com/frontend/gemma/GemmaPackage.kt`
+
+---
+
 ## 🔄 In Progress Features
 
 ### [F-012] Supabase Auth Integration (Web)

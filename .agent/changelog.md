@@ -3,6 +3,20 @@
 **Format**: `[YYYY-MM-DD HH:MM +TZ] TYPE: description`
 
 ---
+### [2026-05-23 14:56 +0800] FEAT: Mobile on-device Gemma native bridge scaffolding
+- **Branch**: `master`
+- **Files Modified**:
+  - `frontend/src/ai/prompts.ts`
+  - `frontend/src/ai/gemmaService.ts`
+  - `frontend/android/app/src/main/java/com/frontend/gemma/GemmaModule.kt`
+  - `frontend/android/app/src/main/java/com/frontend/gemma/GemmaPackage.kt`
+- **Changes**:
+  - ✅ **Prompt Builder**: Added a structured workout + diet prompt assembler for context stuffing.
+  - ✅ **Gemma Service Bridge**: Created a mobile-only service that loads local context and calls the native Gemma module.
+  - ✅ **Native Module**: Added Kotlin Gemma module/package skeleton for LiteRT LLM inference integration.
+
+---
+
 ### [2026-05-23 11:55 +0800] FEAT: Integrated Customizable Hydration, Sleep Progress, Portion Config & Diary Entry Details in Mobile
 - **Branch**: `master`
 - **Files Modified**:
