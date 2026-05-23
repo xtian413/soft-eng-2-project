@@ -1,2 +1,247 @@
-/* Styles for Lift component */
-/* The layout classes are defined globally in Dashboard.css. Local overrides can be added here. */
+/* gemi-lift namespace */
+.gemi-lift-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--xl, 32px);
+  padding: var(--container-padding, 20px) 0;
+  max-width: 32rem; /* max-w-lg */
+  margin: 0 auto;
+}
+
+.gemi-lift-timer-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sm, 8px) 0;
+}
+
+.gemi-lift-timer-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--outline);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--xs, 4px);
+}
+
+.gemi-lift-timer-value {
+  font-family: 'Inter', sans-serif;
+  font-size: 48px;
+  font-weight: 800;
+  color: var(--primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+}
+
+.gemi-lift-canvas {
+  background-color: var(--surface-container-lowest);
+  border-radius: 20px;
+  padding: var(--gutter, 16px);
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: var(--md, 16px);
+}
+
+.gemi-lift-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.gemi-lift-tag {
+  display: inline-block;
+  background-color: var(--surface-container);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  margin-bottom: 8px;
+}
+
+.gemi-lift-exercise-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--on-surface);
+  letter-spacing: -0.02em;
+}
+
+.gemi-lift-unit-toggle {
+  display: flex;
+  background-color: var(--surface-container-low);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.gemi-lift-unit-btn {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  color: var(--outline-variant);
+  transition: colors 0.2s;
+}
+
+.gemi-lift-unit-btn-active {
+  background-color: var(--surface-container-lowest);
+  color: var(--on-surface);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.gemi-lift-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sm, 8px);
+  margin-top: var(--sm, 8px);
+}
+
+.gemi-lift-input-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: var(--surface-bright);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.gemi-lift-input-group label {
+  font-size: 12px;
+  color: var(--outline);
+  margin-bottom: 4px;
+}
+
+.gemi-lift-stat-input {
+  width: 100%;
+  background: transparent;
+  text-align: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--on-surface);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 8px 0;
+  transition: border-color 0.2s ease;
+}
+
+.gemi-lift-stat-input:focus {
+  outline: none;
+  border-color: var(--primary-container);
+  background-color: var(--surface-container-lowest);
+}
+
+.gemi-lift-log-btn {
+  width: 100%;
+  background-color: var(--primary-container);
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.gemi-lift-log-btn:active {
+  transform: scale(0.98);
+}
+
+.gemi-lift-ai-whisper {
+  background: linear-gradient(135deg, #F8FAFC 0%, rgba(139, 92, 246, 0.08) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.1);
+  border-radius: 12px;
+  padding: var(--md, 16px);
+  display: flex;
+  gap: var(--sm, 8px);
+  align-items: flex-start;
+  box-shadow: 0px 8px 24px rgba(14, 165, 233, 0.15);
+  margin-top: var(--xs, 4px);
+}
+
+.gemi-lift-ai-whisper h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--on-surface);
+  margin-bottom: 4px;
+}
+
+.gemi-lift-ai-whisper p {
+  font-size: 14px;
+  color: var(--on-surface-variant);
+}
+
+.gemi-lift-divider {
+  border: 0;
+  border-top: 1px solid var(--surface-container);
+  margin: var(--sm, 8px) 0;
+}
+
+/* Set History */
+.gemi-lift-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gemi-lift-history-header {
+  display: grid;
+  grid-template-columns: 2fr 3fr 5fr 2fr;
+  gap: 8px;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--outline);
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.gemi-lift-set-row {
+  display: grid;
+  grid-template-columns: 2fr 3fr 5fr 2fr;
+  gap: 8px;
+  align-items: center;
+  background-color: var(--surface-container-low);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.gemi-lift-set-row.completed {
+  background-color: var(--surface-container-low);
+  opacity: 0.7;
+}
+
+.gemi-lift-set-row.active {
+  background-color: var(--surface-container-lowest);
+  border: 1px solid rgba(14, 165, 233, 0.3); /* primary-container */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.gemi-lift-set-checkbox {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--outline-variant);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: white;
+  margin: 0 auto;
+}
+
+.gemi-lift-set-checkbox:checked {
+  background-color: var(--primary-container);
+  border-color: var(--primary-container);
+}
+
+.gemi-lift-set-checkbox:checked::after {
+  content: "";
+  width: 6px;
+  height: 12px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-bottom: 2px;
+}
