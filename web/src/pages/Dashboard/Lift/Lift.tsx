@@ -1,36 +1,80 @@
-import React, { useState } from 'react';
-import type { WorkoutItem } from './types';
 import './Lift.css';
 
-export const Lift: React.FC = () => {
-  const [workouts] = useState<WorkoutItem[]>([
-    { id: 1, name: 'Incline Dumbbell Press', sets: '3 sets x 8-10 reps', rpe: '8.5', icon: 'fitness_center' },
-    { id: 2, name: 'Chest-Supported Row', sets: '3 sets x 10-12 reps', rpe: '8.0', icon: 'fitness_center' },
-    { id: 3, name: 'Standing Overhead Press', sets: '2 sets x 8 reps', rpe: '9.0', icon: 'fitness_center' },
-    { id: 4, name: 'Dual Cable Lat Pulldown', sets: '3 sets x 12 reps', rpe: '8.0', icon: 'fitness_center' },
-    { id: 5, name: 'Triceps Overhead Extension', sets: '2 sets x 12-15 reps', rpe: '8.5', icon: 'fitness_center' },
-    { id: 6, name: 'Incline Dumbbell Curl', sets: '2 sets x 10-12 reps', rpe: '9.0', icon: 'fitness_center' }
-  ]);
-
+export function Lift() {
   return (
-    <div className="lumina-weekly-card">
-      <h2 className="lumina-weekly-title" style={{ marginBottom: '16px' }}>Today's Hypertrophy Workout</h2>
-      <div className="lumina-workout-grid">
-        {workouts.map((workout) => (
-          <div key={workout.id} className="lumina-workout-card">
-            <div className="lumina-workout-info">
-              <div className="lumina-workout-icon-box">
-                <span className="material-symbols-outlined">{workout.icon}</span>
-              </div>
-              <div className="lumina-workout-details">
-                <span className="lumina-workout-name">{workout.name}</span>
-                <span className="lumina-workout-sets">{workout.sets}</span>
-              </div>
-            </div>
-            <span className="lumina-workout-rpe-badge">RPE {workout.rpe}</span>
+    <div className="gemi-lift-container">
+      {/* Session Timer Widget */}
+      <section className="gemi-lift-timer-section">
+        <span className="gemi-lift-timer-label">Session Time</span>
+        <div className="gemi-lift-timer-value">00:42:15</div>
+      </section>
+
+      {/* Active Exercise Canvas */}
+      <section className="gemi-lift-canvas">
+        <div className="gemi-lift-header">
+          <div>
+            <span className="gemi-lift-tag">Lower Body</span>
+            <h2 className="gemi-lift-exercise-title">Back Squat</h2>
           </div>
-        ))}
-      </div>
+          <div className="gemi-lift-unit-toggle">
+            <button className="gemi-lift-unit-btn gemi-lift-unit-btn-active">lbs</button>
+            <button className="gemi-lift-unit-btn">kg</button>
+          </div>
+        </div>
+
+        {/* Inputs */}
+        <div className="gemi-lift-inputs">
+          <div className="gemi-lift-input-group">
+            <label>Weight</label>
+            <input type="number" className="gemi-lift-stat-input" defaultValue="225" />
+          </div>
+          <div className="gemi-lift-input-group">
+            <label>Reps</label>
+            <input type="number" className="gemi-lift-stat-input" defaultValue="8" />
+          </div>
+          <div className="gemi-lift-input-group">
+            <label>RIR</label>
+            <input type="number" className="gemi-lift-stat-input" defaultValue="1" />
+          </div>
+        </div>
+
+        <button className="gemi-lift-log-btn">Log Set</button>
+
+        {/* AI Insight */}
+        <div className="gemi-lift-ai-whisper">
+          <span className="material-symbols-outlined" style={{ color: '#8B5CF6', fontVariationSettings: "'FILL' 1" }}>temp_preferences_custom</span>
+          <div>
+            <h4>Insight</h4>
+            <p>Your RIR is hitting 0 earlier than last week. Consider dropping the weight by 5 lbs for the next set.</p>
+          </div>
+        </div>
+
+        <hr className="gemi-lift-divider" />
+
+        {/* Set History */}
+        <div className="gemi-lift-history">
+          <div className="gemi-lift-history-header">
+            <div>Set</div>
+            <div>Previous</div>
+            <div>Lbs x Reps</div>
+            <div><span className="material-symbols-outlined" style={{ fontSize: '16px' }}>check</span></div>
+          </div>
+          
+          <div className="gemi-lift-set-row completed">
+            <div style={{ textAlign: 'center', fontWeight: 'bold' }}>1</div>
+            <div style={{ textAlign: 'center', fontSize: '14px', color: 'var(--outline)' }}>225 x 10</div>
+            <div style={{ textAlign: 'center', fontWeight: 'bold' }}>225 x 10</div>
+            <div><input type="checkbox" className="gemi-lift-set-checkbox" defaultChecked disabled /></div>
+          </div>
+
+          <div className="gemi-lift-set-row active">
+            <div style={{ textAlign: 'center', fontWeight: 'bold' }}>3</div>
+            <div style={{ textAlign: 'center', fontSize: '14px', color: 'var(--outline)' }}>225 x 8</div>
+            <div style={{ textAlign: 'center', fontWeight: 'bold' }}>225 x 8</div>
+            <div><input type="checkbox" className="gemi-lift-set-checkbox" defaultChecked /></div>
+          </div>
+        </div>
+      </section>
     </div>
   );
-};
+}
