@@ -144,6 +144,33 @@ function ensureBuildGradleDependency() {
   console.warn('  implementation "com.google.ai.edge.litertlm:litertlm-android:0.12.0"');
 }
 
+function ensureBuildGradleAaptOptions() {
+  if (!fs.existsSync(BUILD_GRADLE_PATH)) {
+    console.warn(`\n⚠ build.gradle not found at ${BUILD_GRADLE_PATH}`);
+    return;
+  }
+
+  let content = fs.readFileSync(BUILD_GRADLE_PATH, 'utf-8');
+
+  // If aaptOptions with noCompress "litertlm" is already present, nothing to do
+  if (content.includes('noCompress "litertlm"') || content.includes("noCompress 'litertlm'")) {
+    console.log('ℹ aaptOptions.noCompress "litertlm" already present');
+    return;
+  }
+
+  // Look for android { block
+  if (content.includes('android {')) {
+    const patch = `android {\n    aaptOptions {\n        // Do not compress the large LiteRT LM model file\n        noCompress "litertlm"\n    }`;
+    content = content.replace('android {', patch);
+    fs.writeFileSync(BUILD_GRADLE_PATH, content);
+    console.log('✓ Added aaptOptions.noCompress "litertlm" configuration');
+    return;
+  }
+
+  console.warn('\n⚠ Could not find android { block in build.gradle. Add manually:');
+  console.warn('  android { aaptOptions { noCompress "litertlm" } }');
+}
+
 
 function main() {
   console.log('\n🔧 Patching Android project for Gemma module...\n');
@@ -168,6 +195,8 @@ function main() {
   injectPackageRegistration();
   // Ensure MediaPipe dependency
   ensureBuildGradleDependency();
+  // Ensure noCompress configuration
+  ensureBuildGradleAaptOptions();
 
   console.log('\n✅ Patching complete!\n');
   console.log('Next steps:');
