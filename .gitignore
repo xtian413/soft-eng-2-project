@@ -4,4 +4,4 @@ dist/
 .expo/
 *.bin
 *.task
-*.tflite
+*.tflite.worktrees/
