@@ -13,10 +13,12 @@ import type { FoodLogEntry, TabType } from './types';
 export function Dashboard() {
   const location = useLocation();
   
-  // Retrieve passed state from registration/login or use premium defaults
   const passedData = location.state || {};
-  const [fullName] = useState(passedData.fullName || 'Christian Gamos');
-  const [email] = useState(passedData.email || 'christian.gamos@gemi.ai');
+  const [email] = useState(passedData.email || 'athlete@gemi.ai');
+  const [fullName] = useState(
+    passedData.fullName || 
+    (passedData.email ? passedData.email.split('@')[0].charAt(0).toUpperCase() + passedData.email.split('@')[0].slice(1) : 'Athlete')
+  );
   const [gender] = useState(passedData.gender || 'male');
   const [height] = useState(passedData.height || '178 cm');
   const [weight] = useState(passedData.weight || '75 kg');

@@ -32,7 +32,7 @@ const TABS: { key: TabType; label: string }[] = [
 ];
 
 export default function DashboardScreen() {
-  const { user, signOut } = useAuthStore();
+  const { user, signOut, profile, fetchProfile } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastOpacity = useState(new Animated.Value(0))[0];
@@ -99,17 +99,32 @@ export default function DashboardScreen() {
   ]);
 
   // Derived goals
-  const goal: GoalKey = (user?.user_metadata?.goal as GoalKey) || 'build_muscle';
+  const goal: GoalKey = profile?.goal || (user?.user_metadata?.goal as GoalKey) || 'build_muscle';
   const targets = GOAL_TARGETS[goal];
 
-  const fullName = user?.user_metadata?.full_name || 'Christian Gamos';
-  const email = user?.email || 'christian.gamos@gemi.ai';
+  const derivedName = (() => {
+    if (profile?.fullName) return profile.fullName;
+    if (user?.user_metadata?.full_name) return user.user_metadata.full_name;
+    if (user?.email) {
+      const prefix = user.email.split('@')[0];
+      return prefix.charAt(0).toUpperCase() + prefix.slice(1);
+    }
+    return 'Athlete';
+  })();
+
+  const fullName = derivedName;
+  const email = user?.email || '';
 
   // Derived current metrics
   const proteinTotal = Number(foodLogs.reduce((acc, f) => acc + f.protein, 0).toFixed(1));
   const carbsTotal = Number(foodLogs.reduce((acc, f) => acc + f.carbs, 0).toFixed(1));
   const fatsTotal = Number(foodLogs.reduce((acc, f) => acc + f.fat, 0).toFixed(1));
   const caloriesEaten = Math.round(foodLogs.reduce((acc, x) => acc + x.calories, 0));
+
+  // Fetch user profile from Supabase on mount
+  useEffect(() => {
+    fetchProfile();
+  }, []);
 
   // Pulse animation for AI coach button
   useEffect(() => {

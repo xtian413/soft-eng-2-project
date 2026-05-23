@@ -4,9 +4,16 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { supabase } from '@/lib/supabase';
 
+interface ProfileState {
+  fullName: string | null;
+  heightCm: number | null;
+  goal: 'lose_weight' | 'build_muscle' | 'maintain' | null;
+}
+
 interface AuthState {
   session: Session | null;
   user: User | null;
+  profile: ProfileState | null;
   isLoading: boolean;
   initializeAuth: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<AuthError | null>;
@@ -21,6 +28,7 @@ interface AuthState {
     }
   ) => Promise<AuthError | null>;
   signOut: () => Promise<void>;
+  fetchProfile: () => Promise<void>;
 }
 
 type AuthError = {
@@ -36,6 +44,7 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       session: null,
       user: null,
+      profile: null,
       isLoading: true,
       initializeAuth: async () => {
         if (authSubscription) {
@@ -45,11 +54,21 @@ export const useAuthStore = create<AuthState>()(
         try {
           const { data, error } = await supabase.auth.getSession();
           if (!error) {
-            set({ session: data.session, user: data.session?.user ?? null });
+            const user = data.session?.user ?? null;
+            set({ session: data.session, user });
+            if (user) {
+              await get().fetchProfile();
+            }
           }
 
-          authSubscription = supabase.auth.onAuthStateChange((_event, session) => {
-            set({ session, user: session?.user ?? null, isLoading: false });
+          authSubscription = supabase.auth.onAuthStateChange(async (_event, session) => {
+            const user = session?.user ?? null;
+            set({ session, user, isLoading: false });
+            if (user) {
+              await get().fetchProfile();
+            } else {
+              set({ profile: null });
+            }
           }).data.subscription;
         } catch (err) {
           console.warn('[Gemi] Auth init failed (Supabase not configured):', err);
@@ -66,13 +85,17 @@ export const useAuthStore = create<AuthState>()(
         }
 
         try {
-          const { error } = await supabase.auth.signInWithPassword({
+          const { data, error } = await supabase.auth.signInWithPassword({
             email,
             password,
           });
           if (error) {
             console.log('[Gemi] Supabase login error:', error.message);
             return { code: error.status?.toString(), message: error.message };
+          }
+          if (data.user) {
+            set({ user: data.user });
+            await get().fetchProfile();
           }
           return null;
         } catch (e: any) {
@@ -140,6 +163,15 @@ export const useAuthStore = create<AuthState>()(
             if (weightError) {
               console.warn('[Gemi] Failed to save initial weight:', weightError.message);
             }
+
+            // Expose updated profile immediately in Zustand
+            set({
+              profile: {
+                fullName: metadata.fullName,
+                heightCm: metadata.height,
+                goal: metadata.goal,
+              }
+            });
           }
 
           return null;
@@ -154,7 +186,33 @@ export const useAuthStore = create<AuthState>()(
         } catch (e) {
           console.log('[Gemi] Supabase SignOut error:', e);
         }
-        set({ session: null, user: null });
+        set({ session: null, user: null, profile: null });
+      },
+      fetchProfile: async () => {
+        const userId = get().user?.id;
+        if (!userId) {
+          set({ profile: null });
+          return;
+        }
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('full_name, height_cm, goal')
+            .eq('id', userId)
+            .maybeSingle();
+
+          if (!error && data) {
+            set({
+              profile: {
+                fullName: data.full_name,
+                heightCm: data.height_cm ? parseFloat(data.height_cm) : null,
+                goal: data.goal as any,
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('[Gemi] Failed to fetch user profile:', e);
+        }
       },
     }),
     {
@@ -163,6 +221,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         session: state.session,
         user: state.user,
+        profile: state.profile,
       }),
     }
   )
