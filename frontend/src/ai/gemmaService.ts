@@ -12,9 +12,10 @@ const DIET_STORAGE_KEY = 'gemi:dietLogs';
 type GemmaNativeModule = {
   initModel: (modelPath: string) => Promise<void>;
   generateResponse: (prompt: string) => Promise<string>;
+  copyAsset: (assetName: string) => Promise<string>;
 };
 
-function getGemmaModule(): GemmaNativeModule {
+export function getGemmaModule(): GemmaNativeModule {
   const module = NativeModules.GemmaModule as GemmaNativeModule | undefined;
   if (!module) {
     throw new Error('GemmaModule is not registered. Did you run prebuild and add GemmaPackage?');

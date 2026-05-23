@@ -108,15 +108,15 @@ function injectPackageRegistration() {
 function ensureBuildGradleDependency() {
   if (!fs.existsSync(BUILD_GRADLE_PATH)) {
     console.warn(`\n⚠ build.gradle not found at ${BUILD_GRADLE_PATH}`);
-    console.warn('Please add dependency manually: implementation "com.google.mediapipe:tasks-genai:0.10.14"');
+    console.warn('Please add dependency manually: implementation "com.google.ai.edge.litertlm:litertlm-android:0.12.0"');
     return;
   }
 
-  const depLine = 'implementation("com.google.mediapipe:tasks-genai:0.10.14")';
+  const depLine = 'implementation("com.google.ai.edge.litertlm:litertlm-android:0.12.0")';
   let content = fs.readFileSync(BUILD_GRADLE_PATH, 'utf-8');
 
   if (content.includes(depLine)) {
-    console.log('ℹ MediaPipe GenAI dependency already present');
+    console.log('ℹ LiteRT LM dependency already present');
     return;
   }
 
@@ -126,7 +126,7 @@ function ensureBuildGradleDependency() {
       `implementation("com.facebook.react:react-android")\n    ${depLine}`
     );
     fs.writeFileSync(BUILD_GRADLE_PATH, content);
-    console.log('✓ Added MediaPipe GenAI dependency');
+    console.log('✓ Added LiteRT LM dependency');
     return;
   }
 
@@ -136,13 +136,14 @@ function ensureBuildGradleDependency() {
       `dependencies {\n    ${depLine}`
     );
     fs.writeFileSync(BUILD_GRADLE_PATH, content);
-    console.log('✓ Added MediaPipe GenAI dependency');
+    console.log('✓ Added LiteRT LM dependency');
     return;
   }
 
   console.warn('\n⚠ Could not find dependencies block in build.gradle. Add manually:');
-  console.warn('  implementation "com.google.mediapipe:tasks-genai:0.10.14"');
+  console.warn('  implementation "com.google.ai.edge.litertlm:litertlm-android:0.12.0"');
 }
+
 
 function main() {
   console.log('\n🔧 Patching Android project for Gemma module...\n');
