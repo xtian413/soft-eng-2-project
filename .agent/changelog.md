@@ -3,6 +3,19 @@
 **Format**: `[YYYY-MM-DD HH:MM +TZ] TYPE: description`
 
 ---
+### [2026-05-23 11:55 +0800] FEAT: Integrated Customizable Hydration, Sleep Progress, Portion Config & Diary Entry Details in Mobile
+- **Branch**: `master`
+- **Files Modified**:
+  - `frontend/src/screens/dashboard/Food/FoodTab.tsx`
+  - `frontend/src/screens/dashboard/DashboardScreen.tsx`
+- **Changes**:
+  - ✅ **Customizable Hydration**: Added dynamic daily goal editor with target presets, water cup matrices scaled to the selected goals, and progress bar trackers.
+  - ✅ **Sleep Progress Tracker**: Displayed bedtime recovery duration comparing with an 8h target using optimal/fair/poor dynamic color fills and alert warning cards.
+  - ✅ **1g Portion Selector**: Implemented custom single-gram search logger chip scaling micro-nutrient highlights dynamically based on gram counts.
+  - ✅ **Log Entry Detail Overlays**: Integrated tap sheets on logged meals listing calories, protein, carbs, fats, 7 micro-nutrients highlights, and direct entry deletions.
+  - ✅ **Type Safety**: Verified compiling with `npx tsc --noEmit` yielding zero warnings or errors.
+
+---
 
 ### [2026-05-23 10:45 +0800] FEAT: Extracted and Integrated Stitch UI for Lift, Profile, and AI Chat
 - **Branch**: `Frontend-integration`
