@@ -10,7 +10,16 @@ interface AuthState {
   isLoading: boolean;
   initializeAuth: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<AuthError | null>;
-  signUp: (email: string, password: string) => Promise<AuthError | null>;
+  signUp: (
+    email: string,
+    password: string,
+    metadata?: {
+      fullName: string;
+      height: number;
+      weight: number;
+      goal: 'lose_weight' | 'build_muscle' | 'maintain';
+    }
+  ) => Promise<AuthError | null>;
   signOut: () => Promise<void>;
 }
 
@@ -71,21 +80,68 @@ export const useAuthStore = create<AuthState>()(
           return { message: e.message || 'An unexpected authentication error occurred.' };
         }
       },
-      signUp: async (email: string, password: string) => {
+      signUp: async (
+        email: string,
+        password: string,
+        metadata?: {
+          fullName: string;
+          height: number;
+          weight: number;
+          goal: 'lose_weight' | 'build_muscle' | 'maintain';
+        }
+      ) => {
         const hasEnv = !!process.env.EXPO_PUBLIC_SUPABASE_URL;
         if (!hasEnv) {
           return { message: 'Supabase env vars are not configured. Please add them in your .env file to enable authentication.' };
         }
 
         try {
-          const { error } = await supabase.auth.signUp({
+          const { data, error } = await supabase.auth.signUp({
             email,
             password,
+            options: metadata ? {
+              data: {
+                full_name: metadata.fullName,
+                goal: metadata.goal,
+              },
+            } : undefined,
           });
           if (error) {
             console.log('[Gemi] Supabase register error:', error.message);
             return { code: error.status?.toString(), message: error.message };
           }
+
+          // If signup is successful and we have metadata, save to public.profiles and public.body_progress
+          const userId = data.user?.id;
+          if (userId && metadata) {
+            // Update profile
+            const { error: profileError } = await supabase
+              .from('profiles')
+              .update({
+                full_name: metadata.fullName,
+                height_cm: metadata.height,
+                goal: metadata.goal,
+              })
+              .eq('id', userId);
+
+            if (profileError) {
+              console.warn('[Gemi] Failed to save profile details:', profileError.message);
+            }
+
+            // Insert body progress (initial weight)
+            const { error: weightError } = await supabase
+              .from('body_progress')
+              .insert({
+                user_id: userId,
+                weight_kg: metadata.weight,
+                recorded_at: new Date().toISOString(),
+              });
+
+            if (weightError) {
+              console.warn('[Gemi] Failed to save initial weight:', weightError.message);
+            }
+          }
+
           return null;
         } catch (e: any) {
           console.warn('[Gemi] Supabase sign up connection failed:', e);

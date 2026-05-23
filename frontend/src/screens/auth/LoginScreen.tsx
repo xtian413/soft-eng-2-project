@@ -52,10 +52,12 @@ export default function LoginScreen() {
     }
   };
 
+  const Container = Platform.OS === 'web' ? View : KeyboardAvoidingView;
+
   return (
-    <KeyboardAvoidingView
+    <Container
       style={styles.outer}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      {...(Platform.OS !== 'web' ? { behavior: Platform.OS === 'ios' ? 'padding' : undefined } : {})}
     >
       {/* Ambient background decoration */}
       <View style={[styles.glowContainer, { pointerEvents: 'none' }]} pointerEvents="none">
@@ -63,7 +65,12 @@ export default function LoginScreen() {
         <View style={styles.glow2} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={true}
+      >
         {/* Logo Icon box */}
         <View style={styles.logoSection}>
           <View style={styles.logoBox}>
@@ -191,7 +198,7 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </Container>
   );
 }
 
@@ -199,6 +206,12 @@ const styles = StyleSheet.create({
   outer: {
     flex: 1,
     backgroundColor: '#f8f9ff',
+    ...Platform.select({
+      web: {
+        height: '100vh' as any,
+        overflow: 'auto' as any,
+      },
+    }),
   },
   glowContainer: {
     ...StyleSheet.absoluteFill,
@@ -227,7 +240,8 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xxl,
+    paddingTop: spacing.xxl,
+    paddingBottom: 60, // Bounded bottom spacing for scroll safety
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -429,6 +443,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     marginTop: spacing.md,
+    marginBottom: spacing.xl, // Ensures spacing after footer on small phones
   },
   footerText: {
     fontSize: typography.base,

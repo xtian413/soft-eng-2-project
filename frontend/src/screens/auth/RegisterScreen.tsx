@@ -75,7 +75,19 @@ export default function RegisterScreen() {
       return;
     }
 
-    const error = await signUp(values.email, values.password);
+    // Convert stats to metric equivalents to match Supabase database schema
+    const parsedHeight = parseFloat(values.height);
+    const parsedWeight = parseFloat(values.weight);
+    const heightCm = heightUnit === 'cm' ? parsedHeight : parsedHeight * 30.48;
+    const weightKg = weightUnit === 'kg' ? parsedWeight : parsedWeight * 0.45359237;
+
+    const error = await signUp(values.email, values.password, {
+      fullName: values.fullName,
+      height: heightCm,
+      weight: weightKg,
+      goal,
+    });
+
     if (error) {
       Alert.alert('Sign up failed', error.message);
       return;
@@ -88,10 +100,12 @@ export default function RegisterScreen() {
     );
   };
 
+  const Container = Platform.OS === 'web' ? View : KeyboardAvoidingView;
+
   return (
-    <KeyboardAvoidingView
+    <Container
       style={styles.outer}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      {...(Platform.OS !== 'web' ? { behavior: Platform.OS === 'ios' ? 'padding' : undefined } : {})}
     >
       {/* Decorative Blur Backgrounds */}
       <View style={[styles.glowContainer, { pointerEvents: 'none' }]} pointerEvents="none">
@@ -110,7 +124,12 @@ export default function RegisterScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={true}
+      >
         {/* Header */}
         <View style={styles.headerSection}>
           <Text style={styles.title}>Let's Personalize Your Coach</Text>
@@ -373,7 +392,7 @@ export default function RegisterScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </Container>
   );
 }
 
@@ -381,6 +400,12 @@ const styles = StyleSheet.create({
   outer: {
     flex: 1,
     backgroundColor: '#f8f9ff',
+    ...Platform.select({
+      web: {
+        height: '100vh' as any,
+        overflow: 'auto' as any,
+      },
+    }),
   },
   glowContainer: {
     ...StyleSheet.absoluteFill,
@@ -424,7 +449,7 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxl,
+    paddingBottom: 140, // Expanded to ensure extra scrolling breathing room on small viewports
     paddingTop: spacing.lg,
   },
   headerSection: {
@@ -714,6 +739,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
     marginTop: spacing.xl,
+    marginBottom: spacing.xl, // Ensures spacing after footer on small phones
   },
   footerText: {
     fontSize: typography.base,
