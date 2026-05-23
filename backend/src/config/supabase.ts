@@ -8,6 +8,6 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
 }
 
 export const supabaseAdmin = createClient(
-  supabaseUrl ?? 'https://placeholder.supabase.co',
-  supabaseServiceRoleKey ?? 'placeholder-service-role-key'
+  supabaseUrl!,   // Type assertion (OK because it's not null)
+  supabaseServiceRoleKey!   // Type assertion (OK because it's not null)
 );
