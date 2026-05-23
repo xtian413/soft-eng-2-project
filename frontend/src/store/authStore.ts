@@ -53,11 +53,7 @@ export const useAuthStore = create<AuthState>()(
       signIn: async (email: string, password: string) => {
         const hasEnv = !!process.env.EXPO_PUBLIC_SUPABASE_URL;
         if (!hasEnv) {
-          console.log('[Gemi] Offline Fallback: Logging in local demo session.');
-          const mockUser = { id: 'local-demo-user', email, email_confirmed_at: new Date().toISOString() } as any;
-          const mockSession = { access_token: 'local-demo-token', user: mockUser } as any;
-          set({ session: mockSession, user: mockUser });
-          return null;
+          return { message: 'Supabase env vars are not configured. Please add them in your .env file to enable authentication.' };
         }
 
         try {
@@ -66,29 +62,19 @@ export const useAuthStore = create<AuthState>()(
             password,
           });
           if (error) {
-            console.log('[Gemi] Supabase login error, falling back to local session:', error.message);
-            const mockUser = { id: 'local-demo-user', email, email_confirmed_at: new Date().toISOString() } as any;
-            const mockSession = { access_token: 'local-demo-token', user: mockUser } as any;
-            set({ session: mockSession, user: mockUser });
-            return null;
+            console.log('[Gemi] Supabase login error:', error.message);
+            return { code: error.status?.toString(), message: error.message };
           }
           return null;
         } catch (e: any) {
-          console.warn('[Gemi] Supabase connection failed, logging in locally:', e);
-          const mockUser = { id: 'local-demo-user', email, email_confirmed_at: new Date().toISOString() } as any;
-          const mockSession = { access_token: 'local-demo-token', user: mockUser } as any;
-          set({ session: mockSession, user: mockUser });
-          return null;
+          console.warn('[Gemi] Supabase connection failed:', e);
+          return { message: e.message || 'An unexpected authentication error occurred.' };
         }
       },
       signUp: async (email: string, password: string) => {
         const hasEnv = !!process.env.EXPO_PUBLIC_SUPABASE_URL;
         if (!hasEnv) {
-          console.log('[Gemi] Offline Fallback: Creating local account.');
-          const mockUser = { id: 'local-demo-user', email, email_confirmed_at: new Date().toISOString() } as any;
-          const mockSession = { access_token: 'local-demo-token', user: mockUser } as any;
-          set({ session: mockSession, user: mockUser });
-          return null;
+          return { message: 'Supabase env vars are not configured. Please add them in your .env file to enable authentication.' };
         }
 
         try {
@@ -97,26 +83,20 @@ export const useAuthStore = create<AuthState>()(
             password,
           });
           if (error) {
-            console.log('[Gemi] Supabase register error, creating local session:', error.message);
-            const mockUser = { id: 'local-demo-user', email, email_confirmed_at: new Date().toISOString() } as any;
-            const mockSession = { access_token: 'local-demo-token', user: mockUser } as any;
-            set({ session: mockSession, user: mockUser });
-            return null;
+            console.log('[Gemi] Supabase register error:', error.message);
+            return { code: error.status?.toString(), message: error.message };
           }
           return null;
         } catch (e: any) {
-          console.warn('[Gemi] Supabase sign up connection failed, creating local session:', e);
-          const mockUser = { id: 'local-demo-user', email, email_confirmed_at: new Date().toISOString() } as any;
-          const mockSession = { access_token: 'local-demo-token', user: mockUser } as any;
-          set({ session: mockSession, user: mockUser });
-          return null;
+          console.warn('[Gemi] Supabase sign up connection failed:', e);
+          return { message: e.message || 'An unexpected authentication error occurred.' };
         }
       },
       signOut: async () => {
         try {
           await supabase.auth.signOut();
         } catch (e) {
-          console.log('[Gemi] Offline SignOut local override.');
+          console.log('[Gemi] Supabase SignOut error:', e);
         }
         set({ session: null, user: null });
       },
