@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { MealId } from '../../types';
 
 export const useFood = () => {
   // Nutrient carousel slide
@@ -53,7 +54,7 @@ export const useFood = () => {
 
   // Modal open states
   const [isOptionsModalOpen, setIsOptionsModalOpen] = useState(false);
-  const [activeLoggingMealId, setActiveLoggingMealId] = useState<string>('breakfast');
+  const [activeLoggingMealId, setActiveLoggingMealId] = useState<MealId>('breakfast');
 
   return {
     nutrientSlide,

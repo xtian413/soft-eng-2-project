@@ -1,6 +1,6 @@
 # context.md — Project-Wide Context & Notes
 ## Gemi
-**Last Updated**: 2026-05-23T09:44:00+08:00
+**Last Updated**: 2026-05-23T10:09:00+08:00
 
 ---
 
@@ -40,7 +40,12 @@ soft-eng-2-project/
     └── src/
         ├── pages/
         │   ├── Auth/     ← Login.tsx, Register.tsx, Auth.css
-        │   └── Dashboard/ ← Dashboard.tsx, Dashboard.css
+        │   └── Dashboard/ ← Dashboard.tsx, Dashboard.css, types.ts
+        │       ├── AIChat/ ← AIChat.tsx, hooks/useAIChat.ts
+        │       ├── Food/ ← Food.tsx, Food.css, hooks/useFood.ts, subcomponents/FoodModal.tsx
+        │       ├── Home/ ← Home.tsx
+        │       ├── Lift/ ← Lift.tsx
+        │       └── Profile/ ← Profile.tsx
         ├── App.tsx       ← Route definitions
         └── main.tsx      ← BrowserRouter entry point
 ```
@@ -142,6 +147,23 @@ Profile data passed: `navigate('/dashboard', { state: { fullName, email, gender,
 6. **Profile data is transient**: User profile from registration lives in React Router location state. No persistence until Supabase auth is wired (TASK-001).
 7. **Stitch images**: The profile avatar image in Dashboard uses a Google AIDA public URL. Should be replaced with actual user avatar from Supabase Storage in production.
 8. **Supabase migration duplicates**: There are both named (`001_profiles.sql`) and timestamped (`20260522055821_001_profiles.sql`) migration files. The timestamped ones are the ones Supabase CLI actually uses.
+
+---
+
+## 🔮 Future Risks & Potential Error Vectors (For Future Reference)
+
+1. **Shared State Prop-Drilling vs. State Store:**
+   - *Risk:* As multiple tabs (like `Lift`, `Food`, and `AIChat`) scale and require reactive access to shared states, drilling functions (like `setFoodLogs`, `setToastMessage`) down through `Dashboard.tsx` will clutter component interfaces.
+   - *Future Solution:* Transition key shared scopes to a lightweight client-side **Zustand** store (as recommended in `AGENT.md` Section 2.1) to isolate container rendering from state operations.
+2. **ESM Dynamic Imports for local binary/WASM assets:**
+   - *Risk:* Vite dynamic loaders might crash or ignore ESM dynamic namespaces when loading the local Gemma WASM runtime model in Sprint 4 if not resolved with `.default` or absolute resolver path overrides.
+   - *Future Solution:* Ensure local dynamic models explicitly map through verified asset aliases and handle module namespace bindings with fallback triggers.
+3. **Transient React State Loss on Viewport Refresh:**
+   - *Risk:* User logs (meals, sleep targets, water tracking) exist strictly in transient React memory. A browser reload wipes all progress completely.
+   - *Future Solution:* Wire up persistence hooks (e.g. standard `localStorage` wrapper hooks) or push entries directly to Supabase endpoints (`diet_logs`, `workouts`) when the backend DB connection is established.
+4. **Transient User Onboarding Location Routing:**
+   - *Risk:* If a user accesses `/dashboard` directly without routing through `/login` or `/register`, `location.state` will be null, crashing profile metadata displays.
+   - *Future Solution:* Wrap `/dashboard` in a session auth guard (`ProtectedRoute`) that falls back to query profiles from Supabase or loads client-side caches.
 
 ---
 

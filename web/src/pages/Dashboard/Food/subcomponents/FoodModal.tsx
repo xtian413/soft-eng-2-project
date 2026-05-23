@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import type { CustomFoodForm, GemiFoodItem, ModalTab } from '../../types';
+import type { CustomFoodForm, GemiFoodItem, ModalTab, MealId } from '../../types';
 import type { FoodModalProps } from '../types';
 import { fetchLocalFoodDatabase } from '../../../../data/foodAdapter';
 
@@ -32,7 +32,7 @@ export const FoodModal: React.FC<FoodModalProps> = ({
   
   // Configurator state
   const [selectedFoodItem, setSelectedFoodItem] = useState<GemiFoodItem | null>(null);
-  const [configMealId, setConfigMealId] = useState('breakfast');
+  const [configMealId, setConfigMealId] = useState<MealId>('breakfast');
   const [configQuantity, setConfigQuantity] = useState(1);
   const [configUnit, setConfigUnit] = useState('');
   const [configGramWeight, setConfigGramWeight] = useState(100);
@@ -471,7 +471,7 @@ export const FoodModal: React.FC<FoodModalProps> = ({
                 <div 
                   key={meal.id}
                   className={`gemi-meal-selector-btn ${configMealId === meal.id ? 'active' : ''}`}
-                  onClick={() => setConfigMealId(meal.id)}
+                  onClick={() => setConfigMealId(meal.id as MealId)}
                 >
                   <span className="material-symbols-outlined gemi-meal-selector-icon">{meal.icon}</span>
                   <span className="gemi-meal-selector-label">{meal.label}</span>

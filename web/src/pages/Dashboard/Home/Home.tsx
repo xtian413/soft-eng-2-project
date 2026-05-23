@@ -32,7 +32,7 @@ export const Home: React.FC<HomeProps> = ({
     const newLog = {
       id: 'log_' + Date.now(),
       name: food.name,
-      mealId: 'snack',
+      mealId: 'snack' as const,
       calories: food.calories,
       protein: food.protein,
       carbs: food.carbs,

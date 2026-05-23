@@ -319,6 +319,15 @@ Insights are generated:
 - Only write comments for non-obvious logic
 - Every exported function must have a single-line JSDoc: `/** Logs a new workout set to Supabase */`
 
+### 6.6 Component Modularization & Folder Structure (Strict Rule)
+- **❌ NEVER build monolithic screen or page components**: Pages or views exceeding 350 lines MUST be broken down into clean, modularized subcomponents, custom hooks, and isolated styled blocks.
+- **✅ Directory Structure for Complex Pages**:
+  - The main page component (e.g., `Dashboard.tsx`) acts strictly as a structural container and state orchestrator.
+  - Sub-views/tabs are isolated in their own folders under the page directory (e.g., `Home/`, `Food/`, `AIChat/`, `Lift/`, `Profile/`).
+  - Business logic, complex state transitions, and UI event handlers are isolated into custom hooks (e.g., `hooks/useFood.ts`, `hooks/useAIChat.ts`) within the sub-component directories.
+  - Modals, popups, and large isolated widgets live in a `subcomponents/` folder under their parent page or tab.
+- **✅ Strict Type Isolation**: Shared types must live in a dedicated `types.ts` file at the root of the page folder (e.g., `Dashboard/types.ts`) or in a global typing module, explicitly imported using `import type` to prevent runtime ESM syntax issues.
+
 ---
 
 ## 7. Supabase Interaction Rules

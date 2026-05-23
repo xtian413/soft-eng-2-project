@@ -4,6 +4,26 @@
 
 ---
 
+### [2026-05-23 10:10 +0800] REFACTOR: Monolithic Dashboard Modularization & TypeScript Safety
+- **Branch**: `Frontend-integration`
+- **Files Modified**:
+  - `web/src/pages/Dashboard/Dashboard.tsx`
+  - `web/src/pages/Dashboard/Home/Home.tsx`
+  - `web/src/pages/Dashboard/Food/Food.tsx`
+  - `web/src/pages/Dashboard/Food/hooks/useFood.ts`
+  - `web/src/pages/Dashboard/Food/subcomponents/FoodModal.tsx`
+  - `AGENT.md`
+  - `.agent/context.md`
+  - `.agent/decisions.md`
+- **Changes**:
+  - ✅ **Dashboard.tsx**: Carved out monolithic page layout into distinct component directories: `Home`, `Food`, `AIChat`, `Lift`, `Profile`. Shrunk from 1,947 lines to a clean, 242-line layout and orchestrator container.
+  - ✅ **useFood.ts & FoodModal.tsx**: Re-typed `activeLoggingMealId` and `configMealId` states to use strictly-typed `MealId` union rather than generic `string` to enforce proper compiler alignment.
+  - ✅ **Home.tsx & Food.tsx**: Converted mock quick-log payload literals (like `mealId: 'snack'`) to literal assertions via `as const` to satisfy TypeScript constraints.
+  - ✅ **AGENT.md**: Added strict `6.6 Component Modularization & Folder Structure` coding conventions rules to avoid monolithic screens in all future agent sessions.
+  - ✅ **Verification**: Verified clean Vite production bundles with `0 errors` and `0 warnings`.
+
+---
+
 ### [2026-05-23 09:44 +0800] FIX: Portions size selector layout overlap and 1g counterpart
 - **Branch**: `Frontend-integration`
 - **Files Modified**:

@@ -1,6 +1,6 @@
 # decisions.md — Architectural & Technical Decisions
 ## Gemi
-**Last Updated**: 2026-05-22T22:25:44+08:00
+**Last Updated**: 2026-05-23T10:09:00+08:00
 
 ---
 
@@ -136,6 +136,18 @@
 - **Status**: Active
 - **Decision**: Explicitly import TypeScript interfaces using `import type { ... }` separately from runtime function imports.
 - **Rationale**: Vite's hot module rebuilder and ESM spec loaders in browsers error out if a pure type-only interface is imported within a standard runtime import object. Specifying `import type` removes the declaration from the compiled ESM exports, avoiding browser syntax errors.
+
+---
+
+### [DEC-013] Dashboards Modularization & Decoupled State Shell
+- **Date**: 2026-05-23
+- **Status**: Active
+- **Decision**: Modularize `Dashboard.tsx` by carving out each tab layout into separate subcomponents (`<Home>`, `<Food>`, `<AIChat>`, `<Lift>`, `<Profile>`) and isolating tab-specific workflows into localized hooks (e.g. `useFood`, `useAIChat`).
+- **Rationale**:
+  1. **Monolith Avoidance**: The initial monolithic dashboard was 1,947 lines, making it extremely difficult to maintain, trace, and collaborate on without merge conflicts.
+  2. **Decoupled Architecture**: By moving layouts into distinct tab directories and logic into custom React hooks, the code stays highly readable and focused.
+  3. **Lean Container Shell**: The main `Dashboard.tsx` is reduced to 242 lines, focusing solely on structural layouts, route-based tab routing, active logging trigger notifications, and synchronizing global daily macro metrics.
+- **Implications**: Changes to subcomponents are isolated to their folders. Any state shared across tabs (like logged food list) must be lifted up to `Dashboard.tsx` and passed down as reactive props.
 
 ---
 

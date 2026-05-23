@@ -146,7 +146,7 @@ export const Food: React.FC<FoodProps> = ({
       const newLog = {
         id: 'log_' + Date.now(),
         name: matchedFood.name,
-        mealId: 'snack', // Default to snack/uncategorized
+        mealId: 'snack' as const, // Default to snack/uncategorized
         calories: Math.round(matchedFood.calories * multiplier),
         protein: Number((matchedFood.protein * multiplier).toFixed(1)),
         carbs: Number((matchedFood.carbs * multiplier).toFixed(1)),
