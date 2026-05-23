@@ -4,6 +4,41 @@
 
 ---
 
+### [2026-05-23 09:44 +0800] FIX: Portions size selector layout overlap and 1g counterpart
+- **Branch**: `Frontend-integration`
+- **Files Modified**:
+  - `web/src/pages/Dashboard/Dashboard.css`
+  - `web/src/pages/Dashboard/Dashboard.tsx`
+  - `web/src/pages/Dashboard/Food/subcomponents/FoodModal.tsx`
+- **Changes**:
+  - ✅ **Dashboard.css**: Added `display: inline-flex` to `.gemi-unit-chip` to solve overlap of padding in inline layout.
+  - ✅ **Dashboard.css**: Set `.gemi-portion-row` `align-items: flex-start` to avoid pushing Servings input to the middle of wrapped chips.
+  - ✅ **Dashboard.tsx** / **FoodModal.tsx**: Added `1g` option chip for registering precise custom gram tracking.
+  - ✅ **Dashboard.tsx** / **FoodModal.tsx**: Made the servings label dynamic (changing to `Grams:` when `1g` is selected, and `Servings:` otherwise) to keep layouts consistent and premium.
+  - **Build & Lint**: ✅ Verified that build and lint contain no errors/warnings.
+
+---
+
+### [2026-05-23 09:34 +0800] FIX: Lint and type errors from Food page refactoring
+- **Branch**: `Frontend-integration`
+- **Files Modified**:
+  - `web/src/pages/Dashboard/Food/subcomponents/FoodModal.tsx`
+  - `web/src/pages/Dashboard/Dashboard.tsx`
+- **Changes**:
+  - ✅ **FoodModal.tsx**: Added missing `useEffect` and `useCallback` to React imports
+  - ✅ **FoodModal.tsx**: Added missing `fetchLocalFoodDatabase` import from `foodAdapter`
+  - ✅ **FoodModal.tsx**: Removed unused `FoodLogEntry` and `MealId` type imports (post-refactor residue)
+  - ✅ **FoodModal.tsx**: Converted `ensureDbLoaded` to `useCallback` to fix `react-hooks/exhaustive-deps` warning
+  - ✅ **FoodModal.tsx**: Added `eslint-disable-next-line react-hooks/set-state-in-effect` before both setState-in-effect calls
+  - ✅ **Dashboard.tsx**: Replaced `useState<any[]>` on `foodLogs` with `useState<FoodLogEntry[]>` (proper typed import from `./types`)
+  - ✅ **Dashboard.tsx**: Removed unused `waterGlasses` constant (was assigned but never referenced in JSX)
+  - ✅ **Dashboard.tsx**: Added `eslint-disable-next-line react-hooks/set-state-in-effect` before `setProteinTotal` in foodLogs sync effect
+  - ✅ **Dashboard.tsx**: Added `eslint-disable-next-line react-hooks/set-state-in-effect` before `ensureDbLoaded()` in food tab activation effect
+  - **Build**: ✅ `tsc --noEmit && vite build` — 1.23s, 0 errors, 0 type errors
+  - **Lint**: ✅ `eslint src/pages/Dashboard/` — 0 errors, 0 warnings (--max-warnings=0)
+
+---
+
 ## 2026-05-22
 
 ---

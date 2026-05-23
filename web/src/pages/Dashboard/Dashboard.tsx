@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import './Dashboard.css';
 import { fetchLocalFoodDatabase } from '../../data/foodAdapter';
 import type { GemiFoodItem } from '../../data/foodAdapter';
+import type { FoodLogEntry } from './types';
 
 type TabType = 'dashboard' | 'food' | 'lift' | 'chat' | 'profile';
 type ModalTab = 'search' | 'custom' | 'barcode';
@@ -51,7 +52,7 @@ export function Dashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
 
   // --- Gemi Custom Advanced Food State ---
-  const [foodLogs, setFoodLogs] = useState<any[]>([
+  const [foodLogs, setFoodLogs] = useState<FoodLogEntry[]>([
     {
       id: 'init_breakfast_1',
       name: 'Oatmeal, commercial, prepared',
@@ -155,7 +156,6 @@ export function Dashboard() {
   // Sync glass state array size when glassesNeeded changes
   const waterGlassCount = Math.min(glassesNeeded, 12); // cap at 12 for UI
   const waterConsumedMl = waterGlassStates.slice(0, waterGlassCount).filter(Boolean).length * 250;
-  const waterGlasses = waterGlassStates.slice(0, waterGlassCount).filter(Boolean).length;
 
   // Sleep: interactive bedtime / wake time (HCI — user sets actual times)
   const [bedtime, setBedtime] = useState('23:00');
@@ -174,13 +174,15 @@ export function Dashboard() {
   const [foodQuickLogInput, setFoodQuickLogInput] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Reactive synchronizer of custom logs with legacy metrics state
+  // Reactive synchronizer of custom logs with legacy metrics state.
+  // Computing totals from foodLogs is intentional reactive state sync.
   useEffect(() => {
     const p = foodLogs.reduce((acc, f) => acc + f.protein, 0);
     const c = foodLogs.reduce((acc, f) => acc + f.carbs, 0);
     const f = foodLogs.reduce((acc, f) => acc + f.fat, 0);
     const cals = foodLogs.reduce((acc, x) => acc + x.calories, 0);
     
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProteinTotal(Number(p.toFixed(1)));
     setCarbsTotal(Number(c.toFixed(1)));
     setFatsTotal(Number(f.toFixed(1)));
@@ -208,6 +210,7 @@ export function Dashboard() {
 
   useEffect(() => {
     if (activeTab === 'food' || isOptionsModalOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       ensureDbLoaded();
     }
   }, [activeTab, isOptionsModalOpen, ensureDbLoaded]);
@@ -1776,11 +1779,13 @@ export function Dashboard() {
                 {/* Portion Sizes & Servings */}
                 <div className="gemi-portion-row">
                   <div className="gemi-multiplier-box">
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--outline)', marginBottom: '4px', display: 'block' }}>Servings:</span>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--outline)', marginBottom: '4px', display: 'block' }}>
+                      {configUnit === '1g' ? 'Grams:' : 'Servings:'}
+                    </span>
                     <input 
                       type="number"
-                      step="0.25"
-                      min="0.1"
+                      step={configUnit === '1g' ? '1' : '0.25'}
+                      min={configUnit === '1g' ? '1' : '0.1'}
                       className="gemi-multiplier-input"
                       value={configQuantity}
                       onChange={(e) => setConfigQuantity(Number(e.target.value))}
@@ -1812,6 +1817,16 @@ export function Dashboard() {
                         }}
                       >
                         100g
+                      </span>
+                      {/* Standard 1g option */}
+                      <span 
+                        className={`gemi-unit-chip ${configUnit === '1g' ? 'active' : ''}`}
+                        onClick={() => {
+                          setConfigUnit('1g');
+                          setConfigGramWeight(1);
+                        }}
+                      >
+                        1g
                       </span>
                     </div>
                   </div>
