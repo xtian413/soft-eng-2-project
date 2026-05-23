@@ -5,9 +5,19 @@ import { Button } from '../../components/ui/Button/Button';
 import { Checkbox } from '../../components/ui/Checkbox/Checkbox';
 import './Auth.css';
 
+export interface RegisterFormData {
+  fullName: string;
+  email: string;
+  password?: string;
+  gender: 'male' | 'female';
+  height: string;
+  weight: string;
+  goal: 'lose_weight' | 'build_muscle' | 'maintain';
+}
+
 interface RegisterProps {
   onNavigateToLogin: () => void;
-  onRegisterSuccess?: (formData: any) => void;
+  onRegisterSuccess?: (formData: RegisterFormData) => void;
 }
 
 export const Register: React.FC<RegisterProps> = ({

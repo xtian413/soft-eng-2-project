@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Login } from './pages/Auth/Login';
 import { Register } from './pages/Auth/Register';
+import type { RegisterFormData } from './pages/Auth/Register';
 import { Dashboard } from './pages/Dashboard/Dashboard';
 import { Card } from './components/ui/Card/Card';
 import { Button } from './components/ui/Button/Button';
@@ -10,7 +11,7 @@ import './App.css';
 function App() {
   const navigate = useNavigate();
   const [userEmail, setUserEmail] = useState('');
-  const [registeredData, setRegisteredData] = useState<any>(null);
+  const [registeredData, setRegisteredData] = useState<RegisterFormData | null>(null);
 
   const handleLoginSuccess = (email: string) => {
     setUserEmail(email);
@@ -27,7 +28,7 @@ function App() {
     });
   };
 
-  const handleRegisterSuccess = (data: any) => {
+  const handleRegisterSuccess = (data: RegisterFormData) => {
     setUserEmail(data.email);
     setRegisteredData(data);
     navigate('/success');

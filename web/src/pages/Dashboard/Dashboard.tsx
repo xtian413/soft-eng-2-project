@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import './Dashboard.css';
 
@@ -83,32 +83,12 @@ export function Dashboard() {
     }
   ]);
 
-  // Macro progress totals initialized to match the Stitch screen exactly
-  const [proteinTotal, setProteinTotal] = useState(80);
-  const [carbsTotal, setCarbsTotal] = useState(120);
-  const [fatsTotal, setFatsTotal] = useState(45);
-  const [baseSnackCalories, setBaseSnackCalories] = useState(245);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Reactive synchronizer of custom logs with legacy metrics state.
-  // Computing totals from foodLogs is intentional reactive state sync.
-  useEffect(() => {
-    const p = foodLogs.reduce((acc, f) => acc + f.protein, 0);
-    const c = foodLogs.reduce((acc, f) => acc + f.carbs, 0);
-    const f = foodLogs.reduce((acc, f) => acc + f.fat, 0);
-    const cals = foodLogs.reduce((acc, x) => acc + x.calories, 0);
-    
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setProteinTotal(Number(p.toFixed(1)));
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCarbsTotal(Number(c.toFixed(1)));
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setFatsTotal(Number(f.toFixed(1)));
-    
-    // Auto adjust baseSnackCalories so that legacy calculations map perfectly to logs
-    const macroCals = (p * 4) + (c * 4) + (f * 9);
-    setBaseSnackCalories(cals - macroCals);
-  }, [foodLogs]);
+  // Pure derived state from the source of truth (foodLogs)
+  const proteinTotal = Number(foodLogs.reduce((acc, f) => acc + f.protein, 0).toFixed(1));
+  const carbsTotal = Number(foodLogs.reduce((acc, f) => acc + f.carbs, 0).toFixed(1));
+  const fatsTotal = Number(foodLogs.reduce((acc, f) => acc + f.fat, 0).toFixed(1));
 
   // Targets based on goals (Christian is build_muscle, which targets 2300 calories matching Stitch)
   const targetCalories = goal === 'build_muscle' ? 2300 : goal === 'lose_weight' ? 2000 : 2400;
@@ -116,8 +96,8 @@ export function Dashboard() {
   const targetCarbs = goal === 'build_muscle' ? 200 : goal === 'lose_weight' ? 180 : 190;
   const targetFats = goal === 'build_muscle' ? 65 : goal === 'lose_weight' ? 50 : 60;
 
-  // Derived current calories including macros and unspecified snacks
-  const currentCalories = Math.round((proteinTotal * 4) + (carbsTotal * 4) + (fatsTotal * 9) + baseSnackCalories);
+  // Derived current calories
+  const currentCalories = Math.round(foodLogs.reduce((acc, x) => acc + x.calories, 0));
   const caloriesRemaining = Math.max(0, targetCalories - currentCalories);
 
   // Calculate Indicator Dot positions for bottom mobile navigation
