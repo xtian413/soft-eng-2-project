@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react';
 import {
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   SafeAreaView,
   StyleSheet,
@@ -10,14 +9,16 @@ import {
   TouchableOpacity,
   View,
   NativeModules,
+  Keyboard,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing } from '@/theme/typography';
 import type { ChatMessage, MacroTargets, FoodLogEntry } from '@/screens/dashboard/types';
 import { ArrowUp, Bot, Lock } from 'lucide-react-native';
 import { initializeGemmaOnStartup } from '@/ai/gemmaInit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { buildFreeChatPrompt, type WorkoutLog, type DietLog } from '@/ai/prompts';
+import { buildFreeChatPrompt, type WorkoutLog, type DietLog, type UserProfile } from '@/ai/prompts';
 
 const { GemmaModule } = NativeModules;
 
@@ -27,12 +28,30 @@ interface AIChatTabProps {
   targets: MacroTargets;
   messages: ChatMessage[];
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  profile: any; // Using any for simplicity as it comes from authStore
 }
 
-export function AIChatTab({ userName, foodLogs, targets, messages, setMessages }: AIChatTabProps) {
+export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, profile }: AIChatTabProps) {
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
+  const insets = useSafeAreaInsets();
+
+  React.useEffect(() => {
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   const handleSend = async () => {
     const text = inputText.trim();
@@ -49,17 +68,23 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages }
     setInputText('');
     setIsTyping(true);
 
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
-
     try {
-      // 1. Fetch user data for context
+      // 1. Fetch context
       const workoutsStr = await AsyncStorage.getItem('gemi:workouts');
       const dietStr = await AsyncStorage.getItem('gemi:dietLogs');
+      
       const workouts: WorkoutLog[] = workoutsStr ? JSON.parse(workoutsStr) : [];
       const diets: DietLog[] = dietStr ? JSON.parse(dietStr) : [];
+      
+      // Adapt authStore profile to what buildFreeChatPrompt expects
+      const userProfile: UserProfile | null = profile ? {
+        heightCm: profile.heightCm,
+        weightKg: profile.weightKg,
+        goal: profile.goal,
+      } : null;
 
       // 2. Build structured prompt
-      const prompt = buildFreeChatPrompt(userName, text, workouts, diets);
+      const prompt = buildFreeChatPrompt(userName, userProfile, text, workouts, diets);
 
       // 3. Initialize and extract model from assets if not already done
       await initializeGemmaOnStartup();
@@ -85,7 +110,6 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages }
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsTyping(false);
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     }
   };
 
@@ -111,11 +135,7 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={100}
-    >
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.avatar}>
@@ -136,13 +156,14 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages }
       {/* Messages */}
       <FlatList
         ref={listRef}
-        data={messages}
+        data={[...messages].reverse()}
+        inverted={true}
         keyExtractor={(item) => item.id}
         renderItem={renderMessage}
         contentContainerStyle={styles.messageList}
-        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         showsVerticalScrollIndicator={false}
-        ListFooterComponent={
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
           isTyping ? (
             <View style={styles.typingIndicator}>
               <View style={styles.avatar}>
@@ -157,7 +178,7 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages }
       />
 
       {/* Input */}
-      <View style={styles.inputBar}>
+      <View style={[styles.inputBar, { paddingBottom: isKeyboardVisible ? spacing.md : 90 }]}>
         <TextInput
           style={styles.input}
           value={inputText}
@@ -178,7 +199,7 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages }
           <ArrowUp size={20} color={inputText.trim() ? Colors.onPrimary : Colors.outline} strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -223,8 +244,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 2,
   },
   messageList: {
+    flexGrow: 1,
     padding: spacing.base,
-    paddingBottom: spacing.xxxl * 2,
+    paddingTop: spacing.sm,
+    paddingBottom: 100, // Enough padding so it doesn't cut off behind the top header
   },
   messageRow: {
     flexDirection: 'row',
@@ -307,7 +330,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLowest,
     borderTopWidth: 1,
     borderTopColor: 'rgba(190, 200, 210, 0.15)',
-    paddingBottom: Platform.OS === 'ios' ? spacing.xl + 85 : spacing.md + 85,
   },
   input: {
     flex: 1,

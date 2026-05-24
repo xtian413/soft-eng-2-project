@@ -2,6 +2,7 @@ import 'react-native-gesture-handler';
 import { useEffect } from 'react';
 import AppNavigator from '@/navigation/AppNavigator';
 import { initializeGemmaOnStartup } from '@/ai/gemmaInit';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 export default function App() {
   useEffect(() => {
@@ -11,5 +12,9 @@ export default function App() {
     });
   }, []);
 
-  return <AppNavigator />;
+  return (
+    <SafeAreaProvider>
+      <AppNavigator />
+    </SafeAreaProvider>
+  );
 }

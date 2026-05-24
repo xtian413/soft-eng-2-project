@@ -1,6 +1,7 @@
-import React from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Colors } from '@/theme/colors';
+import { useAuthStore } from '@/store/authStore';
 import { typography, fontWeight, radius, spacing } from '@/theme/typography';
 import type { GoalKey, MacroTargets } from '@/screens/dashboard/types';
 import { Dumbbell, TrendingDown, Activity, ShieldCheck, LogOut, Lock } from 'lucide-react-native';
@@ -15,17 +16,50 @@ interface ProfileTabProps {
   fullName: string;
   email: string;
   goal: GoalKey;
+  heightCm: number;
+  weightKg: number;
   targets: MacroTargets;
   onSignOut: () => void;
 }
 
-export function ProfileTab({ fullName, email, goal, targets, onSignOut }: ProfileTabProps) {
+export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets, onSignOut }: ProfileTabProps) {
   const initials = fullName
     .split(' ')
     .map((n) => n[0])
     .join('')
     .toUpperCase()
     .slice(0, 2);
+
+  const { updatePhysicalStats } = useAuthStore();
+  const [isEditModalVisible, setEditModalVisible] = useState(false);
+  const [editHeight, setEditHeight] = useState(String(heightCm));
+  const [editWeight, setEditWeight] = useState(String(weightKg));
+  const [editGoal, setEditGoal] = useState<GoalKey>(goal);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleOpenEdit = () => {
+    setEditHeight(String(heightCm));
+    setEditWeight(String(weightKg));
+    setEditGoal(goal);
+    setEditModalVisible(true);
+  };
+
+  const handleSaveStats = async () => {
+    const h = parseFloat(editHeight);
+    const w = parseFloat(editWeight);
+    if (isNaN(h) || isNaN(w) || h <= 0 || w <= 0) {
+      Alert.alert('Invalid Input', 'Please enter valid numbers for height and weight.');
+      return;
+    }
+    setIsSaving(true);
+    const res = await updatePhysicalStats(h, w, editGoal);
+    setIsSaving(false);
+    if (res?.message) {
+      Alert.alert('Error', res.message);
+    } else {
+      setEditModalVisible(false);
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -62,6 +96,30 @@ export function ProfileTab({ fullName, email, goal, targets, onSignOut }: Profil
           <View style={styles.goalBadgeContent}>
             {renderGoalIcon(goal)}
             <Text style={styles.goalBadgeText}>{GOAL_LABELS[goal]}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Physical Stats Card */}
+      <View style={styles.card}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>Physical Stats</Text>
+          <TouchableOpacity onPress={handleOpenEdit}>
+            <Text style={styles.editBtnText}>Edit</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.statsGrid}>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Height</Text>
+            <Text style={styles.statValue}>{heightCm} cm</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Weight</Text>
+            <Text style={styles.statValue}>{weightKg} kg</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statLabel}>Goal</Text>
+            <Text style={styles.statValue}>{GOAL_LABELS[goal]}</Text>
           </View>
         </View>
       </View>
@@ -112,6 +170,63 @@ export function ProfileTab({ fullName, email, goal, targets, onSignOut }: Profil
           <Text style={styles.signOutText}>Sign Out</Text>
         </View>
       </TouchableOpacity>
+
+      {/* Edit Stats Modal */}
+      <Modal visible={isEditModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Physical Stats</Text>
+            
+            <Text style={styles.inputLabel}>Height (cm)</Text>
+            <TextInput
+              style={styles.input}
+              value={editHeight}
+              onChangeText={setEditHeight}
+              keyboardType="numeric"
+            />
+
+            <Text style={styles.inputLabel}>Weight (kg)</Text>
+            <TextInput
+              style={styles.input}
+              value={editWeight}
+              onChangeText={setEditWeight}
+              keyboardType="numeric"
+            />
+
+            <Text style={styles.inputLabel}>Goal</Text>
+            <View style={styles.goalRow}>
+              {(['lose_weight', 'build_muscle', 'maintain'] as GoalKey[]).map((g) => (
+                <TouchableOpacity
+                  key={g}
+                  style={[styles.goalChoice, editGoal === g && styles.goalChoiceActive]}
+                  onPress={() => setEditGoal(g)}
+                >
+                  <Text style={[styles.goalChoiceText, editGoal === g && styles.goalChoiceTextActive]}>
+                    {GOAL_LABELS[g]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setEditModalVisible(false)}
+                disabled={isSaving}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleSaveStats}
+                disabled={isSaving}
+              >
+                <Text style={styles.modalSaveText}>{isSaving ? 'Saving...' : 'Save Changes'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -293,5 +408,127 @@ const styles = StyleSheet.create({
     color: Colors.error,
     fontSize: typography.base,
     fontWeight: fontWeight.semiBold,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  editBtnText: {
+    color: Colors.primary,
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(190, 200, 210, 0.05)',
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  statBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statLabel: {
+    fontSize: 10,
+    color: Colors.outline,
+    marginBottom: 2,
+    textTransform: 'uppercase',
+  },
+  statValue: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.xl,
+    paddingBottom: 40,
+  },
+  modalTitle: {
+    fontSize: typography.lg,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+  },
+  inputLabel: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.semiBold,
+    color: Colors.onSurface,
+    marginBottom: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.3)',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: typography.base,
+    color: Colors.onSurface,
+    backgroundColor: Colors.background,
+  },
+  goalRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  goalChoice: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.3)',
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  goalChoiceActive: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+  },
+  goalChoiceText: {
+    fontSize: typography.xs,
+    color: Colors.outline,
+    fontWeight: fontWeight.medium,
+  },
+  goalChoiceTextActive: {
+    color: Colors.primary,
+    fontWeight: fontWeight.bold,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.xl,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.3)',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: Colors.outline,
+    fontWeight: fontWeight.bold,
+  },
+  modalSaveBtn: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.full,
+    backgroundColor: Colors.primaryContainer,
+    alignItems: 'center',
+  },
+  modalSaveText: {
+    color: Colors.onPrimary,
+    fontWeight: fontWeight.bold,
   },
 });

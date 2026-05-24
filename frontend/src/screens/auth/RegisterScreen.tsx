@@ -85,6 +85,7 @@ export default function RegisterScreen() {
       fullName: values.fullName,
       height: heightCm,
       weight: weightKg,
+      gender,
       goal,
     });
 

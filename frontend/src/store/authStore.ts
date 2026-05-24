@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase';
 interface ProfileState {
   fullName: string | null;
   heightCm: number | null;
+  weightKg: number | null;
+  gender: 'male' | 'female' | null;
   goal: 'lose_weight' | 'build_muscle' | 'maintain' | null;
 }
 
@@ -24,11 +26,13 @@ interface AuthState {
       fullName: string;
       height: number;
       weight: number;
+      gender: 'male' | 'female';
       goal: 'lose_weight' | 'build_muscle' | 'maintain';
     }
   ) => Promise<AuthError | null>;
   signOut: () => Promise<void>;
   fetchProfile: () => Promise<void>;
+  updatePhysicalStats: (heightCm: number, weightKg: number, goal: 'lose_weight' | 'build_muscle' | 'maintain') => Promise<{ message: string } | null>;
 }
 
 type AuthError = {
@@ -110,6 +114,7 @@ export const useAuthStore = create<AuthState>()(
           fullName: string;
           height: number;
           weight: number;
+          gender: 'male' | 'female';
           goal: 'lose_weight' | 'build_muscle' | 'maintain';
         }
       ) => {
@@ -119,12 +124,16 @@ export const useAuthStore = create<AuthState>()(
         }
 
         try {
+          // Pass all registration metadata into raw_user_meta_data so
+          // the Postgres trigger can read it and auto-create the profile row.
           const { data, error } = await supabase.auth.signUp({
             email,
             password,
             options: metadata ? {
               data: {
                 full_name: metadata.fullName,
+                height_cm: metadata.height,
+                gender: metadata.gender,
                 goal: metadata.goal,
               },
             } : undefined,
@@ -137,15 +146,17 @@ export const useAuthStore = create<AuthState>()(
           // If signup is successful and we have metadata, save to public.profiles and public.body_progress
           const userId = data.user?.id;
           if (userId && metadata) {
-            // Update profile
+            // Safety-net upsert: if the DB trigger already created the row,
+            // this updates it; if not, this creates it. No duplicate-key errors.
             const { error: profileError } = await supabase
               .from('profiles')
-              .update({
+              .upsert({
+                id: userId,
                 full_name: metadata.fullName,
                 height_cm: metadata.height,
+                gender: metadata.gender,
                 goal: metadata.goal,
-              })
-              .eq('id', userId);
+              });
 
             if (profileError) {
               console.warn('[Gemi] Failed to save profile details:', profileError.message);
@@ -169,6 +180,8 @@ export const useAuthStore = create<AuthState>()(
               profile: {
                 fullName: metadata.fullName,
                 heightCm: metadata.height,
+                weightKg: metadata.weight,
+                gender: metadata.gender,
                 goal: metadata.goal,
               }
             });
@@ -183,10 +196,62 @@ export const useAuthStore = create<AuthState>()(
       signOut: async () => {
         try {
           await supabase.auth.signOut();
+          await AsyncStorage.clear();
         } catch (e) {
           console.log('[Gemi] Supabase SignOut error:', e);
         }
         set({ session: null, user: null, profile: null });
+      },
+      updatePhysicalStats: async (heightCm, weightKg, goal) => {
+        const userId = get().user?.id;
+        const currentProfile = get().profile;
+        if (!userId || !currentProfile) return { message: 'Not logged in' };
+
+        try {
+          // 1. Update profiles table
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .update({
+              height_cm: heightCm,
+              goal: goal,
+            })
+            .eq('id', userId);
+
+          if (profileError) {
+            console.warn('[Gemi] Failed to update profile stats:', profileError.message);
+            return { message: profileError.message };
+          }
+
+          // 2. Insert into body_progress if weight changed
+          if (currentProfile.weightKg !== weightKg) {
+            const { error: weightError } = await supabase
+              .from('body_progress')
+              .insert({
+                user_id: userId,
+                weight_kg: weightKg,
+                recorded_at: new Date().toISOString(),
+              });
+
+            if (weightError) {
+              console.warn('[Gemi] Failed to save new weight progress:', weightError.message);
+            }
+          }
+
+          // 3. Update Zustand local state so macros recalculate instantly
+          set({
+            profile: {
+              ...currentProfile,
+              heightCm,
+              weightKg,
+              goal,
+            }
+          });
+
+          return null; // Success
+        } catch (e: any) {
+          console.warn('[Gemi] updatePhysicalStats error:', e);
+          return { message: e.message || 'An unexpected error occurred.' };
+        }
       },
       fetchProfile: async () => {
         const userId = get().user?.id;
@@ -197,8 +262,16 @@ export const useAuthStore = create<AuthState>()(
         try {
           const { data, error } = await supabase
             .from('profiles')
-            .select('full_name, height_cm, goal')
+            .select('full_name, height_cm, goal, gender')
             .eq('id', userId)
+            .maybeSingle();
+
+          const { data: weightData } = await supabase
+            .from('body_progress')
+            .select('weight_kg')
+            .eq('user_id', userId)
+            .order('recorded_at', { ascending: false })
+            .limit(1)
             .maybeSingle();
 
           if (!error && data) {
@@ -206,6 +279,8 @@ export const useAuthStore = create<AuthState>()(
               profile: {
                 fullName: data.full_name,
                 heightCm: data.height_cm ? parseFloat(data.height_cm) : null,
+                weightKg: weightData?.weight_kg ? parseFloat(weightData.weight_kg) : null,
+                gender: data.gender as any,
                 goal: data.goal as any,
               }
             });

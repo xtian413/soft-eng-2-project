@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   SafeAreaView,
   StyleSheet,
@@ -9,12 +9,15 @@ import {
   Animated,
   Dimensions,
   Platform,
+  Keyboard,
 } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing } from '@/theme/typography';
 import { GOAL_TARGETS, type GoalKey, type FoodLogEntry, type ChatMessage } from '@/screens/dashboard/types';
+import { calculateMacros } from '@/utils/macroCalculator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchDietLogs } from '@/api/dietApi';
 import { HomeTab } from '@/screens/dashboard/Home/HomeTab';
 import { FoodTab } from '@/screens/dashboard/Food/FoodTab';
 import { LiftTab } from '@/screens/dashboard/Lift/LiftTab';
@@ -41,11 +44,29 @@ export default function DashboardScreen() {
   // AI coach button pulsing animation
   const pulseAnim = useState(new Animated.Value(1))[0];
 
-  // Shared state of USDA logged food entries (persisted in memory in DashboardScreen)
+  // Shared state of logged food entries — loaded from backend on mount
   const [foodLogs, setFoodLogs] = useState<FoodLogEntry[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(true);
 
   // Chat memory state (persisted to AsyncStorage for 24h)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+
+  const [isKeyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const hideSubscription = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
 
   // Load chat messages on mount
   useEffect(() => {
@@ -88,7 +109,11 @@ export default function DashboardScreen() {
 
   // Derived goals
   const goal: GoalKey = profile?.goal || (user?.user_metadata?.goal as GoalKey) || 'build_muscle';
-  const targets = GOAL_TARGETS[goal];
+  const gender = profile?.gender || 'male';
+  const weightKg = profile?.weightKg || 75;
+  const heightCm = profile?.heightCm || 180;
+  
+  const targets = calculateMacros(weightKg, heightCm, gender, goal);
 
   const derivedName = (() => {
     if (profile?.fullName) return profile.fullName;
@@ -113,6 +138,48 @@ export default function DashboardScreen() {
   useEffect(() => {
     fetchProfile();
   }, []);
+
+  // Load today's diet logs from the backend whenever the user session is available.
+  // This runs on login (user.id changes) and on fresh mount so macros are never zero.
+  const loadTodayLogs = useCallback(async () => {
+    if (!user?.id) return;
+    setIsLoadingLogs(true);
+    try {
+      const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+      const logs = await fetchDietLogs(today);
+
+      // Map the backend DietLog shape to the local FoodLogEntry shape.
+      const entries: FoodLogEntry[] = logs.map((log) => ({
+        id: log.id,
+        name: log.meal_name,
+        mealId: 'snack' as const, // backend doesn't store mealId yet; default to snack
+        calories: log.calories ?? 0,
+        protein: log.protein_g ?? 0,
+        carbs: log.carbs_g ?? 0,
+        fat: log.fat_g ?? 0,
+        fiber: 0,
+        sodium: 0,
+        potassium: 0,
+        calcium: 0,
+        iron: 0,
+        vitaminC: 0,
+        folate: 0,
+        servingSize: 1,
+        servingUnit: 'serving',
+      }));
+
+      setFoodLogs(entries);
+    } catch (err) {
+      console.error('[Gemi] Failed to load today\'s food logs:', err);
+      // Leave foodLogs as empty — don't crash the screen.
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadTodayLogs();
+  }, [loadTodayLogs]);
 
   // Pulse animation for AI coach button
   useEffect(() => {
@@ -182,13 +249,15 @@ export default function DashboardScreen() {
       case 'lift':
         return <LiftTab triggerToast={triggerToast} />;
       case 'chat':
-        return <AIChatTab userName={fullName} foodLogs={foodLogs} targets={targets} messages={chatMessages} setMessages={setChatMessages} />;
+        return <AIChatTab userName={fullName} foodLogs={foodLogs} targets={targets} messages={chatMessages} setMessages={setChatMessages} profile={profile} />;
       case 'profile':
         return (
           <ProfileTab
             fullName={fullName}
             email={email}
             goal={goal}
+            heightCm={heightCm}
+            weightKg={weightKg}
             targets={targets}
             onSignOut={signOut}
           />
@@ -260,8 +329,9 @@ export default function DashboardScreen() {
       )}
 
       {/* Glassmorphic Floating Pill Tab Bar */}
-      <View style={styles.tabBarContainer}>
-        <View style={styles.tabBar}>
+      {!isKeyboardVisible && (
+        <View style={styles.tabBarContainer}>
+          <View style={styles.tabBar}>
           {TABS.map((tab) => {
             const isActive = activeTab === tab.key;
             if (tab.key === 'chat') {
@@ -307,6 +377,7 @@ export default function DashboardScreen() {
           })}
         </View>
       </View>
+      )}
     </SafeAreaView>
   );
 }
