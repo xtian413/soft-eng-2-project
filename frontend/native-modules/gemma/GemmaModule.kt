@@ -49,8 +49,22 @@ class GemmaModule(reactContext: ReactApplicationContext) :
             try {
                 val conversation = currentEngine.createConversation()
                 val result = conversation.sendMessage(prompt)
+                // The Message object contains the generated text.
+                // Depending on the version, it might be in .text or we fallback to string.
+                val extractedString = try {
+                    result.javaClass.getMethod("getText").invoke(result) as? String ?: result.toString()
+                } catch (e: Exception) {
+                    try {
+                        // Fallback to getting contents list if text property doesn't exist directly
+                        val contents = result.javaClass.getMethod("getContents").invoke(result) as? List<*>
+                        contents?.joinToString("") { it.toString() } ?: result.toString()
+                    } catch (e2: Exception) {
+                        result.toString()
+                    }
+                }
+                
                 conversation.close()
-                promise.resolve(result)
+                promise.resolve(extractedString)
             } catch (e: Exception) {
                 promise.reject("E_GEMMA_INFERENCE", "Inference failed: ${e.message}", e)
             }

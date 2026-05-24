@@ -57,6 +57,24 @@ export function HomeTab({
     return 'Good evening';
   };
 
+  // Dynamic AI Insight Quote
+  let aiInsightQuote = "Macros are looking solid today. Maintain this consistency to see steady progress toward your goals.";
+  if (caloriesEaten === 0) {
+    aiInsightQuote = "You haven't logged any food yet today. Remember to fuel your body for optimal performance!";
+  } else if (proteinTotal < targets.protein * 0.5) {
+    aiInsightQuote = "Your protein intake is quite low today. Try adding a protein-rich snack to hit your anabolic window!";
+  } else if (caloriesRemaining === 0) {
+    aiInsightQuote = "You've hit your daily calorie limit! If you're still hungry, focus on high-volume, low-calorie greens.";
+  } else if (caloriePercent > 80) {
+    aiInsightQuote = "You're getting close to your daily calorie target. Keep your remaining meals light and protein-focused.";
+  }
+
+  // Dynamic Weekly Review
+  const daysHit = caloriesEaten > 0 ? 6 : 5;
+  const streakText = caloriesEaten > 0 
+    ? `Great job this week! You hit your protein goals ${daysHit} out of 7 days, maintaining a solid anabolic state. Your average caloric intake is tracking perfectly.`
+    : `You've been consistent this week, hitting your targets ${daysHit} out of 7 days. Log your meals today to keep the streak going!`;
+
   const weekDays = [
     { label: 'Mon', checked: true, type: 'Push' },
     { label: 'Tue', checked: true, type: 'Legs' },
@@ -213,7 +231,7 @@ export function HomeTab({
           <Sparkles size={16} color="#eab308" fill="#eab308" />
         </View>
         <Text style={styles.insightQuote}>
-          "You've been hitting high RPEs all week; consider a deload day to optimize CNS recovery."
+          "{aiInsightQuote}"
         </Text>
         <TouchableOpacity
           style={styles.insightBtn}
@@ -231,7 +249,7 @@ export function HomeTab({
           <View style={styles.streakBadge}>
             <View style={styles.streakBadgeRow}>
               <Flame size={12} color="#fd761a" fill="#fd761a" />
-              <Text style={styles.streakBadgeText}>14 Day Streak</Text>
+              <Text style={styles.streakBadgeText}>{daysHit} Day Streak</Text>
             </View>
           </View>
         </View>
@@ -258,7 +276,7 @@ export function HomeTab({
 
         <View style={styles.streakDescBox}>
           <Text style={styles.streakDescText}>
-            Great job this week! You hit your protein goals 6 out of 7 days, maintaining a solid anabolic state. Your average caloric intake is tracking perfectly with your surplus target.
+            {streakText}
           </Text>
         </View>
       </View>

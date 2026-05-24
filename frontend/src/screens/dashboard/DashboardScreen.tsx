@@ -13,7 +13,8 @@ import {
 import { useAuthStore } from '@/store/authStore';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing } from '@/theme/typography';
-import { GOAL_TARGETS, type GoalKey, type FoodLogEntry } from '@/screens/dashboard/types';
+import { GOAL_TARGETS, type GoalKey, type FoodLogEntry, type ChatMessage } from '@/screens/dashboard/types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { HomeTab } from '@/screens/dashboard/Home/HomeTab';
 import { FoodTab } from '@/screens/dashboard/Food/FoodTab';
 import { LiftTab } from '@/screens/dashboard/Lift/LiftTab';
@@ -41,62 +42,49 @@ export default function DashboardScreen() {
   const pulseAnim = useState(new Animated.Value(1))[0];
 
   // Shared state of USDA logged food entries (persisted in memory in DashboardScreen)
-  const [foodLogs, setFoodLogs] = useState<FoodLogEntry[]>([
-    {
-      id: 'init_breakfast_1',
-      name: 'Oatmeal, commercial, prepared',
-      mealId: 'breakfast',
-      calories: 320,
-      protein: 12,
-      carbs: 50,
-      fat: 8,
-      fiber: 6,
-      sodium: 110,
-      potassium: 280,
-      calcium: 120,
-      iron: 2.2,
-      vitaminC: 0,
-      folate: 25,
-      servingSize: 1,
-      servingUnit: 'cup',
-    },
-    {
-      id: 'init_lunch_1',
-      name: 'Grilled Chicken Breast & Quinoa',
-      mealId: 'lunch',
-      calories: 450,
-      protein: 42,
-      carbs: 45,
-      fat: 11,
-      fiber: 4,
-      sodium: 350,
-      potassium: 420,
-      calcium: 20,
-      iron: 1.2,
-      vitaminC: 0,
-      folate: 10,
-      servingSize: 1,
-      servingUnit: 'portion',
-    },
-    {
-      id: 'init_snack_1',
-      name: 'Mixed Almonds Pack & Whey Shake',
-      mealId: 'snack',
-      calories: 435,
-      protein: 26,
-      carbs: 25,
-      fat: 26,
-      fiber: 5,
-      sodium: 120,
-      potassium: 290,
-      calcium: 150,
-      iron: 1.8,
-      vitaminC: 2,
-      folate: 18,
-      servingSize: 1,
-      servingUnit: 'pack',
-    },
-  ]);
+  const [foodLogs, setFoodLogs] = useState<FoodLogEntry[]>([]);
+
+  // Chat memory state (persisted to AsyncStorage for 24h)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+
+  // Load chat messages on mount
+  useEffect(() => {
+    const loadMessages = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('chatMessages');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.length > 0) {
+            const lastMsg = parsed[parsed.length - 1];
+            const lastTime = new Date(lastMsg.timestamp).getTime();
+            const now = new Date().getTime();
+            if (now - lastTime < 24 * 60 * 60 * 1000) {
+              setChatMessages(parsed.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })));
+              return;
+            }
+          }
+        }
+        setChatMessages([
+          {
+            id: '0',
+            role: 'assistant',
+            content: "Hi! I'm Gemi, your on-device AI fitness coach. I run entirely on your device — no internet needed. Ask me anything about your workouts, nutrition, or recovery! 💪🔒",
+            timestamp: new Date(),
+          },
+        ]);
+      } catch (e) {
+        console.error('Failed to load messages', e);
+      }
+    };
+    loadMessages();
+  }, []);
+
+  // Save chat messages when they change
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      AsyncStorage.setItem('chatMessages', JSON.stringify(chatMessages)).catch(console.error);
+    }
+  }, [chatMessages]);
 
   // Derived goals
   const goal: GoalKey = profile?.goal || (user?.user_metadata?.goal as GoalKey) || 'build_muscle';
@@ -162,35 +150,7 @@ export default function DashboardScreen() {
   };
 
   const handleQuickLog = () => {
-    const randomFoods = [
-      { name: 'Peanut Butter Toast', protein: 8, carbs: 24, fats: 12, calories: 240 },
-      { name: 'Greek Yogurt Bowl', protein: 18, carbs: 12, fats: 0, calories: 120 },
-      { name: 'Mixed Almonds Pack', protein: 6, carbs: 5, fats: 14, calories: 160 },
-      { name: 'Oven Baked Salmon', protein: 28, carbs: 0, fats: 14, calories: 240 },
-    ];
-    const food = randomFoods[Math.floor(Math.random() * randomFoods.length)];
-    
-    const newLog: FoodLogEntry = {
-      id: 'log_' + Date.now(),
-      name: food.name,
-      mealId: 'snack',
-      calories: food.calories,
-      protein: food.protein,
-      carbs: food.carbs,
-      fat: food.fats,
-      fiber: 2,
-      sodium: 150,
-      potassium: 200,
-      calcium: 50,
-      iron: 1,
-      vitaminC: 2,
-      folate: 10,
-      servingSize: 1,
-      servingUnit: 'portion',
-    };
-
-    setFoodLogs((prev) => [...prev, newLog]);
-    triggerToast(`Quick Logged: ${food.name} (+${food.calories} kcal, P: ${food.protein}g)`);
+    setActiveTab('food');
   };
 
   const renderTab = () => {
@@ -222,7 +182,7 @@ export default function DashboardScreen() {
       case 'lift':
         return <LiftTab triggerToast={triggerToast} />;
       case 'chat':
-        return <AIChatTab foodLogs={foodLogs} targets={targets} />;
+        return <AIChatTab userName={fullName} foodLogs={foodLogs} targets={targets} messages={chatMessages} setMessages={setChatMessages} />;
       case 'profile':
         return (
           <ProfileTab

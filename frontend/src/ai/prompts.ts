@@ -87,3 +87,27 @@ export function buildWorkoutInsightPrompt(
     'Keep the response concise (5-8 sentences).',
   ].join('\n');
 }
+
+export function buildFreeChatPrompt(
+  userName: string,
+  userMessage: string,
+  workoutData: WorkoutLog[],
+  dietData: DietLog[]
+) {
+  const workoutSummary = formatWorkoutSummary(workoutData);
+  const dietSummary = formatDietSummary(dietData);
+
+  return [
+    `System: You are Gemi, an intelligent, supportive, and practical on-device fitness and nutrition coach. Never break character or refer to yourself as a generic Google LLM.`,
+    `User: ${userName}`,
+    '',
+    'Recent workouts:',
+    workoutSummary,
+    '',
+    'Recent diet logs:',
+    dietSummary,
+    '',
+    `Message from user: ${userMessage}`,
+    'Gemi:'
+  ].join('\n');
+}

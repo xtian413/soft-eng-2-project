@@ -35,11 +35,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const [inputReps, setInputReps] = useState('8');
   const [inputRir, setInputRir] = useState('2');
 
-  const [setsList, setSetsList] = useState<SetLog[]>([
-    { id: '1', setNum: 1, weight: 185, reps: 8, rir: 2, isChecked: true },
-    { id: '2', setNum: 2, weight: 185, reps: 8, rir: 2, isChecked: true },
-    { id: '3', setNum: 3, weight: 185, reps: 6, rir: 1, isChecked: false },
-  ]);
+  const [setsList, setSetsList] = useState<SetLog[]>([]);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scaleAnim = useState(new Animated.Value(1))[0];

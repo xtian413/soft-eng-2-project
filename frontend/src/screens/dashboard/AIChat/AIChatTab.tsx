@@ -9,73 +9,32 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  NativeModules,
 } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing } from '@/theme/typography';
 import type { ChatMessage, MacroTargets, FoodLogEntry } from '@/screens/dashboard/types';
 import { ArrowUp, Bot, Lock } from 'lucide-react-native';
+import { initializeGemmaOnStartup } from '@/ai/gemmaInit';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { buildFreeChatPrompt, type WorkoutLog, type DietLog } from '@/ai/prompts';
 
-// Keyword-based simulated AI responses
-const AI_RESPONSES: { keywords: string[]; response: string }[] = [
-  {
-    keywords: ['hello', 'hi', 'hey'],
-    response: "Hey! I'm Gemi, your on-device AI coach. How can I help you today? Ask me about your workout, nutrition, or recovery! 💪",
-  },
-  {
-    keywords: ['protein', 'macro', 'nutrition'],
-    response: 'For muscle building, aim for 1.6–2.2g of protein per kg of body weight daily. Spread it across 4-5 meals for optimal synthesis. Your current intake looks great!',
-  },
-  {
-    keywords: ['workout', 'training', 'exercise', 'lift'],
-    response: 'Progressive overload is key — try adding 2.5kg or 1 rep each week on your compound lifts. Make sure you\'re hitting all major muscle groups 2-3x per week.',
-  },
-  {
-    keywords: ['sleep', 'rest', 'recovery'],
-    response: 'Sleep is when your muscles grow! Aim for 7-9 hours. Growth hormone peaks during deep sleep cycles, so consistent sleep timing matters as much as duration.',
-  },
-  {
-    keywords: ['calorie', 'weight', 'loss', 'cut'],
-    response: 'For fat loss, a 300-500 kcal daily deficit is sustainable. Keep protein high (2g/kg) to preserve muscle while cutting. Track weekly averages, not daily numbers.',
-  },
-  {
-    keywords: ['motivation', 'tired', 'energy'],
-    response: 'Feeling low on energy? Check your carb intake before training — 30-60g of carbs 1-2 hours before can boost performance significantly. Also ensure you\'re hydrated!',
-  },
-  {
-    keywords: ['squat', 'deadlift', 'bench'],
-    response: 'Great compound movements! Focus on progressive overload — add weight gradually. Log your sets and aim for 3-5 sets of 5-8 reps for strength development.',
-  },
-];
-
-function getAIResponse(userMessage: string): string {
-  const lower = userMessage.toLowerCase();
-  for (const { keywords, response } of AI_RESPONSES) {
-    if (keywords.some((k) => lower.includes(k))) {
-      return response;
-    }
-  }
-  return "That's a great question! As your on-device AI coach, I'm here to help with workouts, nutrition, and recovery. Could you be more specific? I'm running locally for your privacy. 🔒";
-}
+const { GemmaModule } = NativeModules;
 
 interface AIChatTabProps {
+  userName: string;
   foodLogs: FoodLogEntry[];
   targets: MacroTargets;
+  messages: ChatMessage[];
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
 }
 
-export function AIChatTab({ foodLogs, targets }: AIChatTabProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: '0',
-      role: 'assistant',
-      content: "Hi! I'm Gemi, your on-device AI fitness coach. I run entirely on your device — no internet needed. Ask me anything about your workouts, nutrition, or recovery! 💪🔒",
-      timestamp: new Date(),
-    },
-  ]);
+export function AIChatTab({ userName, foodLogs, targets, messages, setMessages }: AIChatTabProps) {
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = inputText.trim();
     if (!text) return;
 
@@ -90,19 +49,44 @@ export function AIChatTab({ foodLogs, targets }: AIChatTabProps) {
     setInputText('');
     setIsTyping(true);
 
-    // Simulate on-device inference delay
-    setTimeout(() => {
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+
+    try {
+      // 1. Fetch user data for context
+      const workoutsStr = await AsyncStorage.getItem('gemi:workouts');
+      const dietStr = await AsyncStorage.getItem('gemi:dietLogs');
+      const workouts: WorkoutLog[] = workoutsStr ? JSON.parse(workoutsStr) : [];
+      const diets: DietLog[] = dietStr ? JSON.parse(dietStr) : [];
+
+      // 2. Build structured prompt
+      const prompt = buildFreeChatPrompt(userName, text, workouts, diets);
+
+      // 3. Initialize and extract model from assets if not already done
+      await initializeGemmaOnStartup();
+      
+      // 4. Pass structured prompt to native Gemma module for inference
+      const response = await GemmaModule.generateResponse(prompt);
+
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: getAIResponse(text),
+        content: response,
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, aiMsg]);
+    } catch (error) {
+      console.error('Gemma native inference failed:', error);
+      const errorMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: "Sorry, I encountered an error running the on-device model. Please check the logs.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
       setIsTyping(false);
-    }, 1200);
-
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
+    }
   };
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
@@ -323,7 +307,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLowest,
     borderTopWidth: 1,
     borderTopColor: 'rgba(190, 200, 210, 0.15)',
-    paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.md,
+    paddingBottom: Platform.OS === 'ios' ? spacing.xl + 85 : spacing.md + 85,
   },
   input: {
     flex: 1,
