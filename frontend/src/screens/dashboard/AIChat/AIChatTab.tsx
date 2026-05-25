@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing } from '@/theme/typography';
 import type { ChatMessage, MacroTargets, FoodLogEntry } from '@/screens/dashboard/types';
-import { ArrowUp, Bot, Lock } from 'lucide-react-native';
+import { ArrowUp, Bot, Lock, Square } from 'lucide-react-native';
 import { initializeGemmaOnStartup } from '@/ai/gemmaInit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildFreeChatPrompt, type WorkoutLog, type DietLog, type UserProfile } from '@/ai/prompts';
@@ -36,6 +36,8 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, 
   const [isTyping, setIsTyping] = useState(false);
   const [isKeyboardVisible, setKeyboardVisible] = useState(false);
   const listRef = useRef<FlatList<ChatMessage>>(null);
+  const requestIdRef = useRef<string | null>(null);
+  const cancelledRequestsRef = useRef<Set<string>>(new Set());
   const insets = useSafeAreaInsets();
 
   React.useEffect(() => {
@@ -55,7 +57,10 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, 
 
   const handleSend = async () => {
     const text = inputText.trim();
-    if (!text) return;
+    if (!text || isTyping) return;
+
+    const requestId = Date.now().toString();
+    requestIdRef.current = requestId;
 
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -92,6 +97,10 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, 
       // 4. Pass structured prompt to native Gemma module for inference
       const response = await GemmaModule.generateResponse(prompt);
 
+      if (cancelledRequestsRef.current.has(requestId)) {
+        return;
+      }
+
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -100,6 +109,9 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, 
       };
       setMessages((prev) => [...prev, aiMsg]);
     } catch (error) {
+      if (cancelledRequestsRef.current.has(requestId)) {
+        return;
+      }
       console.error('Gemma native inference failed:', error);
       const errorMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -109,8 +121,20 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, 
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
-      setIsTyping(false);
+      if (requestIdRef.current === requestId) {
+        setIsTyping(false);
+        requestIdRef.current = null;
+      }
     }
+  };
+
+  const handleStop = () => {
+    const requestId = requestIdRef.current;
+    if (requestId) {
+      cancelledRequestsRef.current.add(requestId);
+      requestIdRef.current = null;
+    }
+    setIsTyping(false);
   };
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
@@ -189,15 +213,26 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, 
           maxLength={500}
           returnKeyType="send"
           onSubmitEditing={handleSend}
+          editable={!isTyping}
         />
-        <TouchableOpacity
-          style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
-          onPress={handleSend}
-          disabled={!inputText.trim()}
-          activeOpacity={0.8}
-        >
-          <ArrowUp size={20} color={inputText.trim() ? Colors.onPrimary : Colors.outline} strokeWidth={2.5} />
-        </TouchableOpacity>
+        {isTyping ? (
+          <TouchableOpacity
+            style={[styles.sendBtn, styles.stopBtn]}
+            onPress={handleStop}
+            activeOpacity={0.8}
+          >
+            <Square size={18} color={Colors.onPrimary} strokeWidth={2.5} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
+            onPress={handleSend}
+            disabled={!inputText.trim()}
+            activeOpacity={0.8}
+          >
+            <ArrowUp size={20} color={inputText.trim() ? Colors.onPrimary : Colors.outline} strokeWidth={2.5} />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -351,6 +386,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryContainer,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  stopBtn: {
+    backgroundColor: Colors.error,
   },
   sendBtnDisabled: {
     backgroundColor: 'rgba(190, 200, 210, 0.2)',
