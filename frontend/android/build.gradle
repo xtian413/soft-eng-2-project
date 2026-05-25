@@ -1,0 +1,32 @@
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
+
+buildscript {
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath('com.android.tools.build:gradle')
+    classpath('com.facebook.react:react-native-gradle-plugin')
+    classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
+  }
+}
+
+// Override Kotlin version to 2.2.0 so it can read metadata 2.3.0 used by litertlm-android.
+// Expo SDK 56 supports Kotlin 2.2.0 (defined in KSPLookup with ksp 2.2.0-2.0.2).
+// This must be set BEFORE the expo-root-project plugin applies (which uses setIfNotExist).
+ext {
+  kotlinVersion = "2.2.0"
+  kspVersion = "2.2.0-2.0.2"
+}
+
+allprojects {
+  repositories {
+    google()
+    mavenCentral()
+    maven { url 'https://www.jitpack.io' }
+  }
+}
+
+apply plugin: "expo-root-project"
+apply plugin: "com.facebook.react.rootproject"
