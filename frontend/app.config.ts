@@ -6,6 +6,9 @@ const baseConfig = appJson.expo as ExpoConfig;
 
 export default (): ExpoConfig => ({
   ...baseConfig,
+  android: {
+    package: 'com.anonymous.frontend',
+  },
   extra: {
     ...baseConfig.extra,
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL,

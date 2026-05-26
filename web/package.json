@@ -1,0 +1,47 @@
+{
+  "name": "frontend-web",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web:expo": "expo start --web",
+    "build:apk": "expo run:android --variant release"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~56.0.3",
+    "expo-constants": "~16.0.2",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-web": "^0.21.2",
+    "react-router-dom": "^7.15.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.12.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/react-native": "^0.73.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "babel-plugin-module-resolver": "^5.0.3",
+    "babel-preset-expo": "~12.0.3",
+    "eslint": "^10.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.59.2",
+    "vite": "^8.0.12"
+  }
+}

@@ -1,0 +1,189 @@
+.gemi-profile-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--xl, 32px);
+  padding: var(--container-padding, 20px) 0;
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+.gemi-profile-header-section {
+  display: flex;
+  align-items: center;
+  gap: var(--md, 16px);
+}
+
+.gemi-profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0px 10px 25px rgba(0,0,0,0.08);
+  border: 2px solid var(--surface-container-lowest);
+}
+
+.gemi-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gemi-profile-info {
+  flex: 1;
+}
+
+.gemi-profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sm, 8px);
+  margin-bottom: 4px;
+}
+
+.gemi-profile-name {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--on-surface);
+  letter-spacing: -0.02em;
+}
+
+.gemi-profile-pro-badge {
+  background-color: var(--tertiary-fixed-dim);
+  color: var(--on-tertiary-fixed-variant);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gemi-profile-phase {
+  font-size: 16px;
+  color: var(--on-surface-variant);
+  display: flex;
+  align-items: center;
+}
+
+.gemi-profile-phase-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--secondary-container);
+  margin-right: 8px;
+}
+
+.gemi-profile-settings-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: var(--surface-container-lowest);
+  box-shadow: 0px 10px 25px rgba(0,0,0,0.04);
+  transition: background-color 0.2s;
+}
+
+/* Stats Bento */
+.gemi-profile-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--md, 16px);
+}
+
+.gemi-profile-stat-card {
+  background-color: var(--surface-container-lowest);
+  border-radius: 12px;
+  padding: var(--md, 16px);
+  box-shadow: 0px 10px 25px rgba(0,0,0,0.04);
+  border: 1px solid rgba(229, 238, 255, 0.5); /* surface-container */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.gemi-profile-stat-icon-wrapper {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.gemi-profile-stat-value {
+  font-size: 48px;
+  font-weight: 800;
+  color: var(--on-surface);
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.gemi-profile-stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Calendar */
+.gemi-profile-calendar {
+  margin-top: 16px;
+}
+
+.gemi-profile-calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.gemi-profile-calendar-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.gemi-profile-calendar-scroll {
+  display: flex;
+  overflow-x: auto;
+  gap: 8px;
+  padding-bottom: 8px;
+  scrollbar-width: none; /* Firefox */
+}
+
+.gemi-profile-calendar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.gemi-profile-day-card {
+  flex-shrink: 0;
+  width: 76px;
+  background-color: var(--surface-container-lowest);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0px 10px 25px rgba(0,0,0,0.04);
+  border: 1px solid rgba(229, 238, 255, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gemi-profile-day-card.today {
+  background-color: rgba(14, 165, 233, 0.1);
+  border: 2px solid var(--primary);
+  position: relative;
+}
+
+.gemi-profile-day-card.today::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  background-color: var(--primary);
+  border-radius: 50%;
+}

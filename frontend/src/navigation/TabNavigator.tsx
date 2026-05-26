@@ -1,26 +1,15 @@
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import DashboardScreen from '@/screens/dashboard/DashboardScreen';
-import DietLogScreen from '@/screens/diet/DietLogScreen';
-import ProgressScreen from '@/screens/progress/ProgressScreen';
-import WorkoutListScreen from '@/screens/workout/WorkoutListScreen';
 
-export type TabParamList = {
-  Dashboard: undefined;
-  Workout: undefined;
-  Diet: undefined;
-  Progress: undefined;
-};
-
-const Tab = createBottomTabNavigator<TabParamList>();
-
-/** Renders the main tab navigator. */
+/**
+ * The main app navigator.
+ * DashboardScreen contains its own 5-tab internal navigation (Home / Food / Lift / Coach / Profile),
+ * so we render it directly here rather than adding a React Navigation bottom tab bar on top,
+ * which would cause a duplicate nav bar.
+ *
+ * NOTE: WorkoutListScreen, DietLogScreen, and ProgressScreen still exist in src/screens/ and
+ * are wired to the Supabase backend API. They will be integrated into the Dashboard tabs
+ * in Sprint 3 when backend connectivity is established.
+ */
 export default function TabNavigator() {
-  return (
-    <Tab.Navigator>
-      <Tab.Screen name="Dashboard" component={DashboardScreen} />
-      <Tab.Screen name="Workout" component={WorkoutListScreen} />
-      <Tab.Screen name="Diet" component={DietLogScreen} />
-      <Tab.Screen name="Progress" component={ProgressScreen} />
-    </Tab.Navigator>
-  );
+  return <DashboardScreen />;
 }

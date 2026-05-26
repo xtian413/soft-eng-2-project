@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
-import { supabaseAdmin } from '../config/supabase';
+import { supabaseAdmin } from '../config/supabase.js';
 
 /** Verifies Supabase JWT and attaches the user to the request. */
 export async function requireAuth(

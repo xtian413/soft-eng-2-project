@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -8,6 +9,6 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
 }
 
 export const supabaseAdmin = createClient(
-  supabaseUrl ?? 'https://placeholder.supabase.co',
-  supabaseServiceRoleKey ?? 'placeholder-service-role-key'
+  supabaseUrl!,   // Type assertion (OK because it's not null)
+  supabaseServiceRoleKey!   // Type assertion (OK because it's not null)
 );

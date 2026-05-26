@@ -1,4 +1,4 @@
-# AGENT.md — Smart Fitness AI
+# AGENT.md — Gemi
 ## AI Instruction Manual for Coding Sessions
 
 > This file is the single source of truth for all AI-assisted development on this project.
@@ -10,7 +10,7 @@
 
 | Field | Value |
 |---|---|
-| App Name | Smart Fitness AI |
+| App Name | Gemi |
 | Type | Mobile Application (iOS + Android) |
 | Purpose | Workout, diet, and body weight tracking with on-device AI-generated insights |
 | Author | Christian Gamos |
@@ -56,7 +56,7 @@
 ## 3. Repository Structure
 
 ```
-smart-fitness-ai/
+soft-eng-2-project/
 ├── AGENT.md                     ← You are here
 ├── .gitignore
 ├── README.md
@@ -318,6 +318,15 @@ Insights are generated:
 ### 6.5 Comments
 - Only write comments for non-obvious logic
 - Every exported function must have a single-line JSDoc: `/** Logs a new workout set to Supabase */`
+
+### 6.6 Component Modularization & Folder Structure (Strict Rule)
+- **❌ NEVER build monolithic screen or page components**: Pages or views exceeding 350 lines MUST be broken down into clean, modularized subcomponents, custom hooks, and isolated styled blocks.
+- **✅ Directory Structure for Complex Pages**:
+  - The main page component (e.g., `Dashboard.tsx`) acts strictly as a structural container and state orchestrator.
+  - Sub-views/tabs are isolated in their own folders under the page directory (e.g., `Home/`, `Food/`, `AIChat/`, `Lift/`, `Profile/`).
+  - Business logic, complex state transitions, and UI event handlers are isolated into custom hooks (e.g., `hooks/useFood.ts`, `hooks/useAIChat.ts`) within the sub-component directories.
+  - Modals, popups, and large isolated widgets live in a `subcomponents/` folder under their parent page or tab.
+- **✅ Strict Type Isolation**: Shared types must live in a dedicated `types.ts` file at the root of the page folder (e.g., `Dashboard/types.ts`) or in a global typing module, explicitly imported using `import type` to prevent runtime ESM syntax issues.
 
 ---
 
