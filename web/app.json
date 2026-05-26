@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "frontend-web",
+    "slug": "frontend-web",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/react.svg",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./src/assets/react.svg"
+      },
+      "package": "com.anonymous.frontendweb"
+    },
+    "web": {
+      "favicon": "./src/assets/react.svg"
+    }
+  }
+}
