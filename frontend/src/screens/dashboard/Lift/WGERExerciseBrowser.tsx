@@ -62,6 +62,7 @@ interface WGERExerciseBrowserProps {
   muscleName?: string;
   onClose: () => void;
   onSelectExercise: (exercise: ExerciseDbExercise) => void;
+  addedExerciseNames?: string[];
 }
 
 export const WGERExerciseBrowser: React.FC<WGERExerciseBrowserProps> = ({
@@ -70,6 +71,7 @@ export const WGERExerciseBrowser: React.FC<WGERExerciseBrowserProps> = ({
   muscleName = '',
   onClose,
   onSelectExercise,
+  addedExerciseNames = [],
 }) => {
   const [exercises, setExercises] = useState<ExerciseDbExercise[]>([]);
   const [filteredExercises, setFilteredExercises] = useState<ExerciseDbExercise[]>([]);
@@ -137,16 +139,33 @@ export const WGERExerciseBrowser: React.FC<WGERExerciseBrowserProps> = ({
     const isPrimary = item.primaryMuscleIds.includes(muscleId!);
     const exerciseName = getExerciseName(item);
     const equipmentNames = item.equipment ? item.equipment : '';
+    const isAdded = addedExerciseNames.some(
+      (n) => normalizeName(n) === normalizeName(exerciseName)
+    );
 
     return (
-      <View style={styles.exerciseCard}>
+      <View style={[styles.exerciseCard, isAdded && styles.exerciseCardAdded]}>
         <View style={styles.cardHeader}>
           <View style={styles.titleContainer}>
-            <Text style={styles.exerciseName}>{exerciseName}</Text>
-            {isPrimary && <Text style={styles.primaryBadge}>Primary</Text>}
+            <Text style={[styles.exerciseName, isAdded && styles.exerciseNameAdded]}>{exerciseName}</Text>
+            <View style={styles.badgeRow}>
+              {isPrimary && <Text style={styles.primaryBadge}>Primary</Text>}
+              {isAdded && (
+                <View style={styles.addedBadge}>
+                  <Text style={styles.addedBadgeText}>✓ Added</Text>
+                </View>
+              )}
+            </View>
           </View>
-          <TouchableOpacity onPress={() => onSelectExercise(item)} activeOpacity={0.7}>
-            <Zap size={20} color={Colors.primary} />
+          <TouchableOpacity
+            onPress={() => !isAdded && onSelectExercise(item)}
+            activeOpacity={isAdded ? 1 : 0.7}
+            style={[styles.zapBtn, isAdded && styles.zapBtnAdded]}
+          >
+            {isAdded
+              ? <Text style={styles.zapBtnAddedText}>✓</Text>
+              : <Zap size={20} color={Colors.primary} />
+            }
           </TouchableOpacity>
         </View>
 
@@ -396,6 +415,48 @@ const styles = StyleSheet.create({
     padding: spacing.base,
     borderWidth: 1,
     borderColor: Colors.outline,
+  },
+  exerciseCardAdded: {
+    borderColor: '#10b981',
+    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+  },
+  exerciseNameAdded: {
+    color: Colors.outline,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: 2,
+  },
+  addedBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
+  addedBadgeText: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: '#10b981',
+  },
+  zapBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zapBtnAdded: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  zapBtnAddedText: {
+    fontSize: 16,
+    fontWeight: fontWeight.bold,
+    color: '#10b981',
   },
   cardHeader: {
     flexDirection: 'row',
