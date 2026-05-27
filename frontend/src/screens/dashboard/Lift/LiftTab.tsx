@@ -72,6 +72,13 @@ interface RoutineDraftExercise {
   muscleGroup?: string;
 }
 
+// Strip decimals unless the value actually has meaningful fractional part
+const formatWeight = (value: number): string => {
+  if (!Number.isFinite(value) || value <= 0) return '';
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(Math.round(rounded)) : String(rounded);
+};
+
 export function LiftTab({ triggerToast }: LiftTabProps) {
   const user = useAuthStore((state) => state.user);
 
@@ -120,7 +127,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const [showExerciseConfigSheet, setShowExerciseConfigSheet] = useState(false);
   const [configSets, setConfigSets] = useState('3');
   const [configReps, setConfigReps] = useState('10');
-  const [configWeight, setConfigWeight] = useState('0');
+  const [configWeight, setConfigWeight] = useState('');
   const [configWeightUnit, setConfigWeightUnit] = useState<'lbs' | 'kg'>('lbs');
   const [selectedMuscleId, setSelectedMuscleId] = useState<number | null>(null);
   const [selectedMuscleName, setSelectedMuscleName] = useState<string>('');
@@ -206,7 +213,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       Object.entries(prev).forEach(([key, value]) => {
         const currentWeight = parseFloat(value.weight) || 0;
         const nextWeight = convertWeightValue(currentWeight, nextIsLbs);
-        updated[key] = { ...value, weight: nextWeight.toFixed(1) };
+        updated[key] = { ...value, weight: formatWeight(nextWeight) };
       });
       return updated;
     });
@@ -288,7 +295,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         name: '',
         sets: '3',
         reps: '10',
-        weight: '0',
+        weight: '',
         weightUnit: isLbs ? 'lbs' : 'kg',
       },
     ]);
@@ -329,7 +336,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         name: exercise.exercise_name,
         sets: String(exercise.sets),
         reps: String(exercise.reps),
-        weight: Number.isFinite(weightValue) ? weightValue.toFixed(1) : '0.0',
+        weight: formatWeight(weightValue),
         weightUnit: isLbs ? 'lbs' : 'kg',
         muscleGroup: exercise.muscle_group || undefined,
       } as RoutineDraftExercise;
@@ -453,7 +460,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     if (!routineExercise) return;
     setIsUnilateral(false);
     const weight = isLbs ? routineExercise.weight_kg / 0.45359237 : routineExercise.weight_kg;
-    setInputWeight(weight.toFixed(1));
+    setInputWeight(formatWeight(weight));
     setInputReps(String(routineExercise.reps));
     setInputRepsLeft(String(routineExercise.reps));
     setInputRepsRight(String(routineExercise.reps));
@@ -469,7 +476,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       initialProgress[exercise.id] = {
         sets: String(setCount),
         reps: String(exercise.reps),
-        weight: Number.isFinite(weightValue) ? weightValue.toFixed(1) : '0.0',
+        weight: formatWeight(weightValue),
         doneSets: Array.from({ length: setCount }, () => false),
       };
     });
@@ -553,9 +560,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     const currentProgress = routineProgress[exerciseId] || {
       sets: String(exercise.sets),
       reps: String(exercise.reps),
-      weight: Number.isFinite(exercise.weight_kg)
-        ? (isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg).toFixed(1)
-        : '0.0',
+      weight: formatWeight(isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg),
       doneSets: Array.from({ length: Math.max(1, exercise.sets) }, () => false),
     };
 
@@ -611,7 +616,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
             ...current,
             sets: String(nextSets),
             reps: String(nextReps),
-            weight: nextWeight.toFixed(1),
+            weight: formatWeight(nextWeight),
             doneSets: nextDoneSets,
           },
         };
@@ -785,7 +790,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       return {
         sets: String(Math.max(1, previousMatch.sets)),
         reps: String(Math.max(1, previousMatch.reps)),
-        weight: Number.isFinite(weightValue) ? weightValue.toFixed(1) : '0.0',
+        weight: formatWeight(weightValue),
       };
     }
 
@@ -793,11 +798,11 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       return {
         sets: lastDraft.sets || '3',
         reps: lastDraft.reps || '10',
-        weight: lastDraft.weight || '0',
+        weight: lastDraft.weight || '',
       };
     }
 
-    return { sets: '3', reps: '10', weight: '0' };
+    return { sets: '3', reps: '10', weight: '' };
   };
 
   const handleAddExerciseToRoutineDraft = (exercise: ExerciseDbExercise) => {
@@ -896,9 +901,9 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       // Pre-fill log inputs from config
       const weightInCurrentUnit =
         configWeightUnit === 'lbs' && !isLbs
-          ? (parseFloat(configWeight) * 0.45359237).toFixed(1)
+          ? formatWeight(parseFloat(configWeight) * 0.45359237)
           : configWeightUnit === 'kg' && isLbs
-          ? (parseFloat(configWeight) / 0.45359237).toFixed(1)
+          ? formatWeight(parseFloat(configWeight) / 0.45359237)
           : configWeight;
       setInputWeight(weightInCurrentUnit);
       setInputReps(configReps);
@@ -1029,7 +1034,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                       ? exercise.weight_kg / 0.45359237
                       : exercise.weight_kg;
                     const weightLabel = isLbs ? 'lbs' : 'kg';
-                    const weightText = Number.isFinite(weightValue) ? weightValue.toFixed(1) : '0.0';
+                    const weightText = formatWeight(weightValue) || '—';
                     return (
                       <TouchableOpacity
                         key={exercise.id}
@@ -1129,7 +1134,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                   const progress = routineProgress[exercise.id] || {
                     sets: String(exercise.sets),
                     reps: String(exercise.reps),
-                    weight: '0',
+                    weight: formatWeight(isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg),
                     doneSets: Array.from({ length: Math.max(1, exercise.sets) }, () => false),
                   };
 
@@ -1633,13 +1638,17 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
               <View style={styles.configCol}>
                 <Text style={styles.configLabel}>Weight</Text>
-                <TextInput
-                  style={[styles.configInput, { flex: 1 }]}
-                  value={configWeight}
-                  onChangeText={setConfigWeight}
-                  keyboardType="decimal-pad"
-                  textAlign="center"
-                />
+                <View style={[styles.configInputWrapper, { justifyContent: 'center' }]}>
+                  <TextInput
+                    style={styles.configInput}
+                    value={configWeight}
+                    onChangeText={setConfigWeight}
+                    keyboardType="decimal-pad"
+                    textAlign="center"
+                    placeholder="0"
+                    placeholderTextColor={Colors.outline}
+                  />
+                </View>
                 <View style={styles.configUnitToggle}>
                   <TouchableOpacity onPress={() => setConfigWeightUnit('lbs')}>
                     <Text style={[styles.unitBtn, configWeightUnit === 'lbs' && styles.unitBtnActive]}>lbs</Text>
@@ -2608,10 +2617,10 @@ const styles = StyleSheet.create({
     fontSize: typography.base,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,
-    borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.3)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(14, 165, 233, 0.4)',
     borderRadius: radius.md,
-    backgroundColor: 'rgba(14, 165, 233, 0.06)',
+    backgroundColor: Colors.surface,
     paddingHorizontal: spacing.xs,
   },
   configUnitToggle: {
