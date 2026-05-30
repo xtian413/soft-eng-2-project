@@ -3,6 +3,15 @@
 **Format**: `[YYYY-MM-DD HH:MM +TZ] TYPE: description`
 
 ---
+### [2026-05-30 12:48 +0800] CHORE: Removed unused Web subproject
+- **Branch**: `mono-repo-integration`
+- **Files Modified**:
+  - `web/` (Deleted folder and all contents)
+- **Changes**:
+  - ✅ **Directory Removal**: Completely removed the legacy Vite web app subproject `web/` folder from git tracking and the filesystem since Gemi targets Expo React Native.
+  - ✅ **Clean Environment**: Confirmed workspace build and run states are clean and unaffected by this change.
+
+---
 ### [2026-05-30 12:45 +0800] FEAT: Merged master, Cloyd and jb-branch into Unified Monorepo Branch
 - **Branch**: `mono-repo-integration`
 - **Files Modified**:
