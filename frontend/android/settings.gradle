@@ -36,4 +36,5 @@ rootProject.name = 'frontend'
 expoAutolinking.useExpoVersionCatalog()
 
 include ':app'
+include ':llama'
 includeBuild(expoAutolinking.reactNativeGradlePlugin)

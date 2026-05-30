@@ -1,0 +1,3 @@
+[submodule "frontend/native-modules/llama.cpp"]
+	path = frontend/native-modules/llama.cpp
+	url = https://github.com/ggerganov/llama.cpp

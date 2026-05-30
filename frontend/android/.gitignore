@@ -19,3 +19,4 @@ app/src/main/java/inline/
 *.jsbundle
 
 *.litertlm
+*.gguf

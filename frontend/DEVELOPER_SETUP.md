@@ -1,6 +1,6 @@
 # 🚀 Developer Setup Guide
 
-Welcome to the frontend project! This React Native/Expo app utilizes a massive local AI model (**Gemma**) via a custom native Android module. Because of this integration, the setup process diverges significantly from standard Expo projects.
+Welcome to the frontend project! This React Native/Expo app utilizes a massive local AI model (**LFM2.5**) via a custom native Android llama.cpp module. Because of this integration, the setup process diverges significantly from standard Expo projects.
 
 > ⚠️ **CRITICAL:** Please read this entire guide *before* running any commands. Skipping steps will result in failed builds, missing dependencies, or corrupted native code.
 
@@ -41,18 +41,20 @@ npm install
 
 ---
 
-## 🤖 Step 3: The Local AI Model (The 2.4GB File)
+## 🤖 Step 3: The Local AI Model (GGUF)
 
-Our application relies on the Gemma AI model (`gemma-4-E2B-it.litertlm`). Because this file is approximately 2.4GB, it exceeds GitHub's file size limits and is specifically **ignored in `.gitignore`**.
+Our application relies on the LFM2.5 AI model (`lfm2.5-1.2b-instruct-q4_k_m.gguf`). Because this file is large, it exceeds GitHub's file size limits and is specifically **ignored in `.gitignore`**.
 
 If you attempt to build the Android app without this model, the app will crash when attempting to load the LLM.
 
 **How to set this up:**
-1. Download the `gemma-4-E2B-it.litertlm` file from our team's secure storage or shared drive.
+1. Download the `lfm2.5-1.2b-instruct-q4_k_m.gguf` file from our team's secure storage or shared drive.
 2. Manually navigate to the following directory in your project:
    `android/app/src/main/assets/models/`
    *(Create the `models` folder if it does not exist).*
-3. Place the `gemma-4-E2B-it.litertlm` file exactly in that directory.
+3. Place the `lfm2.5-1.2b-instruct-q4_k_m.gguf` file exactly in that directory.
+
+> Optional: set `LFM_MODEL_PATH` and run `npm run android` to auto-copy the model during build.
 
 ---
 
@@ -73,10 +75,10 @@ Ensure your `ANDROID_HOME` system environment variable is correctly pointed to y
 
 ## 🛑 Step 5: The Bare Workflow Warning
 
-We use a custom Android module (`android/app/src/main/java/com/anonymous/frontend/gemma/`) to interface with the LiteRT LM library.
+We use a custom Android module (`android/app/src/main/java/com/anonymous/frontend/llm/`) to interface with llama.cpp via JNI.
 
 > ⚠️ **CRITICAL WARNING:**
-> The `android/` folder is actively tracked in Git because of our custom Gemma module.
+> The `android/` folder is actively tracked in Git because of our custom LFM module.
 >
 > You must **NEVER** run `npx expo prebuild --clean`.
 > Running this command will completely wipe the `android/` folder, destroying our custom native code and irreparably breaking the app's AI integration.
@@ -87,11 +89,12 @@ If you ever need to patch or regenerate other native modules, use the standard `
 
 ## 🧩 Step 6: Kotlin & NDK Dependencies
 
-To successfully compile the local AI module (`litertlm-android:0.12.0`), our Gradle files enforce specific build configurations:
+To successfully compile the local AI module (llama.cpp JNI), our Gradle files enforce specific build configurations:
 
 - **NDK Version:** Ensure your NDK version matches the one implicitly required by the React Native version (`rootProject.ext.ndkVersion`). You can install the default NDK version via Android Studio's SDK Manager.
-- **Kotlin Metadata Mismatch:** We are currently utilizing `-Xskip-metadata-version-check` in our Kotlin compiler options. This bypasses a LiteRT metadata version mismatch (we enforce Kotlin `2.2.0` while `litertlm` expects `2.3.0`).
-> ⚠️ **IMPORTANT:** If you encounter Kotlin compiler errors, **do not** try to globally bump the React Native Kotlin version in `android/build.gradle`. Our current overrides (`kotlinVersion = "2.2.0"`, `kspVersion = "2.2.0-2.0.2"`) are intentionally pinned to maintain compatibility with Expo SDK 56.
+- **CMake/NDK:** Ensure your Android Studio NDK and CMake are installed. The llama.cpp JNI build is compiled via CMake during the Android build.
+- **llama.cpp source:** Clone the llama.cpp repo into `frontend/native-modules/llama.cpp` (or update the path in `android/app/src/main/cpp/CMakeLists.txt`).
+> ⚠️ **IMPORTANT:** If you encounter Kotlin compiler errors, **do not** try to globally bump the React Native Kotlin version in `android/build.gradle`. Our current overrides (`kotlinVersion = "2.2.0"`, `kspVersion = "2.2.0-2.0.2"`) are pinned to maintain compatibility with Expo SDK 56.
 
 ---
 
@@ -105,6 +108,6 @@ Start the Metro bundler and compile the Android app using our custom script (whi
 npm run android
 ```
 
-If everything is configured properly, the app will compile, install onto your connected emulator or physical Android device, and load the Gemma model successfully.
+If everything is configured properly, the app will compile, install onto your connected emulator or physical Android device, and load the LFM model successfully.
 
 🎉 **Happy Coding!**

@@ -8,7 +8,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  NativeModules,
   Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,11 +15,11 @@ import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing } from '@/theme/typography';
 import type { ChatMessage, MacroTargets, FoodLogEntry } from '@/screens/dashboard/types';
 import { ArrowUp, Bot, Lock, Square } from 'lucide-react-native';
-import { initializeGemmaOnStartup } from '@/ai/gemmaInit';
+import { initializeLfmOnStartup } from '@/ai/lfmInit';
+import { generateFreeChatResponse } from '@/ai/lfmService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { buildFreeChatPrompt, type WorkoutLog, type DietLog, type UserProfile } from '@/ai/prompts';
 
-const { GemmaModule } = NativeModules;
 
 interface AIChatTabProps {
   userName: string;
@@ -92,10 +91,10 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, 
       const prompt = buildFreeChatPrompt(userName, userProfile, text, workouts, diets);
 
       // 3. Initialize and extract model from assets if not already done
-      await initializeGemmaOnStartup();
-      
-      // 4. Pass structured prompt to native Gemma module for inference
-      const response = await GemmaModule.generateResponse(prompt);
+      await initializeLfmOnStartup();
+
+      // 4. Pass structured prompt to native LFM module for inference
+      const response = await generateFreeChatResponse(prompt);
 
       if (cancelledRequestsRef.current.has(requestId)) {
         return;
@@ -112,7 +111,7 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, 
       if (cancelledRequestsRef.current.has(requestId)) {
         return;
       }
-      console.error('Gemma native inference failed:', error);
+      console.error('LFM native inference failed:', error);
       const errorMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',

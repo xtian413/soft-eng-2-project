@@ -114,7 +114,7 @@ export function buildFreeChatPrompt(
     : 'User Profile: Not provided.';
 
   return [
-    `System: You are Gemi, an intelligent, supportive, and practical on-device fitness and nutrition coach. Never break character or refer to yourself as a generic Google LLM.`,
+    `System: You are Gemi, an intelligent, supportive, and practical on-device fitness and nutrition coach. Never break character or refer to yourself as a generic LLM.`,
     `User: ${userName}`,
     profileSection,
     '',

@@ -32,7 +32,7 @@ soft-eng-2-project/
 │       ├── config/, controllers/, middleware/, routes/, services/, types/, utils/
 ├── frontend/             ← Expo React Native app (iOS + Android)
 │   └── src/
-│       ├── ai/           ← gemmaService.ts (on-device inference ONLY)
+│       ├── ai/           ← on-device inference (LFM2.5 via llama.cpp; rename gemmaService.ts later)
 │       ├── api/, components/, hooks/, lib/, navigation/, screens/, store/, types/
 ├── supabase/             ← Supabase migrations + config
 │   └── migrations/       ← 001–006 SQL files + timestamped duplicates
@@ -142,7 +142,7 @@ Profile data passed: `navigate('/dashboard', { state: { fullName, email, gender,
 1. **`react-router-dom` install**: Must use `--legacy-peer-deps` due to React 19 peer constraint.
 2. **`.native.tsx` files**: `web/tsconfig.app.json` must exclude `src/**/*.native.tsx` and `src/**/*.native.ts` or type conflicts occur.
 3. **TypeScript ESM pure type imports**: Browsers throwing runtime `SyntaxError` when importing TypeScript interfaces inside standard runtime declarations. Pure interfaces must be imported explicitly with `import type` (ERR-008).
-4. **AI is simulated in web**: The coach chat in `Dashboard.tsx` uses keyword matching with a 1.2s fake delay. Real WASM inference is Sprint 4.
+4. **AI is simulated in web**: The coach chat in `Dashboard.tsx` uses keyword matching with a 1.2s fake delay. Real on-device LFM2.5 inference is Sprint 4.
 5. **No auth guard yet**: `/dashboard` is accessible without login. `ProtectedRoute` component is pending (TASK-006).
 6. **Profile data is transient**: User profile from registration lives in React Router location state. No persistence until Supabase auth is wired (TASK-001).
 7. **Stitch images**: The profile avatar image in Dashboard uses a Google AIDA public URL. Should be replaced with actual user avatar from Supabase Storage in production.
@@ -156,8 +156,8 @@ Profile data passed: `navigate('/dashboard', { state: { fullName, email, gender,
    - *Risk:* As multiple tabs (like `Lift`, `Food`, and `AIChat`) scale and require reactive access to shared states, drilling functions (like `setFoodLogs`, `setToastMessage`) down through `Dashboard.tsx` will clutter component interfaces.
    - *Future Solution:* Transition key shared scopes to a lightweight client-side **Zustand** store (as recommended in `AGENT.md` Section 2.1) to isolate container rendering from state operations.
 2. **ESM Dynamic Imports for local binary/WASM assets:**
-   - *Risk:* Vite dynamic loaders might crash or ignore ESM dynamic namespaces when loading the local Gemma WASM runtime model in Sprint 4 if not resolved with `.default` or absolute resolver path overrides.
-   - *Future Solution:* Ensure local dynamic models explicitly map through verified asset aliases and handle module namespace bindings with fallback triggers.
+  - *Risk:* Vite dynamic loaders might crash or ignore ESM dynamic namespaces when loading the local LFM2.5 runtime model in Sprint 4 if not resolved with `.default` or absolute resolver path overrides.
+  - *Future Solution:* Ensure local dynamic models explicitly map through verified asset aliases and handle module namespace bindings with fallback triggers.
 3. **Transient React State Loss on Viewport Refresh:**
    - *Risk:* User logs (meals, sleep targets, water tracking) exist strictly in transient React memory. A browser reload wipes all progress completely.
    - *Future Solution:* Wire up persistence hooks (e.g. standard `localStorage` wrapper hooks) or push entries directly to Supabase endpoints (`diet_logs`, `workouts`) when the backend DB connection is established.

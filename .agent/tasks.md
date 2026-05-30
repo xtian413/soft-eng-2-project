@@ -32,18 +32,18 @@
 
 ---
 
-### [TASK-002] Real Gemma WASM Inference — Web
+### [TASK-002] Real LFM2.5 Local Inference — Web
 - **Priority**: P1
 - **Sprint**: 4
-- **Description**: Replace simulated coach responses in Dashboard Coach tab with actual on-device Gemma 4 e2b inference via `@mediapipe/tasks-genai`.
+- **Description**: Replace simulated coach responses in Dashboard Coach tab with actual on-device LFM2.5 inference (llama.cpp-backed runtime).
 - **Acceptance Criteria**:
   - [ ] Model asset bundled via Vite static asset import
-  - [ ] `loadGemmaModel()` called on Dashboard mount
+  - [ ] `loadLfmModel()` called on Dashboard mount
   - [ ] `generateInsight(prompt)` replaces simulated delay + keyword matching
   - [ ] Loading state shown while model initializes
   - [ ] Fallback UI: "Insight unavailable — model loading" on error
 - **Files to Create/Modify**:
-  - `web/src/ai/gemmaService.ts` (create — mirrors mobile implementation)
+  - `web/src/ai/lfmService.ts` (create — mirrors mobile implementation)
   - `web/src/pages/Dashboard/Dashboard.tsx`
 
 ---
@@ -79,7 +79,7 @@
 - **Acceptance Criteria**:
   - [ ] Macro summary cards (real Supabase data)
   - [ ] Recent workout card
-  - [ ] Gemma AI insight (generated via `gemmaService.ts`)
+  - [ ] LFM2.5 AI insight (generated via `lfmService.ts`)
   - [ ] Navigation to all major screens
 
 ---

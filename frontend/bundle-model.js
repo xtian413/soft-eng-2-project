@@ -6,21 +6,21 @@ const path = require('path');
 const os = require('os');
 
 // Resolve the default Downloads path dynamically for the current user (cross-platform)
-const defaultSource = path.join(os.homedir(), 'Downloads', 'gemma-4-E2B-it.litertlm');
-const SOURCE = process.env.GEMMA_MODEL_PATH || defaultSource;
+const defaultSource = path.join(os.homedir(), 'Downloads', 'lfm2.5-1.2b-instruct-q4_k_m.gguf');
+const SOURCE = process.env.LFM_MODEL_PATH || defaultSource;
 const DEST_DIR = path.join(__dirname, 'android', 'app', 'src', 'main', 'assets', 'models');
-const DEST_FILE = path.join(DEST_DIR, 'gemma-4-E2B-it.litertlm');
+const DEST_FILE = path.join(DEST_DIR, 'lfm2.5-1.2b-instruct-q4_k_m.gguf');
 
-console.log('📦 Bundling Gemma model into APK assets...\n');
+console.log('📦 Bundling LFM model into APK assets...\n');
 
 // Check source
 if (!fs.existsSync(SOURCE)) {
     console.error(`✗ Model file not found at: ${SOURCE}`);
     console.error(`\nTo fix this, please do one of the following:`);
-    console.error(`1. Download the Gemma model 'gemma-4-E2B-it.litertlm' (2.41 GB) and place it in your Downloads folder.`);
-    console.error(`2. Set the GEMMA_MODEL_PATH environment variable to the path of your model file before building.`);
-    console.error(`   Example (Windows PowerShell):  $env:GEMMA_MODEL_PATH="C:\\path\\to\\model.litertlm"; npm run android`);
-    console.error(`   Example (Bash/macOS):         GEMMA_MODEL_PATH=/path/to/model.litertlm npm run android\n`);
+    console.error(`1. Download the LFM model 'lfm2.5-1.2b-instruct-q4_k_m.gguf' and place it in your Downloads folder.`);
+    console.error(`2. Set the LFM_MODEL_PATH environment variable to the path of your model file before building.`);
+    console.error(`   Example (Windows PowerShell):  $env:LFM_MODEL_PATH="C:\\path\\to\\model.gguf"; npm run android`);
+    console.error(`   Example (Bash/macOS):         LFM_MODEL_PATH=/path/to/model.gguf npm run android\n`);
     process.exit(1);
 }
 
