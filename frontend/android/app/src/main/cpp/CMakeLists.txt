@@ -7,6 +7,16 @@ set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(GGML_CPU_KLEIDIAI OFF CACHE BOOL "" FORCE)
+
+if(ANDROID)
+    # Android debug builds default to unoptimized native code. That makes
+    # on-device LLM inference unusably slow, so keep debug symbols but compile
+    # the llama.cpp runtime with release-grade optimization.
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O3 -DNDEBUG")
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O3 -DNDEBUG")
+    add_compile_options("$<$<CONFIG:Debug>:-O3>" "$<$<CONFIG:Debug>:-DNDEBUG>")
+endif()
 
 add_subdirectory(${LLAMA_CPP_DIR} llama.cpp)
 

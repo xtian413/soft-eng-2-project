@@ -6,6 +6,7 @@ object LlamaBridge {
     }
 
     external fun initModel(modelPath: String, nCtx: Int, nThreads: Int, nBatch: Int): Long
+    external fun getLastError(): String
     external fun generate(
         handle: Long,
         prompt: String,
@@ -15,5 +16,6 @@ object LlamaBridge {
         topK: Int,
         repeatPenalty: Float
     ): String
+    external fun cancelGeneration(handle: Long)
     external fun freeModel(handle: Long)
 }

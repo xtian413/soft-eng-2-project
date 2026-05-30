@@ -9,10 +9,11 @@ import {
 const WORKOUT_STORAGE_KEY = 'gemi:workouts';
 const DIET_STORAGE_KEY = 'gemi:dietLogs';
 
-const DEFAULT_CONTEXT_TOKENS = 1536;
+const DEFAULT_CONTEXT_TOKENS = 1024;
 const DEFAULT_THREADS = 4;
 const DEFAULT_BATCH = 64;
-const DEFAULT_MAX_TOKENS = 256;
+const DEFAULT_INSIGHT_MAX_TOKENS = 96;
+const DEFAULT_CHAT_MAX_TOKENS = 48;
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_TOP_P = 0.9;
 const DEFAULT_TOP_K = 40;
@@ -29,7 +30,8 @@ type LfmNativeModule = {
     repeatPenalty: number
   ) => Promise<string>;
   copyAsset: (assetName: string) => Promise<string>;
-  closeModel: () => Promise<void>;
+  cancelGeneration: () => Promise<string>;
+  closeModel: () => Promise<string>;
 };
 
 export function getLfmModule(): LfmNativeModule {
@@ -56,6 +58,14 @@ async function loadJsonArray<T>(storageKey: string): Promise<T[]> {
   return parsed as T[];
 }
 
+function cleanLfmResponse(response: string) {
+  return response
+    .split('<|im_end|>')[0]
+    .split('<|im_start|>')[0]
+    .replace(/^assistant\s*/i, '')
+    .trim();
+}
+
 export async function initLfmModel(
   modelPath: string,
   options?: { nCtx?: number; nThreads?: number; nBatch?: number }
@@ -74,25 +84,31 @@ export async function generateWorkoutInsight(userName: string) {
   ]);
 
   const prompt = buildWorkoutInsightPrompt(userName, workouts, dietLogs);
-  return getLfmModule().generateResponse(
+  const response = await getLfmModule().generateResponse(
     prompt,
-    DEFAULT_MAX_TOKENS,
+    DEFAULT_INSIGHT_MAX_TOKENS,
     DEFAULT_TEMPERATURE,
     DEFAULT_TOP_P,
     DEFAULT_TOP_K,
     DEFAULT_REPEAT_PENALTY
   );
+  return cleanLfmResponse(response);
 }
 
 export async function generateFreeChatResponse(prompt: string) {
-  return getLfmModule().generateResponse(
+  const response = await getLfmModule().generateResponse(
     prompt,
-    DEFAULT_MAX_TOKENS,
+    DEFAULT_CHAT_MAX_TOKENS,
     DEFAULT_TEMPERATURE,
     DEFAULT_TOP_P,
     DEFAULT_TOP_K,
     DEFAULT_REPEAT_PENALTY
   );
+  return cleanLfmResponse(response);
+}
+
+export async function cancelLfmGeneration() {
+  return getLfmModule().cancelGeneration();
 }
 
 export async function saveWorkoutLogs(workouts: WorkoutLog[]) {

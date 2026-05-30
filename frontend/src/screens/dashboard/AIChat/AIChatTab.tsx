@@ -16,9 +16,15 @@ import { typography, fontWeight, radius, spacing } from '@/theme/typography';
 import type { ChatMessage, MacroTargets, FoodLogEntry } from '@/screens/dashboard/types';
 import { ArrowUp, Bot, Lock, Square } from 'lucide-react-native';
 import { initializeLfmOnStartup } from '@/ai/lfmInit';
-import { generateFreeChatResponse } from '@/ai/lfmService';
+import { cancelLfmGeneration, generateFreeChatResponse } from '@/ai/lfmService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { buildFreeChatPrompt, type WorkoutLog, type DietLog, type UserProfile } from '@/ai/prompts';
+import {
+  buildFreeChatPrompt,
+  getInstantFreeChatResponse,
+  type WorkoutLog,
+  type DietLog,
+  type UserProfile,
+} from '@/ai/prompts';
 
 
 interface AIChatTabProps {
@@ -68,8 +74,21 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, 
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
     setInputText('');
+
+    const instantResponse = getInstantFreeChatResponse(text, userName);
+    if (instantResponse) {
+      const aiMsg: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: instantResponse,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, userMsg, aiMsg]);
+      return;
+    }
+
+    setMessages((prev) => [...prev, userMsg]);
     setIsTyping(true);
 
     try {
@@ -91,7 +110,10 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, 
       const prompt = buildFreeChatPrompt(userName, userProfile, text, workouts, diets);
 
       // 3. Initialize and extract model from assets if not already done
-      await initializeLfmOnStartup();
+      const initialized = await initializeLfmOnStartup();
+      if (!initialized) {
+        throw new Error('LFM model failed to initialize.');
+      }
 
       // 4. Pass structured prompt to native LFM module for inference
       const response = await generateFreeChatResponse(prompt);
@@ -103,7 +125,7 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, 
       const aiMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: response,
+        content: response.trim() || "I could not produce a response from the on-device model.",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, aiMsg]);
@@ -120,6 +142,7 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, 
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
+      cancelledRequestsRef.current.delete(requestId);
       if (requestIdRef.current === requestId) {
         setIsTyping(false);
         requestIdRef.current = null;
@@ -133,6 +156,9 @@ export function AIChatTab({ userName, foodLogs, targets, messages, setMessages, 
       cancelledRequestsRef.current.add(requestId);
       requestIdRef.current = null;
     }
+    cancelLfmGeneration().catch((error) => {
+      console.warn('Failed to cancel LFM generation:', error);
+    });
     setIsTyping(false);
   };
 

@@ -3,6 +3,9 @@ import { getLfmModule, initLfmModel } from './lfmService';
 
 const LFM_MODEL_NAME = 'lfm2.5-1.2b-instruct-q4_k_m.gguf';
 
+let startupInitPromise: Promise<boolean> | null = null;
+let startupInitialized = false;
+
 /**
  * Get the path to the LFM model file.
  * For Android, the model is bundled in APK assets at android/app/src/main/assets/models/.
@@ -24,11 +27,29 @@ async function getLfmModelPath(): Promise<string> {
  * Initialize LFM model on app startup.
  */
 export async function initializeLfmOnStartup() {
+  if (startupInitialized) {
+    return true;
+  }
+
+  if (startupInitPromise) {
+    return startupInitPromise;
+  }
+
+  startupInitPromise = initializeLfm();
+  const initialized = await startupInitPromise;
+  if (!initialized) {
+    startupInitPromise = null;
+  }
+  return initialized;
+}
+
+async function initializeLfm() {
   try {
     console.log('🤖 Initializing LFM model...');
     const modelPath = await getLfmModelPath();
     await initLfmModel(modelPath);
     console.log('✓ LFM model initialized successfully');
+    startupInitialized = true;
     return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
