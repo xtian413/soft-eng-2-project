@@ -1,6 +1,6 @@
 import './Profile.css';
 
-export function Profile({ fullName, goal }: any) {
+export function Profile({ fullName, goal }: { fullName: string; goal: string; email?: string; gender?: string; height?: string; weight?: string }) {
   return (
     <div className="gemi-profile-container">
       {/* Profile Header */}
