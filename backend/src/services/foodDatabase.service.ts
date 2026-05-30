@@ -97,8 +97,8 @@ function mapFdcToFoodItem(fdcFood: FoundationFood): FoodDatabaseItem {
     folate:
       Math.round(findNutrient('Folate', 'µg')) ||
       Math.round(findNutrient('Folate', 'mcg')),
-    defaultServingUnit: portions[0].name,
-    defaultServingSize: portions[0].gramWeight,
+    defaultServingUnit: portions[0]?.name || '100g',
+    defaultServingSize: portions[0]?.gramWeight || 100,
     portions,
   };
 }

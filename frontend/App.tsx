@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import AppNavigator from '@/navigation/AppNavigator';
 import { initializeGemmaOnStartup } from '@/ai/gemmaInit';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 export default function App() {
   useEffect(() => {
@@ -13,8 +14,10 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <AppNavigator />
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AppNavigator />
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

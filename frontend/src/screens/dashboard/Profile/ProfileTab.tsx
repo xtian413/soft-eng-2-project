@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Platform } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { useAuthStore } from '@/store/authStore';
 import { typography, fontWeight, radius, spacing } from '@/theme/typography';
 import type { GoalKey, MacroTargets } from '@/screens/dashboard/types';
 import { Dumbbell, TrendingDown, Activity, ShieldCheck, LogOut, Lock } from 'lucide-react-native';
+import { useProfileStats } from './hooks/useProfileStats';
+import { StatsRow } from './subcomponents/StatsRow';
+import { WeightTrendCard } from './subcomponents/WeightTrendCard';
+import { TrainingCalendar } from './subcomponents/TrainingCalendar';
 
 const GOAL_LABELS: Record<GoalKey, string> = {
   build_muscle: 'Build Muscle',
@@ -20,9 +24,10 @@ interface ProfileTabProps {
   weightKg: number;
   targets: MacroTargets;
   onSignOut: () => void;
+  setActiveTab: (tab: 'dashboard' | 'food' | 'chat' | 'lift' | 'profile') => void;
 }
 
-export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets, onSignOut }: ProfileTabProps) {
+export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets, onSignOut, setActiveTab }: ProfileTabProps) {
   const initials = fullName
     .split(' ')
     .map((n) => n[0])
@@ -32,10 +37,13 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
 
   const { updatePhysicalStats } = useAuthStore();
   const [isEditModalVisible, setEditModalVisible] = useState(false);
+  const [isSignOutModalVisible, setSignOutModalVisible] = useState(false);
   const [editHeight, setEditHeight] = useState(String(heightCm));
   const [editWeight, setEditWeight] = useState(String(weightKg));
   const [editGoal, setEditGoal] = useState<GoalKey>(goal);
   const [isSaving, setIsSaving] = useState(false);
+
+  const { totalVolumeKg, weekStreak, weightEntries, calendarDays, loading, error } = useProfileStats();
 
   const handleOpenEdit = () => {
     setEditHeight(String(heightCm));
@@ -62,10 +70,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
   };
 
   const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: onSignOut },
-    ]);
+    setSignOutModalVisible(true);
   };
 
   const renderGoalIcon = (goalKey: GoalKey) => {
@@ -99,6 +104,32 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
           </View>
         </View>
       </View>
+      {/* Error Banner — only shows if data fetch fails */}
+      {!!error && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>⚠️ {error}</Text>
+        </View>
+      )}
+
+      {/* Total Volume + Week Streak */}
+      <StatsRow
+        totalVolumeKg={totalVolumeKg}
+        weekStreak={weekStreak}
+        loading={loading}
+      />
+
+      {/* Weight Trend Chart */}
+      <WeightTrendCard
+        entries={weightEntries}
+        loading={loading}
+      />
+
+      {/* Training Calendar */}
+      <TrainingCalendar
+        days={calendarDays}
+        loading={loading}
+        setActiveTab={setActiveTab}
+      />
 
       {/* Physical Stats Card */}
       <View style={styles.card}>
@@ -222,6 +253,38 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
                 disabled={isSaving}
               >
                 <Text style={styles.modalSaveText}>{isSaving ? 'Saving...' : 'Save Changes'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Sign Out Confirmation Modal */}
+      <Modal visible={isSignOutModalVisible} transparent animationType="fade">
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmContent}>
+            <View style={styles.confirmIconContainer}>
+              <LogOut size={24} color={Colors.error} />
+            </View>
+            <Text style={styles.confirmTitle}>Sign Out</Text>
+            <Text style={styles.confirmMessage}>
+              Are you sure you want to sign out? You'll need to log in again to access your workouts and diet dashboard.
+            </Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={styles.confirmCancelBtn}
+                onPress={() => setSignOutModalVisible(false)}
+              >
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmDeleteBtn}
+                onPress={() => {
+                  setSignOutModalVisible(false);
+                  onSignOut();
+                }}
+              >
+                <Text style={styles.confirmDeleteText}>Sign Out</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -530,5 +593,98 @@ const styles = StyleSheet.create({
   modalSaveText: {
     color: Colors.onPrimary,
     fontWeight: fontWeight.bold,
+  },
+  errorBanner: {
+    backgroundColor: '#fef2f2',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  errorText: {
+    color: Colors.error,
+    fontSize: typography.sm,
+  },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(11, 28, 48, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  confirmContent: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 24,
+    padding: spacing.xl,
+    width: '100%',
+    maxWidth: 380,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 10px 25px rgba(0, 0, 0, 0.15)',
+      },
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+        elevation: 8,
+      },
+    }),
+  },
+  confirmIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(186, 26, 26, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  confirmTitle: {
+    fontSize: typography.lg,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    marginBottom: spacing.xs,
+  },
+  confirmMessage: {
+    fontSize: typography.sm,
+    color: Colors.outline,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: spacing.lg,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    width: '100%',
+  },
+  confirmCancelBtn: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.4)',
+    alignItems: 'center',
+  },
+  confirmCancelText: {
+    color: Colors.outline,
+    fontWeight: fontWeight.bold,
+    fontSize: typography.sm,
+  },
+  confirmDeleteBtn: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.full,
+    backgroundColor: Colors.error,
+    alignItems: 'center',
+  },
+  confirmDeleteText: {
+    color: '#ffffff',
+    fontWeight: fontWeight.bold,
+    fontSize: typography.sm,
   },
 });
