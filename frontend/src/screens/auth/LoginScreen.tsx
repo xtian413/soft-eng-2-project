@@ -66,7 +66,14 @@ export default function LoginScreen() {
       </View>
 
       <ScrollView
-        style={{ flex: 1 }}
+        style={{
+          flex: 1,
+          ...Platform.select({
+            web: {
+              maxHeight: '100vh' as any,
+            },
+          }),
+        }}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={true}
@@ -209,7 +216,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         height: '100vh' as any,
-        overflow: 'auto' as any,
+        overflow: 'hidden' as any,
       },
     }),
   },

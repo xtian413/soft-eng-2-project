@@ -94,11 +94,16 @@ export default function RegisterScreen() {
       return;
     }
 
-    Alert.alert(
-      '📧 Account Created',
-      `Welcome to Gemi! Your physical profile (Goal: ${goal.replace('_', ' ')}) has been set up successfully.`,
-      [{ text: 'Start Journey', onPress: () => navigation.navigate('Login') }]
-    );
+    if (Platform.OS === 'web') {
+      window.alert(`Welcome to Gemi! Your physical profile (Goal: ${goal.replace('_', ' ')}) has been set up successfully.`);
+      navigation.navigate('Login');
+    } else {
+      Alert.alert(
+        '📧 Account Created',
+        `Welcome to Gemi! Your physical profile (Goal: ${goal.replace('_', ' ')}) has been set up successfully.`,
+        [{ text: 'Start Journey', onPress: () => navigation.navigate('Login') }]
+      );
+    }
   };
 
   const Container = Platform.OS === 'web' ? View : KeyboardAvoidingView;
@@ -126,7 +131,14 @@ export default function RegisterScreen() {
       </View>
 
       <ScrollView
-        style={{ flex: 1 }}
+        style={{
+          flex: 1,
+          ...Platform.select({
+            web: {
+              maxHeight: 'calc(100vh - 56px)' as any,
+            },
+          }),
+        }}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={true}
@@ -404,7 +416,7 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         height: '100vh' as any,
-        overflow: 'auto' as any,
+        overflow: 'hidden' as any,
       },
     }),
   },
