@@ -43,48 +43,6 @@ function formatPromptDate(value: string) {
   return value.includes('T') ? value.split('T')[0] : value;
 }
 
-function getSmallTalkType(message: string) {
-  const normalized = message.trim().toLowerCase().replace(/[.!?]+$/g, '');
-  if ([
-    'hi',
-    'hello',
-    'hey',
-    'hiya',
-    'yo',
-    'sup',
-    'good morning',
-    'good afternoon',
-    'good evening',
-  ].includes(normalized)) {
-    return 'greeting';
-  }
-
-  if ([
-    'thanks',
-    'thank you',
-    'ty',
-  ].includes(normalized)) {
-    return 'thanks';
-  }
-
-  return null;
-}
-
-function isSmallTalkMessage(message: string) {
-  return getSmallTalkType(message) !== null;
-}
-
-export function getInstantFreeChatResponse(userMessage: string, userName: string) {
-  const smallTalkType = getSmallTalkType(userMessage);
-  if (smallTalkType === 'greeting') {
-    return `Hi ${userName || 'there'}, how can I help with your fitness or nutrition today?`;
-  }
-  if (smallTalkType === 'thanks') {
-    return 'You are welcome. I am here when you want help with training, meals, or recovery.';
-  }
-  return null;
-}
-
 function formatWorkoutSummary(workouts: WorkoutLog[]) {
   if (workouts.length === 0) {
     return 'No workouts logged in the recent period.';
@@ -166,46 +124,3 @@ export type UserProfile = {
   weightKg?: number;
   goal?: string;
 };
-
-export function buildFreeChatPrompt(
-  userName: string,
-  userProfile: UserProfile | null,
-  userMessage: string,
-  workoutData: WorkoutLog[],
-  dietData: DietLog[]
-) {
-  const includeTrainingContext = !isSmallTalkMessage(userMessage);
-  const workoutSummary = includeTrainingContext
-    ? formatWorkoutSummary(workoutData)
-    : 'No training context needed for this short social message.';
-  const dietSummary = includeTrainingContext
-    ? formatDietSummary(dietData)
-    : 'No diet context needed for this short social message.';
-
-  const profileSection = userProfile
-    ? `User profile: ${typeof userProfile.heightCm === 'number' ? `${userProfile.heightCm} cm` : 'height N/A'}, ${typeof userProfile.weightKg === 'number' ? `${userProfile.weightKg} kg` : 'weight N/A'}, goal ${userProfile.goal || 'N/A'}.`
-    : 'User profile: not provided.';
-
-  return buildChatMlPrompt(
-    [
-      'You are Gemi, an offline on-device fitness and nutrition coach.',
-      'Answer the latest user message directly and naturally.',
-      'For greetings, just greet the user and ask how you can help.',
-      'Do not invent workouts, meals, or progress.',
-      'Use plain conversational text with no markdown.',
-      'Keep replies to 1 to 3 short sentences unless the user asks for details.',
-    ].join(' '),
-    [
-      `User name: ${userName}`,
-      profileSection,
-      '',
-      'Recent workouts:',
-      workoutSummary,
-      '',
-      'Recent diet logs:',
-      dietSummary,
-      '',
-      `Latest user message: ${userMessage}`,
-    ].join('\n')
-  );
-}

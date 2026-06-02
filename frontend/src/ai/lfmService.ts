@@ -5,15 +5,19 @@ import {
   type DietLog,
   type WorkoutLog,
 } from './prompts';
+import { scanModelOutput } from './safety/safetyClassifier';
 
 const WORKOUT_STORAGE_KEY = 'gemi:workouts';
 const DIET_STORAGE_KEY = 'gemi:dietLogs';
 
 const DEFAULT_CONTEXT_TOKENS = 1024;
 const DEFAULT_THREADS = 4;
-const DEFAULT_BATCH = 64;
+const DEFAULT_BATCH = 32;
 const DEFAULT_INSIGHT_MAX_TOKENS = 96;
-const DEFAULT_CHAT_MAX_TOKENS = 48;
+const DEFAULT_FITNESS_INSIGHT_MAX_TOKENS = 150;
+const DEFAULT_FITNESS_INSIGHT_TIMEOUT_MS = 90_000;
+const DEFAULT_INSIGHT_CHAT_MAX_TOKENS = 128;
+const DEFAULT_INSIGHT_CHAT_TIMEOUT_MS = 90_000;
 const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_TOP_P = 0.9;
 const DEFAULT_TOP_K = 40;
@@ -59,10 +63,61 @@ async function loadJsonArray<T>(storageKey: string): Promise<T[]> {
 }
 
 function cleanLfmResponse(response: string) {
-  return response
-    .split('<|im_end|>')[0]
-    .split('<|im_start|>')[0]
+  const strippedResponse = stripChatSpecialTokens(response);
+
+  const sanitizedFormat = sanitizeCoachResponse(strippedResponse);
+  return scanModelOutput(sanitizedFormat).sanitized;
+}
+
+function cleanStructuredLfmResponse(response: string) {
+  const strippedResponse = stripChatSpecialTokens(response);
+  return scanModelOutput(strippedResponse).sanitized.trim();
+}
+
+function stripChatSpecialTokens(response: string) {
+  let text = response.replace(/\r\n/g, '\n').trim();
+  const assistantMarker = '<|im_start|>assistant';
+  const assistantMarkerIndex = text.lastIndexOf(assistantMarker);
+
+  if (assistantMarkerIndex >= 0) {
+    text = text.slice(assistantMarkerIndex + assistantMarker.length).trim();
+  }
+
+  const endMarkerIndex = text.indexOf('<|im_end|>');
+  if (endMarkerIndex >= 0) {
+    text = text.slice(0, endMarkerIndex).trim();
+  }
+
+  return text
+    .replace(/<\|im_start\|>\s*(system|user|assistant)?/gi, '')
+    .replace(/<\|im_end\|>/gi, '')
     .replace(/^assistant\s*/i, '')
+    .trim();
+}
+
+export function sanitizeCoachResponse(response: string) {
+  return response
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/^\s*[-*]+\s*/g, '')
+        .replace(/^\s*\d+[.)]\s*/g, '')
+        .replace(/[\u2013\u2014]/g, '-')
+        .replace(/\*\*/g, '')
+        .replace(/\*/g, '')
+        .replace(/`/g, '')
+        .replace(/_{2,}/g, '')
+        .replace(/\s+-\s+/g, ': ')
+        .trim(),
+    )
+    .filter((line) => {
+      if (!line) return false;
+      if (/^[),.;:-]+$/.test(line)) return false;
+      return true;
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -95,14 +150,70 @@ export async function generateWorkoutInsight(userName: string) {
   return cleanLfmResponse(response);
 }
 
-export async function generateFreeChatResponse(prompt: string) {
-  const response = await getLfmModule().generateResponse(
+async function generateResponseWithTimeout(
+  prompt: string,
+  maxTokens: number,
+  temperature: number,
+  topP: number,
+  topK: number,
+  repeatPenalty: number,
+  timeoutMs: number,
+) {
+  const module = getLfmModule();
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const startedAt = Date.now();
+  const generationPromise = module.generateResponse(
     prompt,
-    DEFAULT_CHAT_MAX_TOKENS,
-    DEFAULT_TEMPERATURE,
-    DEFAULT_TOP_P,
+    maxTokens,
+    temperature,
+    topP,
+    topK,
+    repeatPenalty,
+  );
+
+  const timeoutPromise = new Promise<string>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      module.cancelGeneration().catch((error) => {
+        console.warn('[Gemi] Failed to cancel timed-out generation:', error);
+      });
+      reject(new Error(`On-device generation exceeded ${Math.round(timeoutMs / 1000)} seconds.`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([generationPromise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    console.log('[Gemi] On-device generation elapsed ms:', Date.now() - startedAt);
+  }
+}
+
+export async function generateFitnessInsightResponse(prompt: string) {
+  console.log('[Gemi] Fitness insight prompt chars:', prompt.length);
+  const response = await generateResponseWithTimeout(
+    prompt,
+    DEFAULT_FITNESS_INSIGHT_MAX_TOKENS,
+    0.4,
+    0.85,
     DEFAULT_TOP_K,
-    DEFAULT_REPEAT_PENALTY
+    DEFAULT_REPEAT_PENALTY,
+    DEFAULT_FITNESS_INSIGHT_TIMEOUT_MS,
+  );
+  return cleanStructuredLfmResponse(response);
+}
+
+export async function generateInsightChatResponse(prompt: string) {
+  console.log('[Gemi] Insight chat prompt chars:', prompt.length);
+  const response = await generateResponseWithTimeout(
+    prompt,
+    DEFAULT_INSIGHT_CHAT_MAX_TOKENS,
+    0.45,
+    0.85,
+    DEFAULT_TOP_K,
+    DEFAULT_REPEAT_PENALTY,
+    DEFAULT_INSIGHT_CHAT_TIMEOUT_MS,
   );
   return cleanLfmResponse(response);
 }

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Platform } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { useAuthStore } from '@/store/authStore';
-import { typography, fontWeight, radius, spacing } from '@/theme/typography';
+import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import type { GoalKey, MacroTargets } from '@/screens/dashboard/types';
 import { Dumbbell, TrendingDown, Activity, ShieldCheck, LogOut, Lock } from 'lucide-react-native';
 import { useProfileStats } from './hooks/useProfileStats';
@@ -24,7 +24,7 @@ interface ProfileTabProps {
   weightKg: number;
   targets: MacroTargets;
   onSignOut: () => void;
-  setActiveTab: (tab: 'dashboard' | 'food' | 'chat' | 'lift' | 'profile') => void;
+  setActiveTab: (tab: 'dashboard' | 'food' | 'insights' | 'lift' | 'profile') => void;
 }
 
 export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets, onSignOut, setActiveTab }: ProfileTabProps) {
@@ -107,7 +107,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
       {/* Error Banner — only shows if data fetch fails */}
       {!!error && (
         <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>⚠️ {error}</Text>
+          <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
 
@@ -135,7 +135,12 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
       <View style={styles.card}>
         <View style={styles.cardHeaderRow}>
           <Text style={styles.cardTitle}>Physical Stats</Text>
-          <TouchableOpacity onPress={handleOpenEdit}>
+          <TouchableOpacity
+            onPress={handleOpenEdit}
+            accessibilityRole="button"
+            accessibilityLabel="Edit physical stats"
+            hitSlop={8}
+          >
             <Text style={styles.editBtnText}>Edit</Text>
           </TouchableOpacity>
         </View>
@@ -190,12 +195,18 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
       <View style={styles.aiNotice}>
         <ShieldCheck size={20} color={Colors.primary} style={styles.aiNoticeIcon} />
         <Text style={styles.aiNoticeText}>
-          Gemi uses an on-device AI model. Your workout data, diet logs, and chat messages never leave your phone.
+          Gemi uses an on-device AI model. Your workout data, diet logs, and generated insights stay on your phone.
         </Text>
       </View>
 
       {/* Sign Out */}
-      <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut} activeOpacity={0.85}>
+      <TouchableOpacity
+        style={styles.signOutBtn}
+        onPress={handleSignOut}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Sign out"
+      >
         <View style={styles.signOutBtnContent}>
           <LogOut size={16} color={Colors.error} style={{ marginRight: 6 }} />
           <Text style={styles.signOutText}>Sign Out</Text>
@@ -214,6 +225,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
               value={editHeight}
               onChangeText={setEditHeight}
               keyboardType="numeric"
+              accessibilityLabel="Height in centimeters"
             />
 
             <Text style={styles.inputLabel}>Weight (kg)</Text>
@@ -222,6 +234,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
               value={editWeight}
               onChangeText={setEditWeight}
               keyboardType="numeric"
+              accessibilityLabel="Weight in kilograms"
             />
 
             <Text style={styles.inputLabel}>Goal</Text>
@@ -231,6 +244,9 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
                   key={g}
                   style={[styles.goalChoice, editGoal === g && styles.goalChoiceActive]}
                   onPress={() => setEditGoal(g)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select ${GOAL_LABELS[g]} goal`}
+                  accessibilityState={{ selected: editGoal === g }}
                 >
                   <Text style={[styles.goalChoiceText, editGoal === g && styles.goalChoiceTextActive]}>
                     {GOAL_LABELS[g]}
@@ -244,6 +260,9 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
                 style={styles.modalCancelBtn}
                 onPress={() => setEditModalVisible(false)}
                 disabled={isSaving}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel editing stats"
+                accessibilityState={{ disabled: isSaving }}
               >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
@@ -251,6 +270,9 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
                 style={styles.modalSaveBtn}
                 onPress={handleSaveStats}
                 disabled={isSaving}
+                accessibilityRole="button"
+                accessibilityLabel="Save physical stats"
+                accessibilityState={{ disabled: isSaving }}
               >
                 <Text style={styles.modalSaveText}>{isSaving ? 'Saving...' : 'Save Changes'}</Text>
               </TouchableOpacity>
@@ -274,6 +296,8 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
               <TouchableOpacity
                 style={styles.confirmCancelBtn}
                 onPress={() => setSignOutModalVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel sign out"
               >
                 <Text style={styles.confirmCancelText}>Cancel</Text>
               </TouchableOpacity>
@@ -283,6 +307,8 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
                   setSignOutModalVisible(false);
                   onSignOut();
                 }}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm sign out"
               >
                 <Text style={styles.confirmDeleteText}>Sign Out</Text>
               </TouchableOpacity>
@@ -317,6 +343,9 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.base,
     paddingBottom: spacing.xxxl * 2,
+    width: '100%',
+    maxWidth: layout.modalMaxWidth,
+    alignSelf: 'center',
   },
   profileHeader: {
     alignItems: 'center',
@@ -358,6 +387,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
     backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    minHeight: 36,
+    justifyContent: 'center',
   },
   goalBadgeContent: {
     flexDirection: 'row',
@@ -461,6 +492,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Colors.error,
     marginBottom: spacing.md,
+    minHeight: layout.minTouchTarget,
   },
   signOutBtnContent: {
     flexDirection: 'row',
@@ -539,6 +571,7 @@ const styles = StyleSheet.create({
     fontSize: typography.base,
     color: Colors.onSurface,
     backgroundColor: Colors.background,
+    minHeight: layout.minTouchTarget,
   },
   goalRow: {
     flexDirection: 'row',
@@ -552,6 +585,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: spacing.sm,
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   goalChoiceActive: {
     borderColor: Colors.primary,
@@ -578,6 +613,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.3)',
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   modalCancelText: {
     color: Colors.outline,
@@ -589,6 +626,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: Colors.primaryContainer,
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   modalSaveText: {
     color: Colors.onPrimary,
@@ -669,6 +708,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.4)',
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   confirmCancelText: {
     color: Colors.outline,
@@ -681,6 +722,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: Colors.error,
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   confirmDeleteText: {
     color: '#ffffff',

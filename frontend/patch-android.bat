@@ -22,5 +22,5 @@ echo.
 echo Next steps:
 echo 1. Register LfmPackage in MainApplication.kt
 echo 2. Verify CMake build configuration in android/app/build.gradle
-echo 3. Place LFM model at: android/app/src/main/assets/models/lfm2.5-1.2b-instruct-q4_k_m.gguf
+echo 3. Place Qwen model at: android/app/src/main/assets/models/qwen2.5-3b-instruct-q4_k_m.gguf
 echo.

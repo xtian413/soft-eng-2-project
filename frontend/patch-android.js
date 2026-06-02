@@ -164,7 +164,7 @@ function main() {
   console.log('\n✅ Patching complete!\n');
   console.log('Next steps:');
   console.log('  1. Verify MainApplication.kt was updated');
-  console.log('  2. Put the model on-device (e.g., /data/user/0/com.anonymous.frontend/files/lfm2.5-1.2b.gguf)');
+  console.log('  2. Put the model on-device (e.g., /data/user/0/com.anonymous.frontend/files/qwen2.5-3b-instruct-q4_k_m.gguf)');
   console.log('  3. Call initModel() with that path');
   console.log('  4. Run: npm run android\n');
 }

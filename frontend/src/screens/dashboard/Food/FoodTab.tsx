@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Colors } from '@/theme/colors';
-import { typography, fontWeight, radius, spacing } from '@/theme/typography';
+import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import { searchFoodDatabase, type GemiFoodItem } from '@/api/foodDatabaseApi';
 import { createDietLog, deleteDietLog } from '@/api/dietApi';
 import type { FoodLogEntry, MacroTargets, MealId } from '@/screens/dashboard/types';
@@ -34,6 +34,7 @@ import {
   Edit2,
   X,
   Info,
+  Sparkles,
 } from 'lucide-react-native';
 
 interface FoodTabProps {
@@ -413,6 +414,9 @@ export function FoodTab({
                   setNutrientSlide((p) => (p === 'energy' ? 'micros' : p === 'macros' ? 'energy' : 'macros'))
                 }
                 style={styles.arrowBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Previous nutrition summary"
+                hitSlop={8}
               >
                 <ChevronLeft size={16} color={Colors.primary} />
               </TouchableOpacity>
@@ -426,6 +430,9 @@ export function FoodTab({
                   setNutrientSlide((p) => (p === 'energy' ? 'macros' : p === 'macros' ? 'micros' : 'energy'))
                 }
                 style={styles.arrowBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Next nutrition summary"
+                hitSlop={8}
               >
                 <ChevronRight size={16} color={Colors.primary} />
               </TouchableOpacity>
@@ -560,7 +567,7 @@ export function FoodTab({
         {/* AI Natural Language Log Card */}
         <View style={styles.aiLogCard}>
           <View style={styles.aiLogHeader}>
-            <Text style={styles.aiLogSparkle}>✨</Text>
+            <Sparkles size={14} color={Colors.primaryContainer} />
             <Text style={styles.aiLogTitle}>AI QUICK PARSER</Text>
           </View>
           <View style={styles.aiLogInputRow}>
@@ -570,8 +577,15 @@ export function FoodTab({
               placeholderTextColor={Colors.outline}
               value={aiInput}
               onChangeText={setAiInput}
+              accessibilityLabel="Quick food log input"
             />
-            <TouchableOpacity style={styles.aiLogBtn} onPress={handleAiQuickLog} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.aiLogBtn}
+              onPress={handleAiQuickLog}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Log quick food"
+            >
               <Text style={styles.aiLogBtnText}>Log</Text>
             </TouchableOpacity>
           </View>
@@ -598,6 +612,9 @@ export function FoodTab({
                   style={styles.mealAddCircleBtn}
                   onPress={() => handleOpenSearchModal(meal.id)}
                   activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add food to ${meal.name}`}
+                  hitSlop={8}
                 >
                   <Plus size={14} color={Colors.primaryContainer} strokeWidth={3} />
                 </TouchableOpacity>
@@ -612,6 +629,8 @@ export function FoodTab({
                         style={{ flex: 1 }}
                         onPress={() => setViewingLoggedItem(entry)}
                         activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={`View details for ${entry.name}`}
                       >
                         <Text style={styles.loggedRowName}>{entry.name}</Text>
                         <Text style={styles.loggedRowMacros}>
@@ -622,6 +641,9 @@ export function FoodTab({
                         style={styles.deleteRowBtn}
                         onPress={() => handleDeleteEntry(entry.id)}
                         activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Delete ${entry.name}`}
+                        hitSlop={8}
                       >
                         <Trash2 size={14} color={Colors.error} />
                       </TouchableOpacity>
@@ -648,6 +670,8 @@ export function FoodTab({
                   setHydrationGoalInput(String(hydrationGoal));
                 }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel="Edit hydration goal"
               >
                 <Edit2 size={12} color={Colors.outline} />
               </TouchableOpacity>
@@ -664,6 +688,9 @@ export function FoodTab({
                     key={ml}
                     style={[styles.editorChip, hydrationGoal === ml && styles.editorChipActive]}
                     onPress={() => updateHydrationGoal(ml)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Set hydration goal to ${ml} milliliters`}
+                    accessibilityState={{ selected: hydrationGoal === ml }}
                   >
                     <Text style={[styles.editorChipText, hydrationGoal === ml && styles.editorChipTextActive]}>
                       {ml >= 1000 ? `${ml / 1000}L` : `${ml}ml`}
@@ -679,6 +706,7 @@ export function FoodTab({
                   placeholderTextColor={Colors.outline}
                   value={hydrationGoalInput}
                   onChangeText={setHydrationGoalInput}
+                  accessibilityLabel="Custom hydration goal in milliliters"
                 />
                 <TouchableOpacity
                   style={styles.customGoalBtn}
@@ -690,12 +718,17 @@ export function FoodTab({
                       triggerToast('Enter target between 250 and 6000 mL!');
                     }
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Set custom hydration goal"
                 >
                   <Text style={styles.customGoalBtnText}>Set</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.customGoalClose}
                   onPress={() => setIsEditingHydration(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close hydration goal editor"
+                  hitSlop={8}
                 >
                   <X size={18} color={Colors.outline} />
                 </TouchableOpacity>
@@ -727,10 +760,13 @@ export function FoodTab({
                   onPress={() => {
                     handleWaterGlassToggle(idx);
                     if (idx + 1 === waterGlassCount && !filled) {
-                      triggerToast('Perfect daily hydration met! 🎉');
+                      triggerToast('Perfect daily hydration met!');
                     }
                   }}
                   activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${filled ? 'Remove' : 'Add'} water glass ${idx + 1}`}
+                  accessibilityState={{ checked: filled }}
                 >
                   <Droplet
                     size={16}
@@ -772,6 +808,7 @@ export function FoodTab({
                 onChangeText={setBedtime}
                 placeholder="23:00"
                 placeholderTextColor={Colors.outline}
+                accessibilityLabel="Sleep start time"
               />
             </View>
             <View style={styles.sleepInputCol}>
@@ -782,6 +819,7 @@ export function FoodTab({
                 onChangeText={setWaketime}
                 placeholder="06:30"
                 placeholderTextColor={Colors.outline}
+                accessibilityLabel="Wake time"
               />
             </View>
           </View>
@@ -829,17 +867,34 @@ export function FoodTab({
               {/* Modal Title bar */}
               <View style={styles.modalTitleRow}>
                 <Text style={styles.modalTitle}>Add Food to {activeMealId}</Text>
-                <TouchableOpacity onPress={() => setIsModalOpen(false)}>
+                <TouchableOpacity
+                  onPress={() => setIsModalOpen(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close food search"
+                  hitSlop={8}
+                >
                   <Text style={styles.closeModalText}>Close</Text>
                 </TouchableOpacity>
               </View>
 
               {/* Tab Selector */}
               <View style={styles.modalTabsRow}>
-                <TouchableOpacity style={[styles.modalTabPill, selectedCategory === 'All' && styles.modalTabPillActive]} onPress={() => setSelectedCategory('All')}>
+                <TouchableOpacity
+                  style={[styles.modalTabPill, selectedCategory === 'All' && styles.modalTabPillActive]}
+                  onPress={() => setSelectedCategory('All')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Show USDA staples"
+                  accessibilityState={{ selected: selectedCategory === 'All' }}
+                >
                   <Text style={[styles.modalTabPillText, selectedCategory === 'All' && styles.modalTabPillTextActive]}>USDA Staples</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalTabPill, selectedCategory === 'Custom' && styles.modalTabPillActive]} onPress={() => setSelectedCategory('Custom')}>
+                <TouchableOpacity
+                  style={[styles.modalTabPill, selectedCategory === 'Custom' && styles.modalTabPillActive]}
+                  onPress={() => setSelectedCategory('Custom')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Create custom food"
+                  accessibilityState={{ selected: selectedCategory === 'Custom' }}
+                >
                   <Text style={[styles.modalTabPillText, selectedCategory === 'Custom' && styles.modalTabPillTextActive]}>+ Custom Food</Text>
                 </TouchableOpacity>
               </View>
@@ -854,6 +909,7 @@ export function FoodTab({
                       value={searchQuery}
                       onChangeText={setSearchQuery}
                       placeholderTextColor={Colors.outline}
+                      accessibilityLabel="Search food database"
                     />
                   </View>
 
@@ -868,6 +924,8 @@ export function FoodTab({
                         <TouchableOpacity
                           style={styles.searchResultRow}
                           onPress={() => handleSelectSearchItem(item)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Select ${item.name}`}
                         >
                           <View style={{ flex: 1 }}>
                             <Text style={styles.resultItemName}>{item.name}</Text>
@@ -891,25 +949,30 @@ export function FoodTab({
                   <Text style={styles.formSectionTitle}>Create reusable custom food entry:</Text>
                   <View style={styles.customFormField}>
                     <Text style={styles.formInputLabel}>Food Name</Text>
-                    <TextInput style={styles.formTextInput} placeholder="e.g. Homemade Protein Cookie" value={customName} onChangeText={setCustomName} />
+                    <TextInput style={styles.formTextInput} placeholder="e.g. Homemade Protein Cookie" value={customName} onChangeText={setCustomName} accessibilityLabel="Custom food name" />
                   </View>
                   <View style={styles.customFormField}>
                     <Text style={styles.formInputLabel}>Calories (kcal)</Text>
-                    <TextInput style={styles.formTextInput} placeholder="0" value={customCals} onChangeText={setCustomCals} keyboardType="numeric" />
+                    <TextInput style={styles.formTextInput} placeholder="0" value={customCals} onChangeText={setCustomCals} keyboardType="numeric" accessibilityLabel="Custom food calories" />
                   </View>
                   <View style={styles.customFormField}>
                     <Text style={styles.formInputLabel}>Protein (g)</Text>
-                    <TextInput style={styles.formTextInput} placeholder="0" value={customProtein} onChangeText={setCustomProtein} keyboardType="numeric" />
+                    <TextInput style={styles.formTextInput} placeholder="0" value={customProtein} onChangeText={setCustomProtein} keyboardType="numeric" accessibilityLabel="Custom food protein grams" />
                   </View>
                   <View style={styles.customFormField}>
                     <Text style={styles.formInputLabel}>Carbohydrates (g)</Text>
-                    <TextInput style={styles.formTextInput} placeholder="0" value={customCarbs} onChangeText={setCustomCarbs} keyboardType="numeric" />
+                    <TextInput style={styles.formTextInput} placeholder="0" value={customCarbs} onChangeText={setCustomCarbs} keyboardType="numeric" accessibilityLabel="Custom food carbohydrates grams" />
                   </View>
                   <View style={styles.customFormField}>
                     <Text style={styles.formInputLabel}>Fat (g)</Text>
-                    <TextInput style={styles.formTextInput} placeholder="0" value={customFat} onChangeText={setCustomFat} keyboardType="numeric" />
+                    <TextInput style={styles.formTextInput} placeholder="0" value={customFat} onChangeText={setCustomFat} keyboardType="numeric" accessibilityLabel="Custom food fat grams" />
                   </View>
-                  <TouchableOpacity style={styles.formSubmitBtn} onPress={handleAddCustomFood}>
+                  <TouchableOpacity
+                    style={styles.formSubmitBtn}
+                    onPress={handleAddCustomFood}
+                    accessibilityRole="button"
+                    accessibilityLabel="Log custom food"
+                  >
                     <Text style={styles.formSubmitBtnText}>Log Custom Food</Text>
                   </TouchableOpacity>
                 </ScrollView>
@@ -919,7 +982,11 @@ export function FoodTab({
             /* Selected configurator detail overlay */
             <ScrollView style={styles.modalBody}>
               <View style={styles.detailTitleBar}>
-                <TouchableOpacity onPress={() => setSelectedItem(null)}>
+                <TouchableOpacity
+                  onPress={() => setSelectedItem(null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to food results"
+                >
                   <Text style={styles.detailBackText}>‹ Back</Text>
                 </TouchableOpacity>
                 <Text style={styles.detailItemTitle} numberOfLines={1}>{selectedItem.name}</Text>
@@ -936,18 +1003,37 @@ export function FoodTab({
                       value={String(configQuantity)}
                       onChangeText={(v) => setConfigQuantity(Number(v) || 1)}
                       keyboardType="numeric"
+                      accessibilityLabel="Food quantity"
                     />
                   </View>
                   <View style={{ flex: 1.5, marginLeft: spacing.md }}>
                     <Text style={styles.formInputLabel}>Serving Unit</Text>
                     <View style={styles.servingUnitsRow}>
-                      <TouchableOpacity style={[styles.unitChip, configUnit === selectedItem.defaultServingUnit && styles.unitChipActive]} onPress={() => { setConfigUnit(selectedItem.defaultServingUnit); setConfigWeight(selectedItem.defaultServingSize); }}>
+                      <TouchableOpacity
+                        style={[styles.unitChip, configUnit === selectedItem.defaultServingUnit && styles.unitChipActive]}
+                        onPress={() => { setConfigUnit(selectedItem.defaultServingUnit); setConfigWeight(selectedItem.defaultServingSize); }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Use ${selectedItem.defaultServingUnit}`}
+                        accessibilityState={{ selected: configUnit === selectedItem.defaultServingUnit }}
+                      >
                         <Text style={[styles.unitChipText, configUnit === selectedItem.defaultServingUnit && styles.unitChipTextActive]}>{selectedItem.defaultServingUnit} ({selectedItem.defaultServingSize}g)</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={[styles.unitChip, configUnit === '100g' && styles.unitChipActive]} onPress={() => { setConfigUnit('100g'); setConfigWeight(100); }}>
+                      <TouchableOpacity
+                        style={[styles.unitChip, configUnit === '100g' && styles.unitChipActive]}
+                        onPress={() => { setConfigUnit('100g'); setConfigWeight(100); }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Use 100 grams"
+                        accessibilityState={{ selected: configUnit === '100g' }}
+                      >
                         <Text style={[styles.unitChipText, configUnit === '100g' && styles.unitChipTextActive]}>100g</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={[styles.unitChip, configUnit === '1g' && styles.unitChipActive]} onPress={() => { setConfigUnit('1g'); setConfigWeight(1); }}>
+                      <TouchableOpacity
+                        style={[styles.unitChip, configUnit === '1g' && styles.unitChipActive]}
+                        onPress={() => { setConfigUnit('1g'); setConfigWeight(1); }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Use 1 gram"
+                        accessibilityState={{ selected: configUnit === '1g' }}
+                      >
                         <Text style={[styles.unitChipText, configUnit === '1g' && styles.unitChipTextActive]}>1g</Text>
                       </TouchableOpacity>
                     </View>
@@ -1020,7 +1106,12 @@ export function FoodTab({
                 );
               })()}
 
-              <TouchableOpacity style={[styles.finalLogBtn, { marginTop: spacing.md }]} onPress={logSelectedItem}>
+              <TouchableOpacity
+                style={[styles.finalLogBtn, { marginTop: spacing.md }]}
+                onPress={logSelectedItem}
+                accessibilityRole="button"
+                accessibilityLabel={`Add food to ${activeMealId}`}
+              >
                 <Text style={styles.finalLogBtnText}>Add to {activeMealId}</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -1037,7 +1128,12 @@ export function FoodTab({
                 <Text style={[styles.modalTitle, { flex: 1, marginRight: spacing.md }]} numberOfLines={2}>
                   {viewingLoggedItem.name}
                 </Text>
-                <TouchableOpacity onPress={() => setViewingLoggedItem(null)}>
+                <TouchableOpacity
+                  onPress={() => setViewingLoggedItem(null)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close food details"
+                  hitSlop={8}
+                >
                   <Text style={styles.closeModalText}>Close</Text>
                 </TouchableOpacity>
               </View>
@@ -1106,6 +1202,8 @@ export function FoodTab({
                   handleDeleteEntry(viewingLoggedItem.id);
                   setViewingLoggedItem(null);
                 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Delete ${viewingLoggedItem.name}`}
               >
                 <Trash2 size={16} color={Colors.onPrimary} style={{ marginRight: 6 }} />
                 <Text style={styles.deleteFoodActionText}>Delete Food Entry</Text>
@@ -1126,6 +1224,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacing.base,
     paddingBottom: spacing.xxxl * 2,
+    width: '100%',
+    maxWidth: layout.modalMaxWidth,
+    alignSelf: 'center',
   },
   carouselContainer: {
     backgroundColor: Colors.surfaceContainerLowest,
@@ -1146,6 +1247,8 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     color: Colors.outline,
     letterSpacing: 0.8,
+    flex: 1,
+    marginRight: spacing.sm,
   },
   carouselArrows: {
     flexDirection: 'row',
@@ -1153,7 +1256,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   arrowBtn: {
-    paddingHorizontal: 8,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
   },
   carouselDots: {
     flexDirection: 'row',
@@ -1252,9 +1360,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     marginBottom: spacing.sm,
   },
-  aiLogSparkle: {
-    fontSize: 14,
-  },
   aiLogTitle: {
     fontSize: typography.xs,
     fontWeight: fontWeight.bold,
@@ -1267,7 +1372,7 @@ const styles = StyleSheet.create({
   },
   aiLogInput: {
     flex: 1,
-    height: 40,
+    minHeight: layout.minTouchTarget,
     backgroundColor: Colors.background,
     borderRadius: radius.full,
     paddingHorizontal: spacing.base,
@@ -1281,6 +1386,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingHorizontal: spacing.base,
     justifyContent: 'center',
+    minHeight: layout.minTouchTarget,
+    alignItems: 'center',
   },
   aiLogBtnText: {
     color: Colors.onPrimary,
@@ -1316,8 +1423,8 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   mealAddCircleBtn: {
-    width: 32,
-    height: 32,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     borderRadius: radius.full,
     backgroundColor: 'rgba(14, 165, 233, 0.08)',
     justifyContent: 'center',
@@ -1348,7 +1455,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   deleteRowBtn: {
-    padding: 6,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   card: {
     backgroundColor: Colors.surfaceContainerLowest,
@@ -1407,8 +1517,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   glassBtn: {
-    width: 32,
-    height: 32,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     borderRadius: radius.full,
     backgroundColor: 'rgba(110, 120, 129, 0.05)',
     justifyContent: 'center',
@@ -1455,7 +1565,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sleepTextInput: {
-    height: 38,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.2)',
     borderRadius: radius.md,
@@ -1529,6 +1639,9 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     padding: spacing.base,
+    width: '100%',
+    maxWidth: layout.modalMaxWidth,
+    alignSelf: 'center',
   },
   modalTitleRow: {
     flexDirection: 'row',
@@ -1556,6 +1669,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
     backgroundColor: 'rgba(110, 120, 129, 0.05)',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalTabPillActive: {
     backgroundColor: Colors.primaryContainer,
@@ -1572,7 +1688,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.base,
   },
   searchBarInput: {
-    height: 42,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.25)',
     borderRadius: radius.md,
@@ -1643,7 +1759,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   formTextInput: {
-    height: 40,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.2)',
     borderRadius: radius.md,
@@ -1658,6 +1774,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
     marginTop: spacing.md,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   formSubmitBtnText: {
     color: Colors.onPrimary,
@@ -1700,11 +1818,13 @@ const styles = StyleSheet.create({
   },
   unitChip: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: spacing.xs,
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.3)',
     backgroundColor: Colors.surfaceContainerLowest,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   unitChipActive: {
     backgroundColor: Colors.primaryContainer,
@@ -1749,6 +1869,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   finalLogBtnText: {
     color: Colors.onPrimary,
@@ -1777,11 +1899,13 @@ const styles = StyleSheet.create({
   },
   editorChip: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 5,
+    paddingVertical: spacing.xs,
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.3)',
     backgroundColor: Colors.surfaceContainerLowest,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   editorChipActive: {
     backgroundColor: Colors.primaryContainer,
@@ -1803,7 +1927,7 @@ const styles = StyleSheet.create({
   },
   customGoalInput: {
     flex: 1,
-    height: 36,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.2)',
     borderRadius: radius.md,
@@ -1815,7 +1939,7 @@ const styles = StyleSheet.create({
   customGoalBtn: {
     backgroundColor: Colors.primaryContainer,
     borderRadius: radius.md,
-    height: 36,
+    minHeight: layout.minTouchTarget,
     paddingHorizontal: spacing.md,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1826,7 +1950,10 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
   },
   customGoalClose: {
-    padding: 6,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   microsListCard: {
     backgroundColor: Colors.surfaceContainerLow,
@@ -1876,6 +2003,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.lg,
     marginBottom: spacing.xl,
+    minHeight: layout.minTouchTarget,
   },
   deleteFoodActionText: {
     color: Colors.onPrimary,

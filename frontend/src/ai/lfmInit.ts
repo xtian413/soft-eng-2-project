@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { getLfmModule, initLfmModel } from './lfmService';
 
-const LFM_MODEL_NAME = 'lfm2.5-1.2b-instruct-q4_k_m.gguf';
+const LFM_MODEL_NAME = 'qwen2.5-3b-instruct-q4_k_m.gguf';
 
 let startupInitPromise: Promise<boolean> | null = null;
 let startupInitialized = false;
@@ -14,7 +14,7 @@ let startupInitialized = false;
 async function getLfmModelPath(): Promise<string> {
   if (Platform.OS === 'android') {
     const module = getLfmModule();
-    console.log('📦 Copying LFM model from assets to physical storage via native code...');
+    console.log('📦 Copying on-device model from assets to physical storage via native code...');
     const destPath = await module.copyAsset(`models/${LFM_MODEL_NAME}`);
     console.log(`✅ Model available at physical path: ${destPath}`);
     return destPath;
@@ -45,15 +45,15 @@ export async function initializeLfmOnStartup() {
 
 async function initializeLfm() {
   try {
-    console.log('🤖 Initializing LFM model...');
+    console.log('🤖 Initializing on-device model...');
     const modelPath = await getLfmModelPath();
     await initLfmModel(modelPath);
-    console.log('✓ LFM model initialized successfully');
+    console.log('✓ On-device model initialized successfully');
     startupInitialized = true;
     return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`✗ Failed to initialize LFM model: ${message}`);
+    console.error(`✗ Failed to initialize on-device model: ${message}`);
     return false;
   }
 }

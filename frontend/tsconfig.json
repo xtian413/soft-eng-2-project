@@ -7,5 +7,10 @@
     "paths": {
       "@/*": ["./*"]
     }
-  }
+  },
+  "exclude": [
+    "android",
+    "native-modules/llama.cpp",
+    "node_modules"
+  ]
 }

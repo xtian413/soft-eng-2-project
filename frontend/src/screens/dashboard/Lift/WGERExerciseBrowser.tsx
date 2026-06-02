@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { X, Zap } from 'lucide-react-native';
 import { Colors } from '@/theme/colors';
-import { typography, fontWeight, spacing } from '@/theme/typography';
+import { typography, fontWeight, spacing, layout } from '@/theme/typography';
 import { exerciseDbService, ExerciseDbExercise, EquipmentOption } from '@/api/exerciseDbService';
 const POPULAR_EXERCISES = [
   'bench press',
@@ -152,7 +152,7 @@ export const WGERExerciseBrowser: React.FC<WGERExerciseBrowserProps> = ({
               {isPrimary && <Text style={styles.primaryBadge}>Primary</Text>}
               {isAdded && (
                 <View style={styles.addedBadge}>
-                  <Text style={styles.addedBadgeText}>✓ Added</Text>
+                  <Text style={styles.addedBadgeText}>Added</Text>
                 </View>
               )}
             </View>
@@ -163,7 +163,7 @@ export const WGERExerciseBrowser: React.FC<WGERExerciseBrowserProps> = ({
             style={[styles.zapBtn, isAdded && styles.zapBtnAdded]}
           >
             {isAdded
-              ? <Text style={styles.zapBtnAddedText}>✓</Text>
+              ? <Text style={styles.zapBtnAddedText}>Added</Text>
               : <Zap size={20} color={Colors.primary} />
             }
           </TouchableOpacity>
@@ -194,7 +194,7 @@ export const WGERExerciseBrowser: React.FC<WGERExerciseBrowserProps> = ({
             {/* Target Muscles */}
             {(item.target.length > 0 || item.secondaryMuscles.length > 0) && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>💪 Targeted Muscles</Text>
+                <Text style={styles.sectionTitle}>Targeted Muscles</Text>
                 <View style={styles.muscleList}>
                   {item.target.length > 0 && (
                     <View style={styles.muscleBadge}>
@@ -213,7 +213,7 @@ export const WGERExerciseBrowser: React.FC<WGERExerciseBrowserProps> = ({
             {/* Instructions */}
             {item.instructions.length > 0 && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>📋 Instructions</Text>
+                <Text style={styles.sectionTitle}>Instructions</Text>
                 {item.instructions.map((note, idx) => (
                   <View key={idx} style={styles.instructionStep}>
                     <Text style={styles.stepNumber}>{idx + 1}.</Text>
@@ -225,7 +225,7 @@ export const WGERExerciseBrowser: React.FC<WGERExerciseBrowserProps> = ({
 
             {item.gifUrl.length > 0 && (
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>🎥 Demo</Text>
+                <Text style={styles.sectionTitle}>Demo</Text>
                 <Image source={{ uri: item.gifUrl }} style={styles.gif} resizeMode="contain" />
               </View>
             )}
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.outline,
   },
   searchInput: {
-    height: 40,
+    minHeight: layout.minTouchTarget,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.outline,
@@ -391,6 +391,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.outline,
     backgroundColor: Colors.background,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   filterButtonActive: {
     backgroundColor: Colors.primary,
@@ -443,8 +445,9 @@ const styles = StyleSheet.create({
     color: '#10b981',
   },
   zapBtn: {
-    width: 36,
-    height: 36,
+    minWidth: layout.minTouchTarget,
+    minHeight: layout.minTouchTarget,
+    paddingHorizontal: spacing.sm,
     borderRadius: 10,
     backgroundColor: 'rgba(14, 165, 233, 0.1)',
     alignItems: 'center',
@@ -504,6 +507,8 @@ const styles = StyleSheet.create({
   },
   expandButton: {
     paddingVertical: spacing.xs,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   expandButtonText: {
     fontSize: typography.sm,

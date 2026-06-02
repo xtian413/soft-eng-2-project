@@ -14,7 +14,7 @@ import {
   Platform,
 } from 'react-native';
 import { Colors } from '@/theme/colors';
-import { typography, fontWeight, radius, spacing } from '@/theme/typography';
+import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle } from 'lucide-react-native';
 import { getMuscleDataForExercise } from './exerciseMuscles';
 import { BodyMuscleMap } from './BodyMuscleMap';
@@ -119,7 +119,6 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
   // UI state
   const [setsList, setSetsList] = useState<SetLog[]>([]);
-  const [showWhisper, setShowWhisper] = useState(true);
   const [showCustomExerciseModal, setShowCustomExerciseModal] = useState(false);
   const [showExerciseBrowser, setShowExerciseBrowser] = useState(false);
   const [exerciseBrowserTarget, setExerciseBrowserTarget] = useState<'routine' | 'workout'>('workout');
@@ -1085,23 +1084,6 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           )}
         </View>
 
-        {/* AI Whisper Card (Dismissible) */}
-        {showWhisper && (
-          <View style={styles.insightCard}>
-            <View style={styles.insightHeader}>
-              <View style={styles.whisperBadge}>
-                <Text style={styles.whisperBadgeText}>Whisper</Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowWhisper(false)} activeOpacity={0.6}>
-                <X size={16} color="#a855f7" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.insightQuote}>
-              "Volume target reached for quadriceps. Adjust squat intensity by +5% next session."
-            </Text>
-          </View>
-        )}
-
         {/* Routine Workout Card */}
         <View style={styles.card}>
           {activeRoutine ? (
@@ -1696,6 +1678,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacing.base,
     paddingBottom: spacing.xxxl * 2,
+    width: '100%',
+    maxWidth: layout.modalMaxWidth,
+    alignSelf: 'center',
   },
   timerCard: {
     backgroundColor: Colors.primary,
@@ -1714,7 +1699,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     fontSize: 9,
     fontWeight: fontWeight.bold,
-    letterSpacing: 1.0,
+    letterSpacing: 0,
   },
   timerActiveDot: {
     width: 6,
@@ -1726,7 +1711,7 @@ const styles = StyleSheet.create({
     color: Colors.onPrimary,
     fontSize: 42,
     fontWeight: fontWeight.extraBold,
-    letterSpacing: 2,
+    letterSpacing: 0,
     marginVertical: spacing.xs,
   },
   timerActions: {
@@ -1739,6 +1724,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingVertical: spacing.sm,
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   btnStart: {
     backgroundColor: Colors.primaryContainer,
@@ -1809,8 +1796,8 @@ const styles = StyleSheet.create({
     color: Colors.onSurface,
   },
   unilateralToggle: {
-    width: 36,
-    height: 36,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     borderRadius: radius.md,
     borderWidth: 1.5,
     borderColor: Colors.primaryContainer,
@@ -1855,7 +1842,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   columnInput: {
-    height: 42,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.25)',
     borderRadius: radius.md,
@@ -1877,6 +1864,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingVertical: spacing.md,
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   logSetBtnText: {
     color: Colors.onPrimary,
@@ -1895,6 +1884,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.primaryContainer,
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   saveDefaultsBtnText: {
     fontSize: typography.base,
@@ -1902,8 +1893,8 @@ const styles = StyleSheet.create({
     color: Colors.primaryContainer,
   },
   addExerciseBtn: {
-    width: 42,
-    height: 42,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     backgroundColor: 'rgba(14, 165, 233, 0.08)',
     borderRadius: radius.md,
     justifyContent: 'center',
@@ -1914,39 +1905,6 @@ const styles = StyleSheet.create({
   addExerciseBtnContent: {
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  insightCard: {
-    backgroundColor: '#faf5ff',
-    borderRadius: radius.lg,
-    padding: spacing.base,
-    marginBottom: spacing.base,
-    borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.15)',
-  },
-  insightHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  whisperBadge: {
-    backgroundColor: Colors.surfaceContainerLowest,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.2)',
-  },
-  whisperBadgeText: {
-    fontSize: 10,
-    fontWeight: fontWeight.bold,
-    color: '#a855f7',
-  },
-  insightQuote: {
-    fontSize: typography.sm,
-    fontStyle: 'italic',
-    color: Colors.onSurfaceVariant,
-    lineHeight: 20,
   },
   tableHeader: {
     flexDirection: 'row',
@@ -1998,6 +1956,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.base,
     borderWidth: 1,
     borderColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
   },
   muscleToggleText: {
     fontSize: 11,
@@ -2050,6 +2009,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
     backgroundColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
   },
   routineAddText: {
     fontSize: typography.xs,
@@ -2071,6 +2031,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.outline,
     marginRight: spacing.xs,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   routinePillActive: {
     backgroundColor: Colors.primaryContainer,
@@ -2127,6 +2089,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   routineEditText: {
     fontSize: typography.sm,
@@ -2167,7 +2131,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   routineInput: {
-    height: 38,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(14, 165, 233, 0.3)',
     borderRadius: radius.md,
@@ -2260,6 +2224,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     alignItems: 'center',
     backgroundColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   routineStartButtonActive: {
     backgroundColor: 'rgba(14, 165, 233, 0.2)',
@@ -2376,7 +2342,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: fontWeight.bold,
     color: Colors.outline,
-    letterSpacing: 0.8,
+    letterSpacing: 0,
   },
   routineDraftEmpty: {
     paddingVertical: spacing.md,
@@ -2401,8 +2367,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   routineDraftIndexBadge: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     borderRadius: radius.full,
     backgroundColor: Colors.primaryContainer,
     alignItems: 'center',
@@ -2415,7 +2381,7 @@ const styles = StyleSheet.create({
   },
   routineDraftNameInput: {
     flex: 1,
-    height: 38,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.2)',
     borderRadius: radius.md,
@@ -2455,7 +2421,10 @@ const styles = StyleSheet.create({
     borderLeftColor: Colors.primaryContainer,
   },
   routineRemoveBtn: {
-    padding: spacing.xs,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   routineDraftMetrics: {
     flexDirection: 'row',
@@ -2472,7 +2441,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   metricInput: {
-    height: 36,
+    minHeight: layout.minTouchTarget,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(14, 165, 233, 0.3)',
@@ -2504,6 +2473,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     alignItems: 'center',
     backgroundColor: Colors.background,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   categoryBtnActive: {
     backgroundColor: Colors.primaryContainer,
@@ -2523,6 +2494,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
     marginBottom: spacing.sm,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   modalConfirmBtnText: {
     color: Colors.onPrimary,
@@ -2535,6 +2508,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingVertical: spacing.md,
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   modalCancelBtnText: {
     color: Colors.onSurfaceVariant,
@@ -2604,6 +2579,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    minWidth: layout.minTouchTarget,
+    minHeight: layout.minTouchTarget,
   },
   configStepperText: {
     fontSize: typography.lg,
@@ -2613,7 +2590,7 @@ const styles = StyleSheet.create({
   },
   configInput: {
     flex: 1,
-    height: 42,
+    minHeight: layout.minTouchTarget,
     fontSize: typography.base,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,

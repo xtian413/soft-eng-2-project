@@ -37,3 +37,9 @@ export const spacing = {
   xxl: 32,
   xxxl: 48,
 };
+
+export const layout = {
+  minTouchTarget: 44,
+  screenMaxWidth: 520,
+  modalMaxWidth: 640,
+};

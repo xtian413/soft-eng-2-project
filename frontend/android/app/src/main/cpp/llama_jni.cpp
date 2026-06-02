@@ -32,6 +32,7 @@ struct LfmModel {
 static std::mutex g_mutex;
 static bool g_backend_initialized = false;
 static std::string g_last_error;
+static constexpr int64_t kMaxGenerationElapsedMs = 85000;
 
 static void set_last_error(const std::string &message) {
   g_last_error = message;
@@ -276,6 +277,12 @@ Java_com_anonymous_frontend_llm_LlamaBridge_generate(
     return env->NewStringUTF(message.c_str());
   }
   const auto start_time = std::chrono::steady_clock::now();
+  const auto has_timed_out = [&start_time]() {
+    const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start_time
+    ).count();
+    return elapsed_ms >= kMaxGenerationElapsedMs;
+  };
   __android_log_print(
       ANDROID_LOG_INFO,
       LOG_TAG,
@@ -292,6 +299,11 @@ Java_com_anonymous_frontend_llm_LlamaBridge_generate(
     if (modelHandle->cancel_requested.load(std::memory_order_acquire)) {
       llama_batch_free(batch);
       __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "generate cancelled while decoding prompt");
+      return env->NewStringUTF("");
+    }
+    if (has_timed_out()) {
+      llama_batch_free(batch);
+      __android_log_print(ANDROID_LOG_INFO, LOG_TAG, "generate timed out while decoding prompt");
       return env->NewStringUTF("");
     }
     const int count = std::min(n_batch, n_prompt - start);
@@ -322,12 +334,15 @@ Java_com_anonymous_frontend_llm_LlamaBridge_generate(
   if (temperature > 0.0f) {
     llama_sampler_chain_add(sampler, llama_sampler_init_temp(temperature));
   }
-  llama_sampler_chain_add(sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
+  const uint32_t seed = static_cast<uint32_t>(
+      std::chrono::steady_clock::now().time_since_epoch().count()
+  );
+  llama_sampler_chain_add(sampler, llama_sampler_init_dist(seed));
 
   const llama_token eos_token = llama_vocab_eos(vocab);
   const llama_token eot_token = llama_vocab_eot(vocab);
   for (int i = 0; i < n_predict; ++i) {
-    if (modelHandle->cancel_requested.load(std::memory_order_acquire)) {
+    if (modelHandle->cancel_requested.load(std::memory_order_acquire) || has_timed_out()) {
       break;
     }
 
