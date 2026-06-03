@@ -4,7 +4,8 @@ import { LOCAL_SCHEMA_VERSION, LOCAL_TABLES } from '@/local/schema';
 type Migration = {
   version: number;
   name: string;
-  statements: string[];
+  statements?: string[];
+  apply?: (db: SQLiteDatabase) => Promise<void>;
 };
 
 const MIGRATIONS: Migration[] = [
@@ -196,6 +197,24 @@ const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_sync_queue_record ON ${LOCAL_TABLES.syncQueue}(table_name, record_id)`,
     ],
   },
+  {
+    version: 2,
+    name: 'add_remote_id_to_diet_logs',
+    apply: async (db) => {
+      const columns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${LOCAL_TABLES.dietLogs})`
+      );
+      const hasRemoteId = columns.some((column) => column.name === 'remote_id');
+
+      if (!hasRemoteId) {
+        await db.execAsync(`ALTER TABLE ${LOCAL_TABLES.dietLogs} ADD COLUMN remote_id TEXT`);
+      }
+
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_diet_logs_remote_id ON ${LOCAL_TABLES.dietLogs}(remote_id)`
+      );
+    },
+  },
 ];
 
 type SchemaMigrationRow = {
@@ -224,8 +243,12 @@ export async function runLocalMigrations(db: SQLiteDatabase) {
     if (appliedVersions.has(migration.version)) continue;
 
     await db.withTransactionAsync(async () => {
-      for (const statement of migration.statements) {
+      for (const statement of migration.statements ?? []) {
         await db.execAsync(statement);
+      }
+
+      if (migration.apply) {
+        await migration.apply(db);
       }
 
       await db.runAsync(

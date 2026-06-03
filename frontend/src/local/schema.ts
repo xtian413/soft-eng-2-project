@@ -1,6 +1,6 @@
 export const GEMI_USER_DATABASE_NAME = 'gemi_user.db';
 
-export const LOCAL_SCHEMA_VERSION = 1;
+export const LOCAL_SCHEMA_VERSION = 2;
 
 export const LOCAL_TABLES = {
   schemaMigrations: 'schema_migrations',
@@ -30,6 +30,7 @@ export interface LocalBaseRecord {
 }
 
 export interface LocalDietLog extends LocalBaseRecord {
+  remote_id: string | null;
   meal_name: string;
   calories: number | null;
   protein_g: number | null;
@@ -51,6 +52,7 @@ export interface LocalDietLog extends LocalBaseRecord {
 export interface CreateLocalDietLogInput {
   user_id: string;
   id?: string;
+  remote_id?: string | null;
   meal_name: string;
   calories?: number | null;
   protein_g?: number | null;

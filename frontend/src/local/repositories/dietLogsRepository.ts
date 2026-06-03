@@ -1,9 +1,26 @@
 import { initializeLocalDatabase } from '@/local/db';
-import { LOCAL_TABLES, type CreateLocalDietLogInput, type LocalDietLog, type UpdateLocalDietLogInput } from '@/local/schema';
+import {
+  LOCAL_TABLES,
+  type CreateLocalDietLogInput,
+  type LocalDietLog,
+  type UpdateLocalDietLogInput,
+} from '@/local/schema';
+
+export interface RemoteDietLogInput {
+  id: string;
+  meal_name: string;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  logged_at: string;
+  created_at?: string;
+}
 
 const DIET_LOG_COLUMNS = [
   'id',
   'user_id',
+  'remote_id',
   'meal_name',
   'calories',
   'protein_g',
@@ -46,6 +63,12 @@ function assertUserId(userId: string) {
   }
 }
 
+function assertRemoteId(remoteId: string) {
+  if (!remoteId.trim()) {
+    throw new Error('Local diet log sync operation requires a backend diet-log ID.');
+  }
+}
+
 function normalizeNullableNumber(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
@@ -72,6 +95,7 @@ export async function createDietLog(input: CreateLocalDietLogInput): Promise<Loc
       `INSERT INTO ${LOCAL_TABLES.dietLogs} (
         id,
         user_id,
+        remote_id,
         meal_name,
         calories,
         protein_g,
@@ -93,9 +117,10 @@ export async function createDietLog(input: CreateLocalDietLogInput): Promise<Loc
         deleted_at,
         sync_status,
         last_synced_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL)`,
       id,
       input.user_id,
+      normalizeNullableText(input.remote_id),
       input.meal_name.trim(),
       normalizeNullableNumber(input.calories),
       normalizeNullableNumber(input.protein_g),
@@ -116,13 +141,7 @@ export async function createDietLog(input: CreateLocalDietLogInput): Promise<Loc
       now
     );
 
-    const created = await db.getFirstAsync<LocalDietLog>(
-      `SELECT ${DIET_LOG_COLUMNS}
-       FROM ${LOCAL_TABLES.dietLogs}
-       WHERE id = ? AND user_id = ?`,
-      id,
-      input.user_id
-    );
+    const created = await getDietLogByUserAndId(input.user_id, id);
 
     if (!created) {
       throw new Error('Inserted diet log could not be read back.');
@@ -131,6 +150,28 @@ export async function createDietLog(input: CreateLocalDietLogInput): Promise<Loc
     return created;
   } catch (error) {
     wrapDietLogError('create', error);
+  }
+}
+
+export async function getDietLogByUserAndId(
+  userId: string,
+  id: string,
+  options?: { includeDeleted?: boolean }
+): Promise<LocalDietLog | null> {
+  try {
+    assertUserId(userId);
+
+    const db = await initializeLocalDatabase();
+    const deletedFilter = options?.includeDeleted ? '' : 'AND deleted_at IS NULL';
+    return await db.getFirstAsync<LocalDietLog>(
+      `SELECT ${DIET_LOG_COLUMNS}
+       FROM ${LOCAL_TABLES.dietLogs}
+       WHERE id = ? AND user_id = ? ${deletedFilter}`,
+      id,
+      userId
+    );
+  } catch (error) {
+    wrapDietLogError('read by id', error);
   }
 }
 
@@ -232,13 +273,7 @@ export async function updateDietLog(
       throw new Error('Diet log was not found for the supplied user.');
     }
 
-    const updated = await db.getFirstAsync<LocalDietLog>(
-      `SELECT ${DIET_LOG_COLUMNS}
-       FROM ${LOCAL_TABLES.dietLogs}
-       WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
-      id,
-      userId
-    );
+    const updated = await getDietLogByUserAndId(userId, id);
 
     if (!updated) {
       throw new Error('Updated diet log could not be read back.');
@@ -274,5 +309,209 @@ export async function softDeleteDietLog(userId: string, id: string): Promise<voi
     }
   } catch (error) {
     wrapDietLogError('soft delete', error);
+  }
+}
+
+export async function markDietLogSynced(
+  userId: string,
+  id: string,
+  remoteId: string
+): Promise<LocalDietLog> {
+  try {
+    assertUserId(userId);
+    assertRemoteId(remoteId);
+
+    const db = await initializeLocalDatabase();
+    const now = new Date().toISOString();
+    const result = await db.runAsync(
+      `UPDATE ${LOCAL_TABLES.dietLogs}
+       SET remote_id = ?,
+           sync_status = 'synced',
+           updated_at = ?,
+           last_synced_at = ?
+       WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+      remoteId,
+      now,
+      now,
+      id,
+      userId
+    );
+
+    if (result.changes === 0) {
+      throw new Error('Diet log was not found for the supplied user.');
+    }
+
+    const synced = await getDietLogByUserAndId(userId, id);
+    if (!synced) {
+      throw new Error('Synced diet log could not be read back.');
+    }
+
+    return synced;
+  } catch (error) {
+    wrapDietLogError('mark synced', error);
+  }
+}
+
+export async function markDietLogSyncFailed(userId: string, id: string): Promise<void> {
+  try {
+    assertUserId(userId);
+
+    const db = await initializeLocalDatabase();
+    const now = new Date().toISOString();
+    const result = await db.runAsync(
+      `UPDATE ${LOCAL_TABLES.dietLogs}
+       SET sync_status = 'failed',
+           updated_at = ?,
+           last_synced_at = NULL
+       WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+      now,
+      id,
+      userId
+    );
+
+    if (result.changes === 0) {
+      throw new Error('Diet log was not found for the supplied user.');
+    }
+  } catch (error) {
+    wrapDietLogError('mark sync failed', error);
+  }
+}
+
+export async function markDietLogDeleteSynced(userId: string, id: string): Promise<void> {
+  try {
+    assertUserId(userId);
+
+    const db = await initializeLocalDatabase();
+    const now = new Date().toISOString();
+    const result = await db.runAsync(
+      `UPDATE ${LOCAL_TABLES.dietLogs}
+       SET sync_status = 'synced',
+           updated_at = ?,
+           last_synced_at = ?
+       WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL`,
+      now,
+      now,
+      id,
+      userId
+    );
+
+    if (result.changes === 0) {
+      throw new Error('Deleted diet log was not found for the supplied user.');
+    }
+  } catch (error) {
+    wrapDietLogError('mark delete synced', error);
+  }
+}
+
+export async function upsertRemoteDietLogForUser(
+  userId: string,
+  remoteLog: RemoteDietLogInput
+): Promise<LocalDietLog> {
+  try {
+    assertUserId(userId);
+    assertRemoteId(remoteLog.id);
+
+    const db = await initializeLocalDatabase();
+    const existing = await db.getFirstAsync<LocalDietLog>(
+      `SELECT ${DIET_LOG_COLUMNS}
+       FROM ${LOCAL_TABLES.dietLogs}
+       WHERE user_id = ? AND remote_id = ?
+       LIMIT 1`,
+      userId,
+      remoteLog.id
+    );
+
+    if (existing) {
+      if (existing.deleted_at || existing.sync_status !== 'synced') {
+        return existing;
+      }
+
+      const now = new Date().toISOString();
+      await db.runAsync(
+        `UPDATE ${LOCAL_TABLES.dietLogs}
+         SET meal_name = ?,
+             calories = ?,
+             protein_g = ?,
+             carbs_g = ?,
+             fat_g = ?,
+             logged_at = ?,
+             updated_at = ?,
+             sync_status = 'synced',
+             last_synced_at = ?
+         WHERE id = ? AND user_id = ? AND remote_id = ? AND deleted_at IS NULL AND sync_status = 'synced'`,
+        remoteLog.meal_name.trim(),
+        normalizeNullableNumber(remoteLog.calories),
+        normalizeNullableNumber(remoteLog.protein_g),
+        normalizeNullableNumber(remoteLog.carbs_g),
+        normalizeNullableNumber(remoteLog.fat_g),
+        remoteLog.logged_at,
+        now,
+        now,
+        existing.id,
+        userId,
+        remoteLog.id
+      );
+
+      const updated = await getDietLogByUserAndId(userId, existing.id);
+      if (!updated) {
+        throw new Error('Updated remote diet log could not be read back.');
+      }
+
+      return updated;
+    }
+
+    const now = new Date().toISOString();
+    const createdAt = remoteLog.created_at ?? now;
+    const id = createLocalUuid();
+
+    await db.runAsync(
+      `INSERT INTO ${LOCAL_TABLES.dietLogs} (
+        id,
+        user_id,
+        remote_id,
+        meal_name,
+        calories,
+        protein_g,
+        carbs_g,
+        fat_g,
+        fiber_g,
+        sodium_mg,
+        potassium_mg,
+        calcium_mg,
+        iron_mg,
+        vitamin_c_mg,
+        folate_mcg,
+        serving_size,
+        serving_unit,
+        source_food_id,
+        logged_at,
+        created_at,
+        updated_at,
+        deleted_at,
+        sync_status,
+        last_synced_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 'serving', NULL, ?, ?, ?, NULL, 'synced', ?)`,
+      id,
+      userId,
+      remoteLog.id,
+      remoteLog.meal_name.trim(),
+      normalizeNullableNumber(remoteLog.calories),
+      normalizeNullableNumber(remoteLog.protein_g),
+      normalizeNullableNumber(remoteLog.carbs_g),
+      normalizeNullableNumber(remoteLog.fat_g),
+      remoteLog.logged_at,
+      createdAt,
+      now,
+      now
+    );
+
+    const inserted = await getDietLogByUserAndId(userId, id);
+    if (!inserted) {
+      throw new Error('Inserted remote diet log could not be read back.');
+    }
+
+    return inserted;
+  } catch (error) {
+    wrapDietLogError('upsert remote', error);
   }
 }

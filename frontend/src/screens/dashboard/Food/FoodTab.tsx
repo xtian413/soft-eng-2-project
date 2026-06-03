@@ -17,7 +17,24 @@ import Svg, { Circle } from 'react-native-svg';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import { searchFoodDatabase, type GemiFoodItem } from '@/api/foodDatabaseApi';
-import { createDietLog, deleteDietLog } from '@/api/dietApi';
+import {
+  createDietLog as createRemoteDietLog,
+  deleteDietLog as deleteRemoteDietLog,
+  type DietLogCreateInput,
+} from '@/api/dietApi';
+import {
+  foodLogEntryToCreateLocalDietLogInput,
+  foodLogEntryToRemoteCreateInput,
+  localDietLogToFoodLogEntry,
+} from '@/local/dietLogsMapper';
+import {
+  createDietLog as createLocalDietLog,
+  getDietLogByUserAndId,
+  markDietLogDeleteSynced,
+  markDietLogSyncFailed,
+  markDietLogSynced,
+  softDeleteDietLog,
+} from '@/local/repositories/dietLogsRepository';
 import type { FoodLogEntry, MacroTargets, MealId } from '@/screens/dashboard/types';
 import {
   Coffee,
@@ -38,17 +55,33 @@ import {
 } from 'lucide-react-native';
 
 interface FoodTabProps {
+  userId: string | null;
   foodLogs: FoodLogEntry[];
   setFoodLogs: React.Dispatch<React.SetStateAction<FoodLogEntry[]>>;
+  refreshFoodLogs: () => Promise<void>;
   targets: MacroTargets;
   triggerToast: (msg: string) => void;
 }
 
 type NutrientSlideType = 'energy' | 'macros' | 'micros';
 
+function getErrorMessage(error: unknown) {
+  if (typeof error === 'object' && error !== null) {
+    const responseError = (error as { response?: { data?: { error?: string } } }).response?.data?.error;
+    if (responseError) return responseError;
+
+    const message = (error as { message?: string }).message;
+    if (message) return message;
+  }
+
+  return 'Unknown error';
+}
+
 export function FoodTab({
+  userId,
   foodLogs,
   setFoodLogs,
+  refreshFoodLogs,
   targets,
   triggerToast,
 }: FoodTabProps) {
@@ -137,6 +170,53 @@ export function FoodTab({
 
   // Tracks when a log/delete API call is in-flight so I can disable the button.
   const [isSavingLog, setIsSavingLog] = useState(false);
+
+  const syncCreatedDietLogToRemote = useCallback(
+    async (localId: string, remoteInput: DietLogCreateInput) => {
+      if (!userId) return;
+
+      try {
+        const remoteLog = await createRemoteDietLog(remoteInput);
+        await markDietLogSynced(userId, localId, remoteLog.id);
+        await refreshFoodLogs();
+      } catch (error) {
+        const message = getErrorMessage(error);
+        console.error('[Gemi] Failed to sync local diet log to backend:', message);
+        await markDietLogSyncFailed(userId, localId).catch((markError) => {
+          console.error('[Gemi] Failed to mark local diet log sync failed:', markError);
+        });
+        triggerToast(`Saved locally. Remote sync pending: ${message}`);
+      }
+    },
+    [refreshFoodLogs, triggerToast, userId]
+  );
+
+  const saveDietLogLocalFirst = useCallback(
+    async (
+      entry: FoodLogEntry,
+      loggedAt: string,
+      sourceFoodId: string | null,
+      successMessage: string
+    ) => {
+      if (!userId) {
+        triggerToast('Please log in before saving food logs.');
+        return null;
+      }
+
+      const localLog = await createLocalDietLog(
+        foodLogEntryToCreateLocalDietLogInput(userId, entry, loggedAt, sourceFoodId)
+      );
+      const localEntry = localDietLogToFoodLogEntry(localLog, entry.mealId);
+      const remoteInput = foodLogEntryToRemoteCreateInput(entry, loggedAt);
+
+      setFoodLogs((prev) => [...prev, localEntry]);
+      triggerToast(successMessage);
+      void syncCreatedDietLogToRemote(localLog.id, remoteInput);
+
+      return localEntry;
+    },
+    [setFoodLogs, syncCreatedDietLogToRemote, triggerToast, userId]
+  );
 
   // Custom Food Form
   const [customName, setCustomName] = useState('');
@@ -262,10 +342,11 @@ export function FoodTab({
     setConfigWeight(item.defaultServingSize);
   };
 
-  // Persists the selected USDA food item to the backend, then updates local state on success.
+  // Saves the selected USDA food locally first, then attempts the existing backend save.
   const logSelectedItem = async () => {
     if (!selectedItem || isSavingLog) return;
     const multiplier = configQuantity * (configWeight / 100);
+    const loggedAt = new Date().toISOString();
     const entry: FoodLogEntry = {
       id: `usda_${Date.now()}`,
       name: selectedItem.name,
@@ -287,33 +368,27 @@ export function FoodTab({
 
     setIsSavingLog(true);
     try {
-      // Save to the backend. The Axios interceptor attaches the Supabase Bearer token automatically.
-      // If the request fails (network error, 401, RLS rejection), this throws and jumps to catch.
-      await createDietLog({
-        meal_name: entry.name,
-        calories: entry.calories,
-        protein_g: entry.protein,
-        carbs_g: entry.carbs,
-        fat_g: entry.fat,
-        logged_at: new Date().toISOString(),
-      });
-      // Only update local state after the server confirmed success.
-      setFoodLogs((prev) => [...prev, entry]);
+      await saveDietLogLocalFirst(
+        entry,
+        loggedAt,
+        selectedItem.id,
+        `Logged to ${activeMealId}: ${entry.name}`
+      );
       setSelectedItem(null);
       setIsModalOpen(false);
-      triggerToast(`Logged to ${activeMealId}: ${entry.name}`);
-    } catch (err: any) {
-      const message = err?.response?.data?.error ?? err?.message ?? 'Unknown error';
-      console.error('[Gemi] Failed to save diet log:', message);
+    } catch (err) {
+      const message = getErrorMessage(err);
+      console.error('[Gemi] Failed to save local diet log:', message);
       triggerToast(`Failed to save: ${message}`);
     } finally {
       setIsSavingLog(false);
     }
   };
 
-  // Persists a custom food entry to the backend, then updates local state on success.
+  // Saves a custom food entry locally first, then attempts the existing backend save.
   const handleAddCustomFood = async () => {
     if (!customName.trim() || isSavingLog) return;
+    const loggedAt = new Date().toISOString();
     const entry: FoodLogEntry = {
       id: `custom_${Date.now()}`,
       name: customName,
@@ -335,41 +410,53 @@ export function FoodTab({
 
     setIsSavingLog(true);
     try {
-      await createDietLog({
-        meal_name: entry.name,
-        calories: entry.calories,
-        protein_g: entry.protein,
-        carbs_g: entry.carbs,
-        fat_g: entry.fat,
-        logged_at: new Date().toISOString(),
-      });
-      setFoodLogs((prev) => [...prev, entry]);
+      await saveDietLogLocalFirst(entry, loggedAt, null, `Logged custom food: ${entry.name}`);
       setCustomName('');
       setCustomCals('');
       setCustomProtein('');
       setCustomCarbs('');
       setCustomFat('');
       setIsModalOpen(false);
-      triggerToast(`Logged custom food: ${entry.name}`);
-    } catch (err: any) {
-      const message = err?.response?.data?.error ?? err?.message ?? 'Unknown error';
-      console.error('[Gemi] Failed to save custom food log:', message);
+    } catch (err) {
+      const message = getErrorMessage(err);
+      console.error('[Gemi] Failed to save local custom food log:', message);
       triggerToast(`Failed to save: ${message}`);
     } finally {
       setIsSavingLog(false);
     }
   };
 
-  // Deletes a log entry from the backend, then removes it from local state on success.
+  // Soft-deletes a local log first, then attempts the existing backend delete if a remote row exists.
   const handleDeleteEntry = async (id: string) => {
+    if (!userId) {
+      triggerToast('Please log in before deleting food logs.');
+      return;
+    }
+
     try {
-      // Only call the backend if this is a real persisted entry (not an optimistic local-only id).
-      // In this app all entries are persisted first, so always call the API.
-      await deleteDietLog(id);
+      const localLog = await getDietLogByUserAndId(userId, id);
+      if (!localLog) {
+        throw new Error('Diet log was not found for the current user.');
+      }
+
+      await softDeleteDietLog(userId, id);
       setFoodLogs((prev) => prev.filter((x) => x.id !== id));
+      setViewingLoggedItem((current) => (current?.id === id ? null : current));
       triggerToast('Logged food entry deleted');
-    } catch (err: any) {
-      const message = err?.response?.data?.error ?? err?.message ?? 'Unknown error';
+
+      const remoteId = localLog.remote_id;
+      if (remoteId) {
+        void (async () => {
+          try {
+            await deleteRemoteDietLog(remoteId);
+            await markDietLogDeleteSynced(userId, id);
+          } catch (error) {
+            console.error('[Gemi] Failed to sync diet-log delete to backend:', getErrorMessage(error));
+          }
+        })();
+      }
+    } catch (err) {
+      const message = getErrorMessage(err);
       console.error('[Gemi] Failed to delete diet log:', message);
       triggerToast(`Delete failed: ${message}`);
     }

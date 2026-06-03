@@ -15,6 +15,14 @@ import { typography, fontWeight, radius, spacing, layout } from '@/theme/typogra
 import { type GoalKey, type FoodLogEntry } from '@/screens/dashboard/types';
 import { calculateMacros } from '@/utils/macroCalculator';
 import { fetchDietLogs } from '@/api/dietApi';
+import {
+  localDietLogToFoodLogEntry,
+  remoteDietLogToLocalRemoteInput,
+} from '@/local/dietLogsMapper';
+import {
+  getDietLogsByUserAndDateRange,
+  upsertRemoteDietLogForUser,
+} from '@/local/repositories/dietLogsRepository';
 import { HomeTab } from '@/screens/dashboard/Home/HomeTab';
 import { FoodTab } from '@/screens/dashboard/Food/FoodTab';
 import { LiftTab } from '@/screens/dashboard/Lift/LiftTab';
@@ -101,36 +109,36 @@ export default function DashboardScreen() {
   }, [fetchProfile]);
 
   const loadTodayLogs = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setFoodLogs([]);
+      setIsLoadingLogs(false);
+      return;
+    }
+
     setIsLoadingLogs(true);
+    const today = new Date().toISOString().split('T')[0];
+    const startOfToday = `${today}T00:00:00.000Z`;
+    const endOfToday = `${today}T23:59:59.999Z`;
+
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const logs = await fetchDietLogs(today);
-
-      const entries: FoodLogEntry[] = logs.map((log) => ({
-        id: log.id,
-        name: log.meal_name,
-        mealId: 'snack' as const,
-        calories: log.calories ?? 0,
-        protein: log.protein_g ?? 0,
-        carbs: log.carbs_g ?? 0,
-        fat: log.fat_g ?? 0,
-        fiber: 0,
-        sodium: 0,
-        potassium: 0,
-        calcium: 0,
-        iron: 0,
-        vitaminC: 0,
-        folate: 0,
-        servingSize: 1,
-        servingUnit: 'serving',
-      }));
-
-      setFoodLogs(entries);
+      const localLogs = await getDietLogsByUserAndDateRange(user.id, startOfToday, endOfToday);
+      setFoodLogs(localLogs.map((log) => localDietLogToFoodLogEntry(log)));
     } catch (err) {
-      console.error('[Gemi] Failed to load today\'s food logs:', err);
+      console.error('[Gemi] Failed to load today\'s local food logs:', err);
     } finally {
       setIsLoadingLogs(false);
+    }
+
+    try {
+      const remoteLogs = await fetchDietLogs(today);
+      await Promise.all(
+        remoteLogs.map((log) => upsertRemoteDietLogForUser(user.id, remoteDietLogToLocalRemoteInput(log)))
+      );
+
+      const mergedLogs = await getDietLogsByUserAndDateRange(user.id, startOfToday, endOfToday);
+      setFoodLogs(mergedLogs.map((log) => localDietLogToFoodLogEntry(log)));
+    } catch (err) {
+      console.warn('[Gemi] Remote diet-log refresh skipped:', err);
     }
   }, [user?.id]);
 
@@ -372,8 +380,10 @@ export default function DashboardScreen() {
       case 'food':
         return (
           <FoodTab
+            userId={user?.id ?? null}
             foodLogs={foodLogs}
             setFoodLogs={setFoodLogs}
+            refreshFoodLogs={loadTodayLogs}
             targets={targets}
             triggerToast={triggerToast}
           />

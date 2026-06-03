@@ -19,6 +19,8 @@ export type MealId = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 export interface FoodLogEntry {
   id: string;
+  remoteId?: string | null;
+  syncStatus?: 'pending' | 'synced' | 'failed';
   name: string;
   mealId: MealId;
   calories: number;
