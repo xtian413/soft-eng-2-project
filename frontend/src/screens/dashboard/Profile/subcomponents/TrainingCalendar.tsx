@@ -13,6 +13,7 @@ interface TrainingCalendarProps {
   days: CalendarDay[];
   loading: boolean;
   setActiveTab: (tab: TabType) => void;
+  onViewAll?: () => void;
 }
 
 interface WorkoutStyle { bg: string; color: string; }
@@ -28,13 +29,13 @@ function getWorkoutStyle(type: string): WorkoutStyle {
 }
 
 /** Horizontal scrollable training calendar for the current week */
-export function TrainingCalendar({ days, loading, setActiveTab }: TrainingCalendarProps) {
+export function TrainingCalendar({ days, loading, setActiveTab, onViewAll }: TrainingCalendarProps) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Training Calendar</Text>
         <TouchableOpacity
-          onPress={() => setActiveTab('lift')}
+          onPress={() => onViewAll ? onViewAll() : setActiveTab('lift')}
           accessibilityRole="button"
           accessibilityLabel="View all training"
           hitSlop={8}
