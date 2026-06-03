@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Platform } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Alert, ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Platform } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { useAuthStore } from '@/store/authStore';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
@@ -42,10 +42,18 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
   const { updatePhysicalStats } = useAuthStore();
   const [isEditModalVisible, setEditModalVisible] = useState(false);
   const [isSignOutModalVisible, setSignOutModalVisible] = useState(false);
+  const [isTDEEModalVisible, setTDEEModalVisible] = useState(false);
   const [editHeight, setEditHeight] = useState(String(heightCm));
   const [editWeight, setEditWeight] = useState(String(weightKg));
   const [editGoal, setEditGoal] = useState<GoalKey>(goal);
   const [isSaving, setIsSaving] = useState(false);
+  const [isHistoryOpen, setHistoryOpen] = useState(false);
+  const [historyMonthOffset, setHistoryMonthOffset] = useState(0);
+  const [historyWorkouts, setHistoryWorkouts] = useState<Workout[]>([]);
+  const [historyDietLogs, setHistoryDietLogs] = useState<DietLog[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [selectedHistoryDate, setSelectedHistoryDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const { totalVolumeKg, weekStreak, weightEntries, calendarDays, loading, error, refetch } = useProfileStats();
 
@@ -528,6 +536,21 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
                 <Text style={styles.confirmDeleteText}>Sign Out</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* TDEE Calculator Modal */}
+      <Modal visible={isTDEEModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>TDEE Calculator</Text>
+              <TouchableOpacity onPress={() => setTDEEModalVisible(false)}>
+                <Text style={styles.modalCloseText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            <TDEECalculator />
           </View>
         </View>
       </Modal>
