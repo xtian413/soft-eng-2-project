@@ -17,7 +17,6 @@ const workoutSetSchema = z.object({
   set_number: z.number().int().positive(),
   reps: z.number().int().positive().optional(),
   weight_kg: z.number().positive().optional(),
-  duration_seconds: z.number().int().positive().optional(),
 });
 
 const workoutSchema = z.object({

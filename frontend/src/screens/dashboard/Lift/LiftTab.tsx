@@ -20,8 +20,21 @@ import { getMuscleDataForExercise } from './exerciseMuscles';
 import { BodyMuscleMap } from './BodyMuscleMap';
 import { WGERExerciseBrowser } from './WGERExerciseBrowser';
 import type { ExerciseDbExercise } from '@/api/exerciseDbService';
+import { createWorkout, fetchWorkoutById } from '@/api/workoutApi';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
+import type { CompletedWorkoutInput, LocalWorkoutWithSets } from '@/local/schema';
+import {
+  completedWorkoutToRemoteCreateInput,
+  matchRemoteWorkoutSets,
+} from '@/local/workoutsMapper';
+import {
+  createWorkoutWithSetsLocal,
+  getRecentWorkoutsByUser,
+  markWorkoutSyncFailed,
+  markWorkoutSynced,
+  type WorkoutSetRemoteMatch,
+} from '@/local/repositories/workoutsRepository';
 
 interface LiftTabProps {
   triggerToast: (msg: string) => void;
@@ -29,6 +42,9 @@ interface LiftTabProps {
 
 interface SetLog {
   id: string;
+  exerciseId: string;
+  exerciseName: string;
+  muscleGroup?: string | null;
   setNum: number;
   weight: number;
   reps: number;
@@ -43,6 +59,7 @@ interface Exercise {
   name: string;
   category: 'barbell' | 'dumbbell' | 'cable' | 'bodyweight' | 'machine';
   isCustom: boolean;
+  muscleGroup?: string | null;
 }
 
 interface RoutineExercise {
@@ -119,6 +136,8 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
   // UI state
   const [setsList, setSetsList] = useState<SetLog[]>([]);
+  const [completedWorkouts, setCompletedWorkouts] = useState<LocalWorkoutWithSets[]>([]);
+  const [isFinishingWorkout, setIsFinishingWorkout] = useState(false);
   const [showCustomExerciseModal, setShowCustomExerciseModal] = useState(false);
   const [showExerciseBrowser, setShowExerciseBrowser] = useState(false);
   const [exerciseBrowserTarget, setExerciseBrowserTarget] = useState<'routine' | 'workout'>('workout');
@@ -135,6 +154,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const [highlightMode, setHighlightMode] = useState<'none' | 'click' | 'exercise'>('none');
   const [primaryMuscleIds, setPrimaryMuscleIds] = useState<number[]>([]);
   const [secondaryMuscleIds, setSecondaryMuscleIds] = useState<number[]>([]);
+  const currentExerciseSets = setsList.filter((set) => set.exerciseId === currentExerciseId);
 
   // Swipe state
   const swipeAnimRefs = useRef<{ [key: string]: Animated.Value }>({});
@@ -187,17 +207,180 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     return [h, m, s].map((v) => String(v).padStart(2, '0')).join(':');
   };
 
-  const handleFinishSession = () => {
+  const getErrorMessage = (error: unknown) => {
+    if (error instanceof Error) return error.message;
+    return String(error);
+  };
+
+  const convertInputWeightToKg = (weight: number) => (isLbs ? weight * 0.45359237 : weight);
+
+  const estimateOneRepMax = (weightKg: number, reps: number) => {
+    if (!Number.isFinite(weightKg) || !Number.isFinite(reps) || weightKg <= 0 || reps <= 0) return null;
+    return Number((weightKg * (1 + reps / 30)).toFixed(2));
+  };
+
+  const loadCompletedWorkoutHistory = async () => {
+    if (!user?.id) {
+      setCompletedWorkouts([]);
+      return;
+    }
+
+    try {
+      const workouts = await getRecentWorkoutsByUser(user.id, 10);
+      setCompletedWorkouts(workouts);
+    } catch (error) {
+      console.error('[LiftTab] Failed to load local workout history:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadCompletedWorkoutHistory();
+  }, [user?.id]);
+
+  const buildRoutineCompletedWorkoutPayload = (): CompletedWorkoutInput | null => {
+    if (!activeRoutine) return null;
+
+    const sets: CompletedWorkoutInput['sets'] = activeRoutine.exercises.flatMap((exercise) => {
+      const progress = routineProgress[exercise.id];
+      if (!progress) return [];
+
+      const reps = Math.max(1, parseInt(progress.reps, 10) || 1);
+      const weight = parseFloat(progress.weight) || 0;
+      const weightKg = isLbs ? weight * 0.45359237 : weight;
+
+      return progress.doneSets.flatMap((isDone, index) =>
+        isDone
+          ? [
+              {
+                exerciseName: exercise.exercise_name,
+                muscleGroup: exercise.muscle_group ?? null,
+                setNumber: index + 1,
+                reps,
+                weightKg: weightKg > 0 ? weightKg : null,
+                rir: 0,
+                estimated1rm: estimateOneRepMax(weightKg, reps),
+              },
+            ]
+          : []
+      );
+    });
+
+    return {
+      name: activeRoutine.name,
+      performedAt: new Date().toISOString(),
+      notes: 'routine_session',
+      sets,
+    };
+  };
+
+  const buildFreeformCompletedWorkoutPayload = (): CompletedWorkoutInput | null => {
+    const checkedSets = setsList.filter((set) => set.isChecked);
+    if (checkedSets.length === 0) return null;
+
+    const workoutName =
+      exercisesList.length === 1
+        ? exercisesList[0].name
+        : exercisesList.length > 1
+        ? 'Custom Workout'
+        : currentExercise.name || 'Workout';
+
+    return {
+      name: workoutName,
+      performedAt: new Date().toISOString(),
+      sets: checkedSets.map((set) => {
+        const weightKg = convertInputWeightToKg(set.weight);
+        return {
+          exerciseName: set.exerciseName,
+          muscleGroup: set.muscleGroup ?? null,
+          setNumber: set.setNum,
+          reps: set.reps,
+          weightKg,
+          rir: set.rir,
+          estimated1rm: estimateOneRepMax(weightKg, set.reps),
+        };
+      }),
+    };
+  };
+
+  const buildCompletedWorkoutPayload = (): CompletedWorkoutInput | null => {
+    return activeRoutine ? buildRoutineCompletedWorkoutPayload() : buildFreeformCompletedWorkoutPayload();
+  };
+
+  const syncWorkoutToRemote = async (
+    localWorkout: LocalWorkoutWithSets,
+    payload: CompletedWorkoutInput
+  ) => {
+    if (!user?.id) return;
+
+    try {
+      const remoteWorkout = await createWorkout(completedWorkoutToRemoteCreateInput(payload));
+      let setMatches: WorkoutSetRemoteMatch[] = [];
+
+      try {
+        const remoteWithSets = await fetchWorkoutById(remoteWorkout.id);
+        const matchResult = matchRemoteWorkoutSets(localWorkout.sets, remoteWithSets.workout_sets ?? []);
+        setMatches = matchResult.matches;
+        if (matchResult.unmatchedLocalSetIds.length > 0) {
+          console.warn('[LiftTab] Some local workout sets could not be matched to remote IDs:', {
+            workoutId: localWorkout.id,
+            unmatchedLocalSetIds: matchResult.unmatchedLocalSetIds,
+          });
+        }
+      } catch (detailError) {
+        console.warn('[LiftTab] Remote workout saved but set IDs could not be fetched:', detailError);
+      }
+
+      const synced = await markWorkoutSynced(user.id, localWorkout.id, remoteWorkout.id, setMatches);
+      setCompletedWorkouts((prev) => [synced, ...prev.filter((workout) => workout.id !== synced.id)]);
+    } catch (error) {
+      console.error('[LiftTab] Failed to sync workout to backend:', getErrorMessage(error));
+      await markWorkoutSyncFailed(user.id, localWorkout.id).catch((markError) => {
+        console.error('[LiftTab] Failed to mark workout sync failed:', markError);
+      });
+      triggerToast(`Workout saved locally. Remote sync pending.`);
+    }
+  };
+
+  const resetFinishedSessionState = () => {
     setIsRunning(false);
     setElapsedSecs(0);
     scaleAnim.setValue(1);
     if (activeRoutineId) {
       setActiveRoutineId(null);
-      setExercisesList([]);
-      setCurrentExerciseId('');
       setRoutineProgress({});
     }
-    triggerToast('✓ Session finished');
+    setExercisesList([]);
+    setCurrentExerciseId('');
+    setSetsList([]);
+  };
+
+  const handleFinishSession = async () => {
+    if (isFinishingWorkout) return;
+
+    if (!user?.id) {
+      triggerToast('Please sign in to save workouts');
+      return;
+    }
+
+    const payload = buildCompletedWorkoutPayload();
+    if (!payload || payload.sets.length === 0) {
+      triggerToast('Log at least one completed set before finishing');
+      return;
+    }
+
+    setIsFinishingWorkout(true);
+    try {
+      const localWorkout = await createWorkoutWithSetsLocal(user.id, payload);
+      setCompletedWorkouts((prev) => [localWorkout, ...prev.filter((workout) => workout.id !== localWorkout.id)]);
+      resetFinishedSessionState();
+      triggerToast('✓ Workout saved');
+      void syncWorkoutToRemote(localWorkout, payload);
+    } catch (error) {
+      console.error('[LiftTab] Failed to save local workout:', error);
+      triggerToast(`Workout save failed: ${getErrorMessage(error)}`);
+    } finally {
+      setIsFinishingWorkout(false);
+    }
   };
 
   const convertWeightValue = (value: number, toLbs: boolean) => {
@@ -485,6 +668,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       name: exercise.exercise_name,
       category: 'barbell',
       isCustom: false,
+      muscleGroup: exercise.muscle_group ?? null,
     }));
 
     setExercisesList(mappedExercises);
@@ -669,6 +853,11 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   };
 
   const handleLogSet = () => {
+    if (!currentExerciseId || !currentExercise.name.trim()) {
+      triggerToast('Add or select an exercise before logging sets');
+      return;
+    }
+
     const w = parseFloat(inputWeight) || 0;
     const r = isUnilateral ? parseInt(inputRepsLeft) || 0 : parseInt(inputReps) || 0;
     const rL = isUnilateral ? parseInt(inputRepsLeft) || 0 : undefined;
@@ -682,7 +871,10 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
     const newSet: SetLog = {
       id: createUniqueId('set'),
-      setNum: setsList.length + 1,
+      exerciseId: currentExerciseId,
+      exerciseName: currentExercise.name,
+      muscleGroup: currentExercise.muscleGroup ?? null,
+      setNum: currentExerciseSets.length + 1,
       weight: w,
       reps: r,
       repsLeft: rL,
@@ -731,13 +923,13 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       name: customExerciseName,
       category: customExerciseCategory,
       isCustom: true,
+      muscleGroup: customExerciseCategory,
     };
 
     setExercisesList((prev) => [...prev, newExercise]);
     setCurrentExerciseId(newExercise.id);
     setCustomExerciseName('');
     setShowCustomExerciseModal(false);
-    setSetsList([]); // Reset sets for new exercise
     triggerToast(`✓ Added custom exercise: ${customExerciseName}`);
   };
 
@@ -756,6 +948,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       name: exercise.name || `Exercise ${exercise.id}`,
       category: 'barbell',
       isCustom: false,
+      muscleGroup: exercise.target || exercise.bodyPart || null,
     };
 
     // Debug: Log the exercise data
@@ -892,6 +1085,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         name: pendingExercise.name || `Exercise ${pendingExercise.id}`,
         category: 'barbell',
         isCustom: false,
+        muscleGroup: pendingExercise.target || pendingExercise.bodyPart || null,
       };
       setPrimaryMuscleIds(pendingExercise.primaryMuscleIds);
       setSecondaryMuscleIds(pendingExercise.secondaryMuscleIds);
@@ -908,7 +1102,6 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       setInputReps(configReps);
       setInputRepsLeft(configReps);
       setInputRepsRight(configReps);
-      setSetsList([]);
       triggerToast(`✓ Added: ${newExercise.name}`);
     }
 
@@ -1204,7 +1397,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         </View>
 
         {/* Set History Table */}
-        {setsList.length > 0 && (
+        {currentExerciseSets.length > 0 && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>SET HISTORY</Text>
 
@@ -1216,7 +1409,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
             </View>
 
             <View style={styles.tableBody}>
-              {setsList.map((set) => {
+              {currentExerciseSets.map((set) => {
                 const animValue = swipeAnimRefs.current[set.id] || new Animated.Value(0);
                 const panResponder = createSwipeHandler(set.id);
 
@@ -1258,6 +1451,30 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                   </Animated.View>
                 );
               })}
+            </View>
+          </View>
+        )}
+
+        {completedWorkouts.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>RECENT SAVED WORKOUTS</Text>
+            <View style={styles.savedWorkoutList}>
+              {completedWorkouts.map((workout) => (
+                <View key={workout.id} style={styles.savedWorkoutRow}>
+                  <View style={styles.savedWorkoutHeader}>
+                    <Text style={styles.savedWorkoutName}>{workout.name}</Text>
+                    <Text style={styles.savedWorkoutMeta}>
+                      {workout.sets.length} sets · {workout.sync_status}
+                    </Text>
+                  </View>
+                  <Text style={styles.savedWorkoutDate}>{workout.performed_at.split('T')[0]}</Text>
+                  <Text style={styles.savedWorkoutSets}>
+                    {[...new Set(workout.sets.map((set) => set.exercise_name))]
+                      .slice(0, 3)
+                      .join(', ') || 'No sets'}
+                  </Text>
+                </View>
+              ))}
             </View>
           </View>
         )}
@@ -1759,6 +1976,43 @@ const styles = StyleSheet.create({
     color: Colors.outline,
     letterSpacing: 0.8,
     marginBottom: spacing.base,
+  },
+  savedWorkoutList: {
+    gap: spacing.sm,
+  },
+  savedWorkoutRow: {
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.12)',
+  },
+  savedWorkoutHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  savedWorkoutName: {
+    flex: 1,
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  savedWorkoutMeta: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+  },
+  savedWorkoutDate: {
+    fontSize: 10,
+    color: Colors.outline,
+    marginTop: 2,
+  },
+  savedWorkoutSets: {
+    fontSize: typography.xs,
+    color: Colors.onSurfaceVariant,
+    marginTop: spacing.xs,
   },
   exerciseHeader: {
     flexDirection: 'row',

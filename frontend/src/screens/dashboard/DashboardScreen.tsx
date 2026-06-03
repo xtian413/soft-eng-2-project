@@ -8,7 +8,6 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '@/store/authStore';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
@@ -19,10 +18,12 @@ import {
   localDietLogToFoodLogEntry,
   remoteDietLogToLocalRemoteInput,
 } from '@/local/dietLogsMapper';
+import { localWorkoutToAiWorkoutLog } from '@/local/workoutsMapper';
 import {
   getDietLogsByUserAndDateRange,
   upsertRemoteDietLogForUser,
 } from '@/local/repositories/dietLogsRepository';
+import { getRecentWorkoutsByUser } from '@/local/repositories/workoutsRepository';
 import { HomeTab } from '@/screens/dashboard/Home/HomeTab';
 import { FoodTab } from '@/screens/dashboard/Food/FoodTab';
 import { LiftTab } from '@/screens/dashboard/Lift/LiftTab';
@@ -58,8 +59,6 @@ const TABS: { key: TabType; label: string }[] = [
   { key: 'lift', label: 'Lift' },
   { key: 'profile', label: 'Profile' },
 ];
-
-const WORKOUT_STORAGE_KEY = 'gemi:workouts';
 
 export default function DashboardScreen() {
   const { user, signOut, profile, fetchProfile } = useAuthStore();
@@ -147,16 +146,22 @@ export default function DashboardScreen() {
   }, [loadTodayLogs]);
 
   const loadWorkoutLogs = useCallback(async () => {
+    if (!user?.id) {
+      setWorkouts([]);
+      setHasLoadedWorkouts(true);
+      return;
+    }
+
     try {
-      const raw = await AsyncStorage.getItem(WORKOUT_STORAGE_KEY);
-      setWorkouts(raw ? JSON.parse(raw) : []);
+      const localWorkouts = await getRecentWorkoutsByUser(user.id, 10);
+      setWorkouts(localWorkouts.map((workout) => localWorkoutToAiWorkoutLog(workout)));
     } catch (error) {
       console.warn('[Gemi] Failed to load workout logs for insights:', error);
       setWorkouts([]);
     } finally {
       setHasLoadedWorkouts(true);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     loadWorkoutLogs();
