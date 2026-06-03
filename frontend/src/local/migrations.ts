@@ -244,6 +244,36 @@ const MIGRATIONS: Migration[] = [
       );
     },
   },
+  {
+    version: 4,
+    name: 'add_remote_ids_to_routines',
+    apply: async (db) => {
+      const ensureColumn = async (tableName: string, columnName: string, definition: string) => {
+        const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${tableName})`);
+        const hasColumn = columns.some((column) => column.name === columnName);
+        if (!hasColumn) {
+          await db.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+        }
+      };
+
+      await ensureColumn(LOCAL_TABLES.routines, 'remote_id', 'TEXT');
+      await ensureColumn(LOCAL_TABLES.routines, 'remote_template_workout_id', 'TEXT');
+      await ensureColumn(LOCAL_TABLES.routineExercises, 'remote_id', 'TEXT');
+
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_routines_remote_id ON ${LOCAL_TABLES.routines}(remote_id)`
+      );
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_routines_remote_template_workout_id ON ${LOCAL_TABLES.routines}(remote_template_workout_id)`
+      );
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_routine_exercises_remote_id ON ${LOCAL_TABLES.routineExercises}(remote_id)`
+      );
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_routine_exercises_user_routine_id ON ${LOCAL_TABLES.routineExercises}(user_id, routine_id)`
+      );
+    },
+  },
 ];
 
 type SchemaMigrationRow = {

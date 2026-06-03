@@ -1,6 +1,6 @@
 export const GEMI_USER_DATABASE_NAME = 'gemi_user.db';
 
-export const LOCAL_SCHEMA_VERSION = 3;
+export const LOCAL_SCHEMA_VERSION = 4;
 
 export const LOCAL_TABLES = {
   schemaMigrations: 'schema_migrations',
@@ -113,4 +113,41 @@ export interface CompletedWorkoutInput {
 
 export interface LocalWorkoutWithSets extends LocalWorkout {
   sets: LocalWorkoutSet[];
+}
+
+export interface LocalRoutine extends LocalBaseRecord {
+  remote_id: string | null;
+  remote_template_workout_id: string | null;
+  routine_name: string;
+}
+
+export interface LocalRoutineExercise extends LocalBaseRecord {
+  remote_id: string | null;
+  routine_id: string;
+  exercise_name: string;
+  muscle_group: string | null;
+  sort_order: number;
+  sets: number | null;
+  reps: number | null;
+  weight_kg: number | null;
+}
+
+export interface CreateLocalRoutineInput {
+  routineName: string;
+  remoteId?: string | null;
+  remoteTemplateWorkoutId?: string | null;
+  exercises: Array<{
+    id?: string;
+    remoteId?: string | null;
+    exerciseName: string;
+    muscleGroup?: string | null;
+    sortOrder: number;
+    sets?: number | null;
+    reps?: number | null;
+    weightKg?: number | null;
+  }>;
+}
+
+export interface LocalRoutineWithExercises extends LocalRoutine {
+  exercises: LocalRoutineExercise[];
 }
