@@ -2,16 +2,19 @@ import type { DietLog, DietLogCreateInput } from '@/api/dietApi';
 import type { CreateLocalDietLogInput, LocalDietLog } from '@/local/schema';
 import type { FoodLogEntry, MealId } from '@/screens/dashboard/types';
 
-export function localDietLogToFoodLogEntry(
-  log: LocalDietLog,
-  fallbackMealId: MealId = 'snack'
-): FoodLogEntry {
+function normalizeMealId(value: string | null | undefined): MealId {
+  return value === 'breakfast' || value === 'lunch' || value === 'dinner' || value === 'snack'
+    ? value
+    : 'snack';
+}
+
+export function localDietLogToFoodLogEntry(log: LocalDietLog): FoodLogEntry {
   return {
     id: log.id,
     remoteId: log.remote_id,
     syncStatus: log.sync_status,
     name: log.meal_name,
-    mealId: fallbackMealId,
+    mealId: normalizeMealId(log.meal_id),
     calories: log.calories ?? 0,
     protein: log.protein_g ?? 0,
     carbs: log.carbs_g ?? 0,
@@ -36,6 +39,7 @@ export function foodLogEntryToCreateLocalDietLogInput(
 ): CreateLocalDietLogInput {
   return {
     user_id: userId,
+    meal_id: normalizeMealId(entry.mealId),
     meal_name: entry.name,
     calories: entry.calories,
     protein_g: entry.protein,

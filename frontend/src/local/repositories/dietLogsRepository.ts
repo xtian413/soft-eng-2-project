@@ -5,6 +5,7 @@ import {
   type LocalDietLog,
   type UpdateLocalDietLogInput,
 } from '@/local/schema';
+import type { MealId } from '@/screens/dashboard/types';
 
 export interface RemoteDietLogInput {
   id: string;
@@ -21,6 +22,7 @@ const DIET_LOG_COLUMNS = [
   'id',
   'user_id',
   'remote_id',
+  'meal_id',
   'meal_name',
   'calories',
   'protein_g',
@@ -78,6 +80,12 @@ function normalizeNullableText(value: string | null | undefined) {
   return trimmed ? trimmed : null;
 }
 
+function normalizeMealId(value: string | null | undefined): MealId {
+  return value === 'breakfast' || value === 'lunch' || value === 'dinner' || value === 'snack'
+    ? value
+    : 'snack';
+}
+
 function wrapDietLogError(action: string, error: unknown): never {
   const message = error instanceof Error ? error.message : String(error);
   throw new Error(`Local diet log ${action} failed: ${message}`);
@@ -96,6 +104,7 @@ export async function createDietLog(input: CreateLocalDietLogInput): Promise<Loc
         id,
         user_id,
         remote_id,
+        meal_id,
         meal_name,
         calories,
         protein_g,
@@ -117,10 +126,11 @@ export async function createDietLog(input: CreateLocalDietLogInput): Promise<Loc
         deleted_at,
         sync_status,
         last_synced_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL)`,
       id,
       input.user_id,
       normalizeNullableText(input.remote_id),
+      normalizeMealId(input.meal_id),
       input.meal_name.trim(),
       normalizeNullableNumber(input.calories),
       normalizeNullableNumber(input.protein_g),
@@ -218,6 +228,26 @@ export async function getDietLogsByUserAndDateRange(
   }
 }
 
+export async function getUnsyncedNewDietLogsByUser(userId: string): Promise<LocalDietLog[]> {
+  try {
+    assertUserId(userId);
+
+    const db = await initializeLocalDatabase();
+    return await db.getAllAsync<LocalDietLog>(
+      `SELECT ${DIET_LOG_COLUMNS}
+       FROM ${LOCAL_TABLES.dietLogs}
+       WHERE user_id = ?
+         AND deleted_at IS NULL
+         AND sync_status IN ('pending', 'failed')
+         AND remote_id IS NULL
+       ORDER BY updated_at ASC, created_at ASC`,
+      userId
+    );
+  } catch (error) {
+    wrapDietLogError('read unsynced new', error);
+  }
+}
+
 export async function updateDietLog(
   userId: string,
   id: string,
@@ -235,6 +265,7 @@ export async function updateDietLog(
     };
 
     if (input.meal_name !== undefined) addUpdate('meal_name', input.meal_name.trim());
+    if (input.meal_id !== undefined) addUpdate('meal_id', normalizeMealId(input.meal_id));
     if (input.calories !== undefined) addUpdate('calories', normalizeNullableNumber(input.calories));
     if (input.protein_g !== undefined) addUpdate('protein_g', normalizeNullableNumber(input.protein_g));
     if (input.carbs_g !== undefined) addUpdate('carbs_g', normalizeNullableNumber(input.carbs_g));
@@ -430,6 +461,7 @@ export async function upsertRemoteDietLogForUser(
       await db.runAsync(
         `UPDATE ${LOCAL_TABLES.dietLogs}
          SET meal_name = ?,
+             meal_id = COALESCE(meal_id, 'snack'),
              calories = ?,
              protein_g = ?,
              carbs_g = ?,
@@ -469,6 +501,7 @@ export async function upsertRemoteDietLogForUser(
         id,
         user_id,
         remote_id,
+        meal_id,
         meal_name,
         calories,
         protein_g,
@@ -490,7 +523,7 @@ export async function upsertRemoteDietLogForUser(
         deleted_at,
         sync_status,
         last_synced_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 'serving', NULL, ?, ?, ?, NULL, 'synced', ?)`,
+      ) VALUES (?, ?, ?, 'snack', ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 'serving', NULL, ?, ?, ?, NULL, 'synced', ?)`,
       id,
       userId,
       remoteLog.id,

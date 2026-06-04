@@ -1,6 +1,8 @@
+import type { MealId } from '@/screens/dashboard/types';
+
 export const GEMI_USER_DATABASE_NAME = 'gemi_user.db';
 
-export const LOCAL_SCHEMA_VERSION = 4;
+export const LOCAL_SCHEMA_VERSION = 5;
 
 export const LOCAL_TABLES = {
   schemaMigrations: 'schema_migrations',
@@ -31,6 +33,7 @@ export interface LocalBaseRecord {
 
 export interface LocalDietLog extends LocalBaseRecord {
   remote_id: string | null;
+  meal_id: MealId;
   meal_name: string;
   calories: number | null;
   protein_g: number | null;
@@ -53,6 +56,7 @@ export interface CreateLocalDietLogInput {
   user_id: string;
   id?: string;
   remote_id?: string | null;
+  meal_id?: MealId;
   meal_name: string;
   calories?: number | null;
   protein_g?: number | null;

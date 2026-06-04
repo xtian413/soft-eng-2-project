@@ -1,19 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
+  AppState,
+  type AppStateStatus,
   ScrollView,
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
   TextInput,
-  Modal,
-  FlatList,
-  Dimensions,
-  ActivityIndicator,
-  SafeAreaView,
-  Platform,
 } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import { searchFoodDatabase, type GemiFoodItem } from '@/api/foodDatabaseApi';
@@ -30,28 +25,23 @@ import {
 import {
   createDietLog as createLocalDietLog,
   getDietLogByUserAndId,
+  getUnsyncedNewDietLogsByUser,
   markDietLogDeleteSynced,
   markDietLogSyncFailed,
   markDietLogSynced,
   softDeleteDietLog,
+  updateDietLog as updateLocalDietLog,
 } from '@/local/repositories/dietLogsRepository';
 import { searchLocalFoods } from '@/local/repositories/foodsRepository';
 import type { FoodLogEntry, MacroTargets, MealId } from '@/screens/dashboard/types';
+import { NutritionCarousel } from './NutritionCarousel';
+import { MealDiarySection } from './MealDiarySection';
+import { HydrationTrackerCard } from './HydrationTrackerCard';
+import { SleepRecoveryCard } from './SleepRecoveryCard';
+import { LoggedItemDetailsModal } from './LoggedItemDetailsModal';
+import { FoodSearchModal } from './FoodSearchModal';
 import {
-  Coffee,
-  Sun,
-  Moon,
-  Apple,
-  Droplet,
-  Bed,
-  Plus,
-  Trash2,
   Lock,
-  ChevronLeft,
-  ChevronRight,
-  Edit2,
-  X,
-  Info,
   Sparkles,
 } from 'lucide-react-native';
 
@@ -65,6 +55,7 @@ interface FoodTabProps {
 }
 
 type NutrientSlideType = 'energy' | 'macros' | 'micros';
+type SyncCreatedDietLogResult = { didSync: boolean; message?: string };
 
 function getErrorMessage(error: unknown) {
   if (typeof error === 'object' && error !== null) {
@@ -88,6 +79,7 @@ export function FoodTab({
 }: FoodTabProps) {
   // Nutrient carousel slide
   const [nutrientSlide, setNutrientSlide] = useState<NutrientSlideType>('energy');
+  const [visibleMicros, setVisibleMicros] = useState<string[]>(['fiber', 'sodium', 'potassium', 'calcium', 'iron', 'vitaminC']);
 
   // Hydration state
   const [waterGlassStates, setWaterGlassStates] = useState<boolean[]>(Array(8).fill(false));
@@ -165,6 +157,8 @@ export function FoodTab({
   const [configUnit, setConfigUnit] = useState('portion');
   const [configWeight, setConfigWeight] = useState(100);
   const latestSearchRef = useRef(0);
+  const isRetryingDietLogsRef = useRef(false);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   // Viewing Logged Item Detail Modal State
   const [viewingLoggedItem, setViewingLoggedItem] = useState<FoodLogEntry | null>(null);
@@ -173,20 +167,33 @@ export function FoodTab({
   const [isSavingLog, setIsSavingLog] = useState(false);
 
   const syncCreatedDietLogToRemote = useCallback(
-    async (localId: string, remoteInput: DietLogCreateInput) => {
-      if (!userId) return;
+    async (
+      localId: string,
+      remoteInput: DietLogCreateInput,
+      options?: { showFailureToast?: boolean; refreshAfterSync?: boolean }
+    ): Promise<SyncCreatedDietLogResult> => {
+      if (!userId) return { didSync: false, message: 'Missing authenticated user.' };
+
+      const showFailureToast = options?.showFailureToast ?? true;
+      const refreshAfterSync = options?.refreshAfterSync ?? true;
 
       try {
         const remoteLog = await createRemoteDietLog(remoteInput);
         await markDietLogSynced(userId, localId, remoteLog.id);
-        await refreshFoodLogs();
+        if (refreshAfterSync) {
+          await refreshFoodLogs();
+        }
+        return { didSync: true };
       } catch (error) {
         const message = getErrorMessage(error);
         console.error('[Gemi] Failed to sync local diet log to backend:', message);
         await markDietLogSyncFailed(userId, localId).catch((markError) => {
           console.error('[Gemi] Failed to mark local diet log sync failed:', markError);
         });
-        triggerToast(`Saved locally. Remote sync pending: ${message}`);
+        if (showFailureToast) {
+          triggerToast(`Saved locally. Remote sync pending: ${message}`);
+        }
+        return { didSync: false, message };
       }
     },
     [refreshFoodLogs, triggerToast, userId]
@@ -207,7 +214,7 @@ export function FoodTab({
       const localLog = await createLocalDietLog(
         foodLogEntryToCreateLocalDietLogInput(userId, entry, loggedAt, sourceFoodId)
       );
-      const localEntry = localDietLogToFoodLogEntry(localLog, entry.mealId);
+      const localEntry = localDietLogToFoodLogEntry(localLog);
       const remoteInput = foodLogEntryToRemoteCreateInput(entry, loggedAt);
 
       setFoodLogs((prev) => [...prev, localEntry]);
@@ -219,6 +226,50 @@ export function FoodTab({
     [setFoodLogs, syncCreatedDietLogToRemote, triggerToast, userId]
   );
 
+  const retryPendingDietLogCreates = useCallback(
+    async (targetUserId: string) => {
+      if (isRetryingDietLogsRef.current) {
+        console.log('[FoodTab] Diet-log create retry skipped: already running');
+        return;
+      }
+
+      isRetryingDietLogsRef.current = true;
+      let shouldRefreshLogs = false;
+      try {
+        console.log('[FoodTab] Diet-log create retry begin');
+        const unsyncedLogs = await getUnsyncedNewDietLogsByUser(targetUserId);
+        console.log(`[FoodTab] Unsynced new diet logs found: ${unsyncedLogs.length}`);
+
+        for (const localLog of unsyncedLogs) {
+          console.log(`[FoodTab] Retrying local diet log: ${localLog.id}`);
+          const entry = localDietLogToFoodLogEntry(localLog);
+          const remoteInput = foodLogEntryToRemoteCreateInput(entry, localLog.logged_at);
+          const result = await syncCreatedDietLogToRemote(localLog.id, remoteInput, {
+            showFailureToast: false,
+            refreshAfterSync: false,
+          });
+
+          if (result.didSync) {
+            shouldRefreshLogs = true;
+            console.log(`[FoodTab] Diet-log create retry synced: ${localLog.id}`);
+          } else {
+            console.log(`[FoodTab] Diet-log create retry failed: ${result.message ?? 'Unknown error'}`);
+          }
+        }
+
+        if (shouldRefreshLogs) {
+          await refreshFoodLogs();
+        }
+        console.log('[FoodTab] Diet-log create retry complete');
+      } catch (error) {
+        console.log(`[FoodTab] Diet-log create retry failed: ${getErrorMessage(error)}`);
+      } finally {
+        isRetryingDietLogsRef.current = false;
+      }
+    },
+    [refreshFoodLogs, syncCreatedDietLogToRemote]
+  );
+
   // Custom Food Form
   const [customName, setCustomName] = useState('');
   const [customCals, setCustomCals] = useState('');
@@ -226,7 +277,6 @@ export function FoodTab({
   const [customCarbs, setCustomCarbs] = useState('');
   const [customFat, setCustomFat] = useState('');
   const [customUnit, setCustomUnit] = useState('serving');
-  const [customWeight, setCustomWeight] = useState('100');
 
   // Load food database results locally first, then fall back to the backend.
   const loadFoodResults = useCallback(async (query: string) => {
@@ -278,6 +328,30 @@ export function FoodTab({
     }, delay);
     return () => clearTimeout(timer);
   }, [isModalOpen, searchQuery, selectedCategory, loadFoodResults]);
+
+  useEffect(() => {
+    if (!userId) return;
+    void retryPendingDietLogCreates(userId);
+  }, [retryPendingDietLogCreates, userId]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const previousAppState = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      if (
+        userId &&
+        nextAppState === 'active' &&
+        (previousAppState === 'background' || previousAppState === 'inactive')
+      ) {
+        void retryPendingDietLogCreates(userId);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [retryPendingDietLogCreates, userId]);
 
   // Derived macros totals
   const proteinTotal = Number(foodLogs.reduce((acc, f) => acc + f.protein, 0).toFixed(1));
@@ -480,194 +554,85 @@ export function FoodTab({
     }
   };
 
-  const renderMealIcon = (mealId: MealId) => {
-    switch (mealId) {
-      case 'breakfast':
-        return <Coffee size={18} color="#fd761a" style={styles.mealIcon} />;
-      case 'lunch':
-        return <Sun size={18} color="#eab308" style={styles.mealIcon} />;
-      case 'dinner':
-        return <Moon size={18} color="#6366f1" style={styles.mealIcon} />;
-      default:
-        return <Apple size={18} color="#22c55e" style={styles.mealIcon} />;
+  const handleUpdateEntry = async (
+    entry: FoodLogEntry,
+    nextAmount: number,
+    nextMealId: MealId
+  ) => {
+    if (!userId) {
+      triggerToast('Please log in before editing food logs.');
+      return;
+    }
+
+    if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
+      triggerToast('Enter an amount greater than 0.');
+      return;
+    }
+
+    if (isSavingLog) return;
+
+    const originalAmount = entry.servingSize > 0 ? entry.servingSize : 1;
+    const multiplier = nextAmount / originalAmount;
+    const updatedEntry: FoodLogEntry = {
+      ...entry,
+      mealId: nextMealId,
+      calories: Math.round(entry.calories * multiplier),
+      protein: Number((entry.protein * multiplier).toFixed(1)),
+      carbs: Number((entry.carbs * multiplier).toFixed(1)),
+      fat: Number((entry.fat * multiplier).toFixed(1)),
+      fiber: Number((entry.fiber * multiplier).toFixed(1)),
+      sodium: Math.round(entry.sodium * multiplier),
+      potassium: Math.round(entry.potassium * multiplier),
+      calcium: Math.round(entry.calcium * multiplier),
+      iron: Number((entry.iron * multiplier).toFixed(2)),
+      vitaminC: Number((entry.vitaminC * multiplier).toFixed(1)),
+      folate: Math.round(entry.folate * multiplier),
+      servingSize: nextAmount,
+    };
+
+    setIsSavingLog(true);
+    try {
+      const updatedLocalLog = await updateLocalDietLog(userId, entry.id, {
+        meal_id: updatedEntry.mealId,
+        meal_name: updatedEntry.name,
+        calories: updatedEntry.calories,
+        protein_g: updatedEntry.protein,
+        carbs_g: updatedEntry.carbs,
+        fat_g: updatedEntry.fat,
+        fiber_g: updatedEntry.fiber,
+        sodium_mg: updatedEntry.sodium,
+        potassium_mg: updatedEntry.potassium,
+        calcium_mg: updatedEntry.calcium,
+        iron_mg: updatedEntry.iron,
+        vitamin_c_mg: updatedEntry.vitaminC,
+        folate_mcg: updatedEntry.folate,
+        serving_size: updatedEntry.servingSize,
+        serving_unit: updatedEntry.servingUnit,
+      });
+      const localEntry = localDietLogToFoodLogEntry(updatedLocalLog);
+
+      setFoodLogs((prev) => prev.map((item) => (item.id === entry.id ? localEntry : item)));
+      setViewingLoggedItem(null);
+      triggerToast(`Updated ${localEntry.name}`);
+    } catch (err) {
+      const message = getErrorMessage(err);
+      console.error('[Gemi] Failed to update local diet log:', message);
+      triggerToast(`Update failed: ${message}`);
+    } finally {
+      setIsSavingLog(false);
     }
   };
-
-  // Meal defs
-  const mealDefs: { id: MealId; name: string }[] = [
-    { id: 'breakfast', name: 'Breakfast' },
-    { id: 'lunch',     name: 'Lunch' },
-    { id: 'dinner',    name: 'Dinner' },
-    { id: 'snack',     name: 'Snacks & Extras' },
-  ];
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Scrollable Nutrient Targets Panel */}
-        <View style={styles.carouselContainer}>
-          <View style={styles.carouselHeader}>
-            <Text style={styles.carouselHeaderTitle}>
-              {nutrientSlide === 'energy' && 'Daily Energy Balance'}
-              {nutrientSlide === 'macros' && 'Daily Macronutrients'}
-              {nutrientSlide === 'micros' && 'Daily Micronutrient Highlights'}
-            </Text>
-
-            <View style={styles.carouselArrows}>
-              <TouchableOpacity
-                onPress={() =>
-                  setNutrientSlide((p) => (p === 'energy' ? 'micros' : p === 'macros' ? 'energy' : 'macros'))
-                }
-                style={styles.arrowBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Previous nutrition summary"
-                hitSlop={8}
-              >
-                <ChevronLeft size={16} color={Colors.primary} />
-              </TouchableOpacity>
-              <View style={styles.carouselDots}>
-                <View style={[styles.dot, nutrientSlide === 'energy' && styles.dotActive]} />
-                <View style={[styles.dot, nutrientSlide === 'macros' && styles.dotActive]} />
-                <View style={[styles.dot, nutrientSlide === 'micros' && styles.dotActive]} />
-              </View>
-              <TouchableOpacity
-                onPress={() =>
-                  setNutrientSlide((p) => (p === 'energy' ? 'macros' : p === 'macros' ? 'micros' : 'energy'))
-                }
-                style={styles.arrowBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Next nutrition summary"
-                hitSlop={8}
-              >
-                <ChevronRight size={16} color={Colors.primary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Slide 1: Energy rings */}
-          {nutrientSlide === 'energy' && (
-            <View style={styles.energyRingsRow}>
-              {/* Target */}
-              <View style={styles.ringCol}>
-                <Svg width="70" height="70" viewBox="0 0 100 100">
-                  <Circle cx="50" cy="50" r="42" stroke="#e5eeff" strokeWidth="8" fill="transparent" />
-                  <Circle
-                    cx="50"
-                    cy="50"
-                    r="42"
-                    stroke={Colors.primary}
-                    strokeWidth="8"
-                    fill="transparent"
-                    strokeDasharray={263.8}
-                    strokeDashoffset={0}
-                  />
-                </Svg>
-                <View style={styles.miniRingLabel}>
-                  <Text style={styles.miniRingNum}>{targets.calories}</Text>
-                  <Text style={styles.miniRingDesc}>Target</Text>
-                </View>
-              </View>
-
-              {/* Consumed */}
-              <View style={styles.ringCol}>
-                <Svg width="70" height="70" viewBox="0 0 100 100">
-                  <Circle cx="50" cy="50" r="42" stroke="#e5eeff" strokeWidth="8" fill="transparent" />
-                  <Circle
-                    cx="50"
-                    cy="50"
-                    r="42"
-                    stroke={Colors.primaryContainer}
-                    strokeWidth="8"
-                    fill="transparent"
-                    strokeDasharray={263.8}
-                    strokeDashoffset={263.8 - (263.8 * Math.min(100, (caloriesEaten / targets.calories) * 100)) / 100}
-                    transform="rotate(-90 50 50)"
-                  />
-                </Svg>
-                <View style={styles.miniRingLabel}>
-                  <Text style={styles.miniRingNum}>{caloriesEaten}</Text>
-                  <Text style={styles.miniRingDesc}>Eaten</Text>
-                </View>
-              </View>
-
-              {/* Remaining */}
-              <View style={styles.ringCol}>
-                <Svg width="70" height="70" viewBox="0 0 100 100">
-                  <Circle cx="50" cy="50" r="42" stroke="#e5eeff" strokeWidth="8" fill="transparent" />
-                  <Circle
-                    cx="50"
-                    cy="50"
-                    r="42"
-                    stroke={Colors.secondaryContainer}
-                    strokeWidth="8"
-                    fill="transparent"
-                    strokeDasharray={263.8}
-                    strokeDashoffset={263.8 - (263.8 * Math.min(100, (Math.max(0, targets.calories - caloriesEaten) / targets.calories) * 100)) / 100}
-                    transform="rotate(-90 50 50)"
-                  />
-                </Svg>
-                <View style={styles.miniRingLabel}>
-                  <Text style={styles.miniRingNum}>{Math.max(0, targets.calories - caloriesEaten)}</Text>
-                  <Text style={styles.miniRingDesc}>Left</Text>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* Slide 2: Macronutrients summary */}
-          {nutrientSlide === 'macros' && (
-            <View style={styles.macrosProgressWrap}>
-              <View style={styles.macroProgressRow}>
-                <Text style={styles.macroLabel}>Protein ({Math.round(proteinTotal)}g / {targets.protein}g)</Text>
-                <View style={styles.progressLineBg}>
-                  <View style={[styles.progressLineFill, { width: `${proteinPercent}%`, backgroundColor: Colors.proteinAccent }]} />
-                </View>
-              </View>
-              <View style={styles.macroProgressRow}>
-                <Text style={styles.macroLabel}>Carbs ({Math.round(carbsTotal)}g / {targets.carbs}g)</Text>
-                <View style={styles.progressLineBg}>
-                  <View style={[styles.progressLineFill, { width: `${carbsPercent}%`, backgroundColor: Colors.tertiaryFixedDim }]} />
-                </View>
-              </View>
-              <View style={styles.macroProgressRow}>
-                <Text style={styles.macroLabel}>Fats ({Math.round(fatsTotal)}g / {targets.fats}g)</Text>
-                <View style={styles.progressLineBg}>
-                  <View style={[styles.progressLineFill, { width: `${fatsPercent}%`, backgroundColor: Colors.secondaryContainer }]} />
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* Slide 3: Micronutrients tracking */}
-          {nutrientSlide === 'micros' && (
-            <View style={styles.microsGrid}>
-              <View style={styles.microBox}>
-                <Text style={styles.microVal}>{fiberTotal}g</Text>
-                <Text style={styles.microName}>Fiber</Text>
-              </View>
-              <View style={styles.microBox}>
-                <Text style={styles.microVal}>{sodiumTotal}mg</Text>
-                <Text style={styles.microName}>Sodium</Text>
-              </View>
-              <View style={styles.microBox}>
-                <Text style={styles.microVal}>{potassiumTotal}mg</Text>
-                <Text style={styles.microName}>Potassium</Text>
-              </View>
-              <View style={styles.microBox}>
-                <Text style={styles.microVal}>{calciumTotal}mg</Text>
-                <Text style={styles.microName}>Calcium</Text>
-              </View>
-              <View style={styles.microBox}>
-                <Text style={styles.microVal}>{ironTotal}mg</Text>
-                <Text style={styles.microName}>Iron</Text>
-              </View>
-              <View style={styles.microBox}>
-                <Text style={styles.microVal}>{vitaminCTotal}mg</Text>
-                <Text style={styles.microName}>Vit C</Text>
-              </View>
-            </View>
-          )}
-        </View>
+        <NutritionCarousel
+          foodLogs={foodLogs}
+          targets={targets}
+          visibleMicros={visibleMicros}
+          setVisibleMicros={setVisibleMicros}
+          triggerToast={triggerToast}
+        />
 
         {/* AI Natural Language Log Card */}
         <View style={styles.aiLogCard}>
@@ -696,627 +661,87 @@ export function FoodTab({
           </View>
         </View>
 
-        {/* Meal Diary Sections */}
-        {mealDefs.map((meal) => {
-          const logged = foodLogs.filter((x) => x.mealId === meal.id);
-          const mealCals = Math.round(logged.reduce((s, x) => s + x.calories, 0));
+        <MealDiarySection
+          foodLogs={foodLogs}
+          onOpenSearch={handleOpenSearchModal}
+          onItemPress={setViewingLoggedItem}
+          onDeleteEntry={handleDeleteEntry}
+        />
 
-          return (
-            <View key={meal.id} style={styles.mealSectionCard}>
-              <View style={styles.mealSectionHeader}>
-                <View style={styles.mealHeaderTitleGroup}>
-                  {renderMealIcon(meal.id)}
-                  <View>
-                    <Text style={styles.mealSectionName}>{meal.name}</Text>
-                    <Text style={styles.mealSectionSubtext}>
-                      {logged.length} items · {mealCals} kcal logged
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={styles.mealAddCircleBtn}
-                  onPress={() => handleOpenSearchModal(meal.id)}
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Add food to ${meal.name}`}
-                  hitSlop={8}
-                >
-                  <Plus size={14} color={Colors.primaryContainer} strokeWidth={3} />
-                </TouchableOpacity>
-              </View>
+        <HydrationTrackerCard
+          hydrationGoal={hydrationGoal}
+          setHydrationGoal={setHydrationGoal}
+          waterGlassStates={waterGlassStates}
+          setWaterGlassStates={setWaterGlassStates}
+          triggerToast={triggerToast}
+        />
 
-              {/* Logged Item Sub-rows */}
-              {logged.length > 0 && (
-                <View style={styles.loggedRowsList}>
-                  {logged.map((entry) => (
-                    <View key={entry.id} style={styles.loggedRow}>
-                      <TouchableOpacity
-                        style={{ flex: 1 }}
-                        onPress={() => setViewingLoggedItem(entry)}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel={`View details for ${entry.name}`}
-                      >
-                        <Text style={styles.loggedRowName}>{entry.name}</Text>
-                        <Text style={styles.loggedRowMacros}>
-                          {entry.servingSize} {entry.servingUnit} · {entry.calories} kcal · {entry.protein}P · {entry.carbs}C · {entry.fat}F · Tap for details
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.deleteRowBtn}
-                        onPress={() => handleDeleteEntry(entry.id)}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Delete ${entry.name}`}
-                        hitSlop={8}
-                      >
-                        <Trash2 size={14} color={Colors.error} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          );
-        })}
-
-        {/* Hydration Tracker */}
-        <View style={styles.hydrationCard}>
-          <View style={styles.hydrationHeader}>
-            <View style={styles.cardTitleRow}>
-              <Droplet size={14} color={Colors.primary} fill={Colors.primary} style={{ marginRight: 4 }} />
-              <Text style={styles.cardTitle}>DAILY HYDRATION</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.hydrationGoalLabel}>Goal: {(hydrationGoal / 1000).toFixed(2)}L</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setIsEditingHydration(true);
-                  setHydrationGoalInput(String(hydrationGoal));
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel="Edit hydration goal"
-              >
-                <Edit2 size={12} color={Colors.outline} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Inline goal selector */}
-          {isEditingHydration && (
-            <View style={styles.hydrationGoalEditor}>
-              <Text style={styles.editorLabel}>Set Daily Target Goal (mL):</Text>
-              <View style={styles.chipsRow}>
-                {[1500, 2000, 2500, 3000, 3500, 4000].map((ml) => (
-                  <TouchableOpacity
-                    key={ml}
-                    style={[styles.editorChip, hydrationGoal === ml && styles.editorChipActive]}
-                    onPress={() => updateHydrationGoal(ml)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Set hydration goal to ${ml} milliliters`}
-                    accessibilityState={{ selected: hydrationGoal === ml }}
-                  >
-                    <Text style={[styles.editorChipText, hydrationGoal === ml && styles.editorChipTextActive]}>
-                      {ml >= 1000 ? `${ml / 1000}L` : `${ml}ml`}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <View style={styles.customGoalRow}>
-                <TextInput
-                  style={styles.customGoalInput}
-                  keyboardType="numeric"
-                  placeholder="Custom mL (e.g. 3500)"
-                  placeholderTextColor={Colors.outline}
-                  value={hydrationGoalInput}
-                  onChangeText={setHydrationGoalInput}
-                  accessibilityLabel="Custom hydration goal in milliliters"
-                />
-                <TouchableOpacity
-                  style={styles.customGoalBtn}
-                  onPress={() => {
-                    const ml = Number(hydrationGoalInput);
-                    if (ml >= 250 && ml <= 6000) {
-                      updateHydrationGoal(ml);
-                    } else {
-                      triggerToast('Enter target between 250 and 6000 mL!');
-                    }
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Set custom hydration goal"
-                >
-                  <Text style={styles.customGoalBtnText}>Set</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.customGoalClose}
-                  onPress={() => setIsEditingHydration(false)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close hydration goal editor"
-                  hitSlop={8}
-                >
-                  <X size={18} color={Colors.outline} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          <Text style={styles.hydrationSubtext}>
-            {waterConsumedMl.toLocaleString()} ml logged / {waterGlassCount} glasses
-          </Text>
-
-          {/* Fluid hydration progress indicator line */}
-          <View style={styles.hydrationProgressContainer}>
-            <View
-              style={[
-                styles.hydrationProgressFill,
-                { width: `${Math.min(100, (waterConsumedMl / hydrationGoal) * 100)}%` },
-              ]}
-            />
-          </View>
-
-          <View style={styles.glassRow}>
-            {Array.from({ length: waterGlassCount }).map((_, idx) => {
-              const filled = waterGlassStates[idx] === true;
-              return (
-                <TouchableOpacity
-                  key={idx}
-                  style={[styles.glassBtn, filled && styles.glassBtnFilled]}
-                  onPress={() => {
-                    handleWaterGlassToggle(idx);
-                    if (idx + 1 === waterGlassCount && !filled) {
-                      triggerToast('Perfect daily hydration met!');
-                    }
-                  }}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${filled ? 'Remove' : 'Add'} water glass ${idx + 1}`}
-                  accessibilityState={{ checked: filled }}
-                >
-                  <Droplet
-                    size={16}
-                    color={filled ? '#0ea5e9' : 'rgba(110, 120, 129, 0.4)'}
-                    fill={filled ? '#0ea5e9' : 'transparent'}
-                  />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Sleep Tracker Card */}
-        <View style={styles.card}>
-          <View style={styles.sleepHeader}>
-            <View style={styles.cardTitleRow}>
-              <Bed size={14} color="#8b5cf6" style={{ marginRight: 4 }} />
-              <Text style={styles.cardTitle}>SLEEP TRACKER</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[styles.sleepHoursText, { color: sleepMetrics.sleepQualityColor }]}>
-                {sleepHours} hrs
-              </Text>
-              <Text style={[styles.sleepQualityText, { color: sleepMetrics.sleepQualityColor }]}>
-                {sleepMetrics.sleepQuality}
-              </Text>
-            </View>
-          </View>
-
-          <Text style={styles.sleepSubtext}>Daily recovery target: 8.0 hrs · last night → morning</Text>
-
-          {/* Sleep pickers */}
-          <View style={styles.sleepInputsRow}>
-            <View style={styles.sleepInputCol}>
-              <Text style={styles.sleepInputLabel}>Slept at (last night)</Text>
-              <TextInput
-                style={styles.sleepTextInput}
-                value={bedtime}
-                onChangeText={setBedtime}
-                placeholder="23:00"
-                placeholderTextColor={Colors.outline}
-                accessibilityLabel="Sleep start time"
-              />
-            </View>
-            <View style={styles.sleepInputCol}>
-              <Text style={styles.sleepInputLabel}>Woke up (morning)</Text>
-              <TextInput
-                style={styles.sleepTextInput}
-                value={waketime}
-                onChangeText={setWaketime}
-                placeholder="06:30"
-                placeholderTextColor={Colors.outline}
-                accessibilityLabel="Wake time"
-              />
-            </View>
-          </View>
-
-          {/* Sleep recovery progress bar */}
-          <View style={styles.sleepBarRow}>
-            <View style={styles.sleepProgressBg}>
-              <View
-                style={[
-                  styles.sleepProgressFill,
-                  {
-                    width: `${Math.min(100, (sleepHours / 9) * 100)}%`,
-                    backgroundColor: sleepMetrics.sleepQualityColor,
-                  },
-                ]}
-              />
-            </View>
-            <Text style={styles.sleepGoalLabelText}>Goal: 8h</Text>
-          </View>
-
-          {sleepHours < 6 && (
-            <View style={styles.sleepWarningRow}>
-              <Info size={13} color="#ef4444" style={{ marginRight: 6 }} />
-              <Text style={styles.sleepWarningText}>
-                Less than 6h — recovery may be impaired. Aim for 7–9h.
-              </Text>
-            </View>
-          )}
-        </View>
+        <SleepRecoveryCard
+          bedtime={bedtime}
+          setBedtime={setBedtime}
+          waketime={waketime}
+          setWaketime={setWaketime}
+          triggerToast={triggerToast}
+        />
 
         {/* Privacy Note */}
         <View style={styles.privacyWrap}>
           <View style={styles.privacyRow}>
             <Lock size={12} color={Colors.outline} style={{ marginRight: 6 }} />
-            <Text style={styles.privacyText}>Food search results are fetched from the backend. Logged entries stay on this device.</Text>
+            <Text style={styles.privacyText}>Food logs stay local-first and sync when available.</Text>
           </View>
         </View>
       </ScrollView>
 
-      {/* Database Search & Modal Sheet */}
-      <Modal visible={isModalOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsModalOpen(false)}>
-        <SafeAreaView style={styles.modalContainer}>
-          {selectedItem === null ? (
-            <View style={styles.modalBody}>
-              {/* Modal Title bar */}
-              <View style={styles.modalTitleRow}>
-                <Text style={styles.modalTitle}>Add Food to {activeMealId}</Text>
-                <TouchableOpacity
-                  onPress={() => setIsModalOpen(false)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close food search"
-                  hitSlop={8}
-                >
-                  <Text style={styles.closeModalText}>Close</Text>
-                </TouchableOpacity>
-              </View>
+      <FoodSearchModal
+        visible={isModalOpen}
+        activeMealId={activeMealId}
+        selectedCategory={selectedCategory}
+        searchQuery={searchQuery}
+        searchResults={dbList}
+        selectedItem={selectedItem}
+        loading={isLoadingDb}
+        isSaving={isSavingLog}
+        configQuantity={configQuantity}
+        configUnit={configUnit}
+        configWeight={configWeight}
+        customName={customName}
+        customCals={customCals}
+        customProtein={customProtein}
+        customCarbs={customCarbs}
+        customFat={customFat}
+        customUnit={customUnit}
+        onClose={() => {
+          setSelectedItem(null);
+          setIsModalOpen(false);
+        }}
+        onBackFromSelected={() => setSelectedItem(null)}
+        onSearchQueryChange={setSearchQuery}
+        onSelectedCategoryChange={setSelectedCategory}
+        onSelectFood={handleSelectSearchItem}
+        onAddSelectedFood={logSelectedItem}
+        onAddCustomFood={handleAddCustomFood}
+        onMealChange={setActiveMealId}
+        setConfigQuantity={setConfigQuantity}
+        setConfigUnit={setConfigUnit}
+        setConfigWeight={setConfigWeight}
+        setCustomName={setCustomName}
+        setCustomCals={setCustomCals}
+        setCustomProtein={setCustomProtein}
+        setCustomCarbs={setCustomCarbs}
+        setCustomFat={setCustomFat}
+        setCustomUnit={setCustomUnit}
+      />
 
-              {/* Tab Selector */}
-              <View style={styles.modalTabsRow}>
-                <TouchableOpacity
-                  style={[styles.modalTabPill, selectedCategory === 'All' && styles.modalTabPillActive]}
-                  onPress={() => setSelectedCategory('All')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Show USDA staples"
-                  accessibilityState={{ selected: selectedCategory === 'All' }}
-                >
-                  <Text style={[styles.modalTabPillText, selectedCategory === 'All' && styles.modalTabPillTextActive]}>USDA Staples</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalTabPill, selectedCategory === 'Custom' && styles.modalTabPillActive]}
-                  onPress={() => setSelectedCategory('Custom')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Create custom food"
-                  accessibilityState={{ selected: selectedCategory === 'Custom' }}
-                >
-                  <Text style={[styles.modalTabPillText, selectedCategory === 'Custom' && styles.modalTabPillTextActive]}>+ Custom Food</Text>
-                </TouchableOpacity>
-              </View>
-
-              {selectedCategory !== 'Custom' ? (
-                <>
-                  {/* Search Field */}
-                  <View style={styles.searchBarContainer}>
-                    <TextInput
-                      style={styles.searchBarInput}
-                      placeholder="Search USDA database..."
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                      placeholderTextColor={Colors.outline}
-                      accessibilityLabel="Search food database"
-                    />
-                  </View>
-
-                  {/* Results List */}
-                  {isLoadingDb ? (
-                    <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
-                  ) : (
-                    <FlatList
-                      data={dbList}
-                      keyExtractor={(item) => item.id}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          style={styles.searchResultRow}
-                          onPress={() => handleSelectSearchItem(item)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Select ${item.name}`}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.resultItemName}>{item.name}</Text>
-                            <Text style={styles.resultItemCategory}>{item.category}</Text>
-                            <Text style={styles.resultItemMacros}>
-                              P: {item.protein}g · C: {item.carbs}g · F: {item.fat}g (per 100g)
-                            </Text>
-                          </View>
-                          <View style={styles.resultItemCalsBadge}>
-                            <Text style={styles.resultItemCalsText}>{item.calories}</Text>
-                            <Text style={styles.resultItemCalsLabel}>kcal</Text>
-                          </View>
-                        </TouchableOpacity>
-                      )}
-                    />
-                  )}
-                </>
-              ) : (
-                /* Custom Food Form */
-                <ScrollView style={styles.customFoodScroll}>
-                  <Text style={styles.formSectionTitle}>Create reusable custom food entry:</Text>
-                  <View style={styles.customFormField}>
-                    <Text style={styles.formInputLabel}>Food Name</Text>
-                    <TextInput style={styles.formTextInput} placeholder="e.g. Homemade Protein Cookie" value={customName} onChangeText={setCustomName} accessibilityLabel="Custom food name" />
-                  </View>
-                  <View style={styles.customFormField}>
-                    <Text style={styles.formInputLabel}>Calories (kcal)</Text>
-                    <TextInput style={styles.formTextInput} placeholder="0" value={customCals} onChangeText={setCustomCals} keyboardType="numeric" accessibilityLabel="Custom food calories" />
-                  </View>
-                  <View style={styles.customFormField}>
-                    <Text style={styles.formInputLabel}>Protein (g)</Text>
-                    <TextInput style={styles.formTextInput} placeholder="0" value={customProtein} onChangeText={setCustomProtein} keyboardType="numeric" accessibilityLabel="Custom food protein grams" />
-                  </View>
-                  <View style={styles.customFormField}>
-                    <Text style={styles.formInputLabel}>Carbohydrates (g)</Text>
-                    <TextInput style={styles.formTextInput} placeholder="0" value={customCarbs} onChangeText={setCustomCarbs} keyboardType="numeric" accessibilityLabel="Custom food carbohydrates grams" />
-                  </View>
-                  <View style={styles.customFormField}>
-                    <Text style={styles.formInputLabel}>Fat (g)</Text>
-                    <TextInput style={styles.formTextInput} placeholder="0" value={customFat} onChangeText={setCustomFat} keyboardType="numeric" accessibilityLabel="Custom food fat grams" />
-                  </View>
-                  <TouchableOpacity
-                    style={styles.formSubmitBtn}
-                    onPress={handleAddCustomFood}
-                    accessibilityRole="button"
-                    accessibilityLabel="Log custom food"
-                  >
-                    <Text style={styles.formSubmitBtnText}>Log Custom Food</Text>
-                  </TouchableOpacity>
-                </ScrollView>
-              )}
-            </View>
-          ) : (
-            /* Selected configurator detail overlay */
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.detailTitleBar}>
-                <TouchableOpacity
-                  onPress={() => setSelectedItem(null)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Back to food results"
-                >
-                  <Text style={styles.detailBackText}>‹ Back</Text>
-                </TouchableOpacity>
-                <Text style={styles.detailItemTitle} numberOfLines={1}>{selectedItem.name}</Text>
-              </View>
-
-              {/* Quantity config */}
-              <View style={styles.portionSection}>
-                <Text style={styles.sectionHeading}>Portion Configurator:</Text>
-                <View style={styles.portionRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.formInputLabel}>{configUnit === '1g' ? 'Grams:' : 'Quantity (Servings)'}</Text>
-                    <TextInput
-                      style={styles.formTextInput}
-                      value={String(configQuantity)}
-                      onChangeText={(v) => setConfigQuantity(Number(v) || 1)}
-                      keyboardType="numeric"
-                      accessibilityLabel="Food quantity"
-                    />
-                  </View>
-                  <View style={{ flex: 1.5, marginLeft: spacing.md }}>
-                    <Text style={styles.formInputLabel}>Serving Unit</Text>
-                    <View style={styles.servingUnitsRow}>
-                      <TouchableOpacity
-                        style={[styles.unitChip, configUnit === selectedItem.defaultServingUnit && styles.unitChipActive]}
-                        onPress={() => { setConfigUnit(selectedItem.defaultServingUnit); setConfigWeight(selectedItem.defaultServingSize); }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Use ${selectedItem.defaultServingUnit}`}
-                        accessibilityState={{ selected: configUnit === selectedItem.defaultServingUnit }}
-                      >
-                        <Text style={[styles.unitChipText, configUnit === selectedItem.defaultServingUnit && styles.unitChipTextActive]}>{selectedItem.defaultServingUnit} ({selectedItem.defaultServingSize}g)</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.unitChip, configUnit === '100g' && styles.unitChipActive]}
-                        onPress={() => { setConfigUnit('100g'); setConfigWeight(100); }}
-                        accessibilityRole="button"
-                        accessibilityLabel="Use 100 grams"
-                        accessibilityState={{ selected: configUnit === '100g' }}
-                      >
-                        <Text style={[styles.unitChipText, configUnit === '100g' && styles.unitChipTextActive]}>100g</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.unitChip, configUnit === '1g' && styles.unitChipActive]}
-                        onPress={() => { setConfigUnit('1g'); setConfigWeight(1); }}
-                        accessibilityRole="button"
-                        accessibilityLabel="Use 1 gram"
-                        accessibilityState={{ selected: configUnit === '1g' }}
-                      >
-                        <Text style={[styles.unitChipText, configUnit === '1g' && styles.unitChipTextActive]}>1g</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              {/* Nutrition Summary Box */}
-              {(() => {
-                const mult = configQuantity * (configWeight / 100);
-                const scaledKcal = Math.round(selectedItem.calories * mult);
-                const scaledProt = (selectedItem.protein * mult).toFixed(1);
-                const scaledCarb = (selectedItem.carbs * mult).toFixed(1);
-                const scaledFat = (selectedItem.fat * mult).toFixed(1);
-
-                return (
-                  <>
-                    <View style={styles.summaryBento}>
-                      <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.primary, borderLeftWidth: 3 }]}>
-                        <Text style={styles.summaryBigVal}>{scaledKcal}</Text>
-                        <Text style={styles.summaryLabel}>Calories</Text>
-                      </View>
-                      <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.proteinAccent, borderLeftWidth: 3 }]}>
-                        <Text style={styles.summaryBigVal}>{scaledProt}g</Text>
-                        <Text style={styles.summaryLabel}>Protein</Text>
-                      </View>
-                      <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.tertiaryFixedDim, borderLeftWidth: 3 }]}>
-                        <Text style={styles.summaryBigVal}>{scaledCarb}g</Text>
-                        <Text style={styles.summaryLabel}>Carbs</Text>
-                      </View>
-                      <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.secondaryContainer, borderLeftWidth: 3 }]}>
-                        <Text style={styles.summaryBigVal}>{scaledFat}g</Text>
-                        <Text style={styles.summaryLabel}>Fats</Text>
-                      </View>
-                    </View>
-
-                    {/* Detailed Micronutrients Breakdown list */}
-                    <View style={styles.microsListCard}>
-                      <Text style={styles.microsCardTitle}>Micronutrient Highlights:</Text>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Fiber</Text>
-                        <Text style={styles.microDetailVal}>{(selectedItem.fiber * mult).toFixed(1)}g</Text>
-                      </View>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Sodium</Text>
-                        <Text style={styles.microDetailVal}>{Math.round(selectedItem.sodium * mult)}mg</Text>
-                      </View>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Potassium</Text>
-                        <Text style={styles.microDetailVal}>{Math.round(selectedItem.potassium * mult)}mg</Text>
-                      </View>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Calcium</Text>
-                        <Text style={styles.microDetailVal}>{Math.round(selectedItem.calcium * mult)}mg</Text>
-                      </View>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Iron</Text>
-                        <Text style={styles.microDetailVal}>{(selectedItem.iron * mult).toFixed(2)}mg</Text>
-                      </View>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Vitamin C</Text>
-                        <Text style={styles.microDetailVal}>{(selectedItem.vitaminC * mult).toFixed(1)}mg</Text>
-                      </View>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Folate</Text>
-                        <Text style={styles.microDetailVal}>{Math.round(selectedItem.folate * mult)}µg</Text>
-                      </View>
-                    </View>
-                  </>
-                );
-              })()}
-
-              <TouchableOpacity
-                style={[styles.finalLogBtn, { marginTop: spacing.md }]}
-                onPress={logSelectedItem}
-                accessibilityRole="button"
-                accessibilityLabel={`Add food to ${activeMealId}`}
-              >
-                <Text style={styles.finalLogBtnText}>Add to {activeMealId}</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          )}
-        </SafeAreaView>
-      </Modal>
-
-      {/* Logged Item Details Sheet Modal */}
-      <Modal visible={viewingLoggedItem !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setViewingLoggedItem(null)}>
-        <SafeAreaView style={styles.modalContainer}>
-          {viewingLoggedItem && (
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.modalTitleRow}>
-                <Text style={[styles.modalTitle, { flex: 1, marginRight: spacing.md }]} numberOfLines={2}>
-                  {viewingLoggedItem.name}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setViewingLoggedItem(null)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close food details"
-                  hitSlop={8}
-                >
-                  <Text style={styles.closeModalText}>Close</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.loggedDetailSub}>
-                Logged to {viewingLoggedItem.mealId.toUpperCase()} · {viewingLoggedItem.servingSize} {viewingLoggedItem.servingUnit}
-              </Text>
-
-              {/* Bento Grid */}
-              <View style={styles.summaryBento}>
-                <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.primary, borderLeftWidth: 3 }]}>
-                  <Text style={styles.summaryBigVal}>{viewingLoggedItem.calories}</Text>
-                  <Text style={styles.summaryLabel}>Calories</Text>
-                </View>
-                <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.proteinAccent, borderLeftWidth: 3 }]}>
-                  <Text style={styles.summaryBigVal}>{viewingLoggedItem.protein}g</Text>
-                  <Text style={styles.summaryLabel}>Protein</Text>
-                </View>
-                <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.tertiaryFixedDim, borderLeftWidth: 3 }]}>
-                  <Text style={styles.summaryBigVal}>{viewingLoggedItem.carbs}g</Text>
-                  <Text style={styles.summaryLabel}>Carbs</Text>
-                </View>
-                <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.secondaryContainer, borderLeftWidth: 3 }]}>
-                  <Text style={styles.summaryBigVal}>{viewingLoggedItem.fat}g</Text>
-                  <Text style={styles.summaryLabel}>Fats</Text>
-                </View>
-              </View>
-
-              {/* Micronutrients breakdown */}
-              <View style={styles.microsListCard}>
-                <Text style={styles.microsCardTitle}>Micronutrient Highlights:</Text>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Fiber</Text>
-                  <Text style={styles.microDetailVal}>{(viewingLoggedItem.fiber || 0).toFixed(1)}g</Text>
-                </View>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Sodium</Text>
-                  <Text style={styles.microDetailVal}>{viewingLoggedItem.sodium || 0}mg</Text>
-                </View>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Potassium</Text>
-                  <Text style={styles.microDetailVal}>{viewingLoggedItem.potassium || 0}mg</Text>
-                </View>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Calcium</Text>
-                  <Text style={styles.microDetailVal}>{viewingLoggedItem.calcium || 0}mg</Text>
-                </View>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Iron</Text>
-                  <Text style={styles.microDetailVal}>{(viewingLoggedItem.iron || 0).toFixed(2)}mg</Text>
-                </View>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Vitamin C</Text>
-                  <Text style={styles.microDetailVal}>{(viewingLoggedItem.vitaminC || 0).toFixed(1)}mg</Text>
-                </View>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Folate</Text>
-                  <Text style={styles.microDetailVal}>{viewingLoggedItem.folate || 0}µg</Text>
-                </View>
-              </View>
-
-              {/* Action Buttons */}
-              <TouchableOpacity
-                style={styles.deleteFoodActionBtn}
-                onPress={() => {
-                  handleDeleteEntry(viewingLoggedItem.id);
-                  setViewingLoggedItem(null);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Delete ${viewingLoggedItem.name}`}
-              >
-                <Trash2 size={16} color={Colors.onPrimary} style={{ marginRight: 6 }} />
-                <Text style={styles.deleteFoodActionText}>Delete Food Entry</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          )}
-        </SafeAreaView>
-      </Modal>
+      <LoggedItemDetailsModal
+        isOpen={viewingLoggedItem !== null}
+        onClose={() => setViewingLoggedItem(null)}
+        viewingLoggedItem={viewingLoggedItem}
+        targets={targets}
+        onSaveChanges={handleUpdateEntry}
+        onDeleteEntry={handleDeleteEntry}
+        isSaving={isSavingLog}
+      />
     </View>
   );
 }
