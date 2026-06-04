@@ -19,6 +19,7 @@ type LocalFoodRow = {
   folate_mcg_per_100g: number | null;
   default_serving_unit: string | null;
   default_serving_size: number | null;
+  source: string;
 };
 
 const FOOD_SELECT_COLUMNS = [
@@ -38,6 +39,7 @@ const FOOD_SELECT_COLUMNS = [
   'folate_mcg_per_100g',
   'default_serving_unit',
   'default_serving_size',
+  'source',
 ].join(', ');
 
 function normalizeLimit(limit?: number) {
@@ -92,17 +94,30 @@ export async function searchLocalFoods(query: string, limit?: number): Promise<G
         )
      ORDER BY
        CASE
-         WHEN lower(name) = ? THEN 0
-         WHEN lower(name) LIKE ? THEN 1
-         ELSE 2
+         WHEN EXISTS (
+           SELECT 1
+           FROM ${FOOD_TABLES.aliases}
+           WHERE food_id = ${FOOD_TABLES.items}.id
+             AND lower(alias) = ?
+         ) THEN 0
+         WHEN lower(name) = ? THEN 1
+         WHEN lower(name) LIKE ? THEN 2
+         WHEN lower(name) LIKE ? THEN 3
+         WHEN lower(COALESCE(category, '')) LIKE ? THEN 4
+         ELSE 5
        END,
-       name COLLATE NOCASE ASC
+       CASE WHEN source = 'prototype_seed' THEN 0 ELSE 1 END,
+       name COLLATE NOCASE ASC,
+       id ASC
      LIMIT ?`,
     containsQuery,
     containsQuery,
     containsQuery,
     normalizedQuery,
+    normalizedQuery,
     prefixQuery,
+    containsQuery,
+    containsQuery,
     maxResults
   );
 

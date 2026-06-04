@@ -209,10 +209,16 @@ export const SEED_FOOD_ITEMS: SeedFoodItem[] = [
 
 export const SEED_FOOD_ALIASES: SeedFoodAlias[] = [
   { alias: 'chicken', foodId: 'seed_chicken_breast' },
+  { alias: 'egg', foodId: 'seed_egg' },
   { alias: 'itlog', foodId: 'seed_egg' },
   { alias: 'eggs', foodId: 'seed_egg' },
   { alias: 'kanin', foodId: 'seed_cooked_white_rice' },
   { alias: 'rice', foodId: 'seed_cooked_white_rice' },
+  { alias: 'white rice', foodId: 'seed_cooked_white_rice' },
+  { alias: 'rice cooked', foodId: 'seed_cooked_white_rice' },
   { alias: 'oats', foodId: 'seed_rolled_oats' },
+  { alias: 'oatmeal', foodId: 'seed_rolled_oats' },
   { alias: 'tuna', foodId: 'seed_canned_tuna' },
+  { alias: 'pb', foodId: 'seed_peanut_butter' },
+  { alias: 'bread loaf', foodId: 'seed_bread' },
 ];
