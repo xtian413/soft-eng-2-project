@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { importFoundationFoodsIfNeeded } from '@/local/foodDatasetImporter';
 import { FOOD_TABLES, runFoodMigrations } from '@/local/foodMigrations';
 import { FOOD_SEED_SOURCE, SEED_FOOD_ALIASES, SEED_FOOD_ITEMS } from '@/local/foodSeedData';
 
@@ -111,6 +112,7 @@ export async function initializeFoodDatabase() {
       await db.execAsync('PRAGMA foreign_keys = ON');
       await runFoodMigrations(db);
       await seedFoodDatabaseIfNeeded(db);
+      await importFoundationFoodsIfNeeded(db);
       return db;
     })();
   }
