@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-export const FOOD_SCHEMA_VERSION = 1;
+export const FOOD_SCHEMA_VERSION = 2;
 
 export const FOOD_TABLES = {
   schemaMigrations: 'food_schema_migrations',
@@ -12,6 +12,23 @@ type FoodMigration = {
   version: number;
   apply: (db: SQLiteDatabase) => Promise<void>;
 };
+
+type TableInfoRow = {
+  name: string;
+};
+
+async function addNullableColumnIfMissing(
+  db: SQLiteDatabase,
+  tableName: string,
+  columnName: string,
+  definition: string
+) {
+  const rows = await db.getAllAsync<TableInfoRow>(`PRAGMA table_info(${tableName})`);
+  const hasColumn = rows.some((row) => row.name === columnName);
+  if (hasColumn) return;
+
+  await db.execAsync(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+}
 
 const FOOD_MIGRATIONS: FoodMigration[] = [
   {
@@ -61,6 +78,29 @@ const FOOD_MIGRATIONS: FoodMigration[] = [
       await db.execAsync(
         `CREATE INDEX IF NOT EXISTS idx_food_aliases_food_id ON ${FOOD_TABLES.aliases}(food_id)`
       );
+    },
+  },
+  {
+    version: 2,
+    apply: async (db) => {
+      await addNullableColumnIfMissing(db, FOOD_TABLES.items, 'remote_source', 'TEXT');
+      await addNullableColumnIfMissing(db, FOOD_TABLES.items, 'remote_id', 'TEXT');
+      await addNullableColumnIfMissing(db, FOOD_TABLES.items, 'cached_at', 'TEXT');
+      await addNullableColumnIfMissing(db, FOOD_TABLES.items, 'last_used_at', 'TEXT');
+      await addNullableColumnIfMissing(db, FOOD_TABLES.items, 'remote_updated_at', 'TEXT');
+      await addNullableColumnIfMissing(db, FOOD_TABLES.items, 'barcode', 'TEXT');
+      await addNullableColumnIfMissing(db, FOOD_TABLES.items, 'portions_json', 'TEXT');
+
+      try {
+        await db.execAsync(
+          `CREATE UNIQUE INDEX IF NOT EXISTS idx_food_items_remote_identity
+           ON ${FOOD_TABLES.items}(remote_source, remote_id)
+           WHERE remote_source IS NOT NULL
+             AND remote_id IS NOT NULL`
+        );
+      } catch (error) {
+        console.warn('[FoodDB] Remote identity partial index skipped:', error);
+      }
     },
   },
 ];

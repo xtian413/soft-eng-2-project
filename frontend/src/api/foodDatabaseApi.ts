@@ -22,6 +22,8 @@ export interface GemiFoodItem {
     gramWeight: number;
     amount: number;
   }>;
+  barcode?: string;
+  remoteUpdatedAt?: string;
 }
 
 type FoodSearchParams = {

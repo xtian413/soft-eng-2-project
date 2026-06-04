@@ -32,7 +32,11 @@ import {
   softDeleteDietLog,
   updateDietLog as updateLocalDietLog,
 } from '@/local/repositories/dietLogsRepository';
-import { searchLocalFoods } from '@/local/repositories/foodsRepository';
+import {
+  cacheRemoteFoodItems,
+  markFoodLastUsed,
+  searchLocalFoods,
+} from '@/local/repositories/foodsRepository';
 import type { FoodLogEntry, MacroTargets, MealId } from '@/screens/dashboard/types';
 import { NutritionCarousel } from './NutritionCarousel';
 import { MealDiarySection } from './MealDiarySection';
@@ -306,6 +310,11 @@ export function FoodTab({
       });
       if (requestId === latestSearchRef.current) {
         setDbList(list);
+        if (list.length > 0) {
+          void cacheRemoteFoodItems(list).catch((cacheError) => {
+            console.warn('[FoodTab] Failed to cache backend food results:', getErrorMessage(cacheError));
+          });
+        }
       }
     } catch (err) {
       if (requestId === latestSearchRef.current) {
@@ -432,6 +441,9 @@ export function FoodTab({
     setConfigQuantity(1);
     setConfigUnit(item.defaultServingUnit);
     setConfigWeight(item.defaultServingSize);
+    void markFoodLastUsed(item.id).catch((error) => {
+      console.warn('[FoodTab] Failed to mark cached food used:', getErrorMessage(error));
+    });
   };
 
   // Saves the selected USDA food locally first, then attempts the existing backend save.
@@ -466,6 +478,9 @@ export function FoodTab({
         selectedItem.id,
         `Logged to ${activeMealId}: ${entry.name}`
       );
+      void markFoodLastUsed(selectedItem.id).catch((error) => {
+        console.warn('[FoodTab] Failed to mark cached food used:', getErrorMessage(error));
+      });
       setSelectedItem(null);
       setIsModalOpen(false);
     } catch (err) {
