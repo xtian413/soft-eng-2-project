@@ -257,7 +257,7 @@ export function FoodSearchModal({
                   </View>
                 </View>
 
-                {loading ? (
+                {loading && searchResults.length === 0 ? (
                   renderSkeletonRows()
                 ) : searchResults.length === 0 ? (
                   <View style={styles.emptyStateWrap}>

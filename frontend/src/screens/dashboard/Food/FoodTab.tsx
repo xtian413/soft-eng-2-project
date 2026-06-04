@@ -61,6 +61,8 @@ interface FoodTabProps {
 type NutrientSlideType = 'energy' | 'macros' | 'micros';
 type SyncCreatedDietLogResult = { didSync: boolean; message?: string };
 
+const REMOTE_FOOD_ID_PREFIX = 'supabase_usda:';
+
 function getErrorMessage(error: unknown) {
   if (typeof error === 'object' && error !== null) {
     const responseError = (error as { response?: { data?: { error?: string } } }).response?.data?.error;
@@ -71,6 +73,34 @@ function getErrorMessage(error: unknown) {
   }
 
   return 'Unknown error';
+}
+
+function getRemoteFoodMergeKey(item: GemiFoodItem, source: 'local' | 'remote') {
+  if (source === 'local') {
+    return item.id.startsWith(REMOTE_FOOD_ID_PREFIX) ? item.id : item.id;
+  }
+
+  return item.id.startsWith(REMOTE_FOOD_ID_PREFIX)
+    ? item.id
+    : `${REMOTE_FOOD_ID_PREFIX}${item.id}`;
+}
+
+function mergeLocalAndRemoteFoodResults(
+  localResults: GemiFoodItem[],
+  remoteResults: GemiFoodItem[]
+) {
+  const seen = new Set(localResults.map((item) => getRemoteFoodMergeKey(item, 'local')));
+  const merged = [...localResults];
+
+  for (const item of remoteResults) {
+    const key = getRemoteFoodMergeKey(item, 'remote');
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    merged.push(item);
+  }
+
+  return merged;
 }
 
 export function FoodTab({
@@ -282,14 +312,16 @@ export function FoodTab({
   const [customFat, setCustomFat] = useState('');
   const [customUnit, setCustomUnit] = useState('serving');
 
-  // Load food database results locally first, then fall back to the backend.
+  // Load local food results first, then enrich with backend results if the request is still current.
   const loadFoodResults = useCallback(async (query: string) => {
     const requestId = ++latestSearchRef.current;
     setIsLoadingDb(true);
+    let localResults: GemiFoodItem[] = [];
+
     try {
       const trimmedQuery = query.trim();
       const limit = trimmedQuery ? 50 : 15;
-      const localResults = await searchLocalFoods(trimmedQuery, limit).catch((error) => {
+      localResults = await searchLocalFoods(trimmedQuery, limit).catch((error) => {
         const message = getErrorMessage(error);
         console.warn('[FoodTab] Local food search failed:', message);
         return [];
@@ -298,18 +330,15 @@ export function FoodTab({
       if (requestId !== latestSearchRef.current) return;
 
       console.log(`[FoodTab] Local food results: ${localResults.length}`);
-      if (localResults.length > 0) {
-        setDbList(localResults);
-        console.log('[FoodTab] Backend food fallback skipped: local results available');
-        return;
-      }
+      setDbList(localResults);
+      setIsLoadingDb(false);
 
       const list = await searchFoodDatabase({
         query: trimmedQuery || undefined,
         limit,
       });
       if (requestId === latestSearchRef.current) {
-        setDbList(list);
+        setDbList((currentResults) => mergeLocalAndRemoteFoodResults(currentResults, list));
         if (list.length > 0) {
           void cacheRemoteFoodItems(list).catch((cacheError) => {
             console.warn('[FoodTab] Failed to cache backend food results:', getErrorMessage(cacheError));
@@ -319,8 +348,10 @@ export function FoodTab({
     } catch (err) {
       if (requestId === latestSearchRef.current) {
         const message = getErrorMessage(err);
-        console.warn('[FoodTab] Backend food fallback skipped or failed:', message);
-        setDbList([]);
+        console.warn('[FoodTab] Backend food enrichment skipped or failed:', message);
+        if (localResults.length === 0) {
+          setDbList([]);
+        }
       }
     } finally {
       if (requestId === latestSearchRef.current) {
