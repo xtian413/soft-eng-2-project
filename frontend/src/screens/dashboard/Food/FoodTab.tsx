@@ -35,6 +35,7 @@ import {
   markDietLogSynced,
   softDeleteDietLog,
 } from '@/local/repositories/dietLogsRepository';
+import { searchLocalFoods } from '@/local/repositories/foodsRepository';
 import type { FoodLogEntry, MacroTargets, MealId } from '@/screens/dashboard/types';
 import {
   Coffee,
@@ -227,22 +228,39 @@ export function FoodTab({
   const [customUnit, setCustomUnit] = useState('serving');
   const [customWeight, setCustomWeight] = useState('100');
 
-  // Load USDA database results from the backend
+  // Load food database results locally first, then fall back to the backend.
   const loadFoodResults = useCallback(async (query: string) => {
     const requestId = ++latestSearchRef.current;
     setIsLoadingDb(true);
     try {
       const trimmedQuery = query.trim();
+      const limit = trimmedQuery ? 50 : 15;
+      const localResults = await searchLocalFoods(trimmedQuery, limit).catch((error) => {
+        const message = getErrorMessage(error);
+        console.warn('[FoodTab] Local food search failed:', message);
+        return [];
+      });
+
+      if (requestId !== latestSearchRef.current) return;
+
+      console.log(`[FoodTab] Local food results: ${localResults.length}`);
+      if (localResults.length > 0) {
+        setDbList(localResults);
+        console.log('[FoodTab] Backend food fallback skipped: local results available');
+        return;
+      }
+
       const list = await searchFoodDatabase({
         query: trimmedQuery || undefined,
-        limit: trimmedQuery ? 50 : 15,
+        limit,
       });
       if (requestId === latestSearchRef.current) {
         setDbList(list);
       }
     } catch (err) {
       if (requestId === latestSearchRef.current) {
-        console.error('[Gemi] Food database loading error:', err);
+        const message = getErrorMessage(err);
+        console.warn('[FoodTab] Backend food fallback skipped or failed:', message);
         setDbList([]);
       }
     } finally {
