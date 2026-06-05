@@ -245,7 +245,7 @@ export const useAuthStore = create<AuthState>()(
       signOut: async () => {
         try {
           await supabase.auth.signOut();
-          await AsyncStorage.clear();
+          await AsyncStorage.removeItem('auth-store');
         } catch (e) {
           console.log('[Gemi] Supabase SignOut error:', e);
         }
