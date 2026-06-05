@@ -249,6 +249,26 @@ export async function getUnsyncedNewDietLogsByUser(userId: string): Promise<Loca
   }
 }
 
+export async function getUnsyncedEditedDietLogsByUser(userId: string): Promise<LocalDietLog[]> {
+  try {
+    assertUserId(userId);
+
+    const db = await initializeLocalDatabase();
+    return await db.getAllAsync<LocalDietLog>(
+      `SELECT ${DIET_LOG_COLUMNS}
+       FROM ${LOCAL_TABLES.dietLogs}
+       WHERE user_id = ?
+         AND deleted_at IS NULL
+         AND remote_id IS NOT NULL
+         AND sync_status IN ('pending', 'failed')
+       ORDER BY updated_at ASC, created_at ASC`,
+      userId
+    );
+  } catch (error) {
+    wrapDietLogError('read unsynced edited', error);
+  }
+}
+
 export async function updateDietLog(
   userId: string,
   id: string,

@@ -15,16 +15,19 @@ import { searchFoodDatabase, type GemiFoodItem } from '@/api/foodDatabaseApi';
 import {
   createDietLog as createRemoteDietLog,
   deleteDietLog as deleteRemoteDietLog,
+  updateDietLog as updateRemoteDietLog,
   type DietLogCreateInput,
 } from '@/api/dietApi';
 import {
   foodLogEntryToCreateLocalDietLogInput,
   foodLogEntryToRemoteCreateInput,
+  foodLogEntryToRemoteUpdateInput,
   localDietLogToFoodLogEntry,
 } from '@/local/dietLogsMapper';
 import {
   createDietLog as createLocalDietLog,
   getDietLogByUserAndId,
+  getUnsyncedEditedDietLogsByUser,
   getUnsyncedNewDietLogsByUser,
   markDietLogDeleteSynced,
   markDietLogSyncFailed,
@@ -196,6 +199,7 @@ export function FoodTab({
   const [configWeight, setConfigWeight] = useState(100);
   const latestSearchRef = useRef(0);
   const isRetryingDietLogsRef = useRef(false);
+  const isRetryingDietLogUpdatesRef = useRef(false);
   const inFlightDietLogCreateIdsRef = useRef(new Set<string>());
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
@@ -328,6 +332,59 @@ export function FoodTab({
     [refreshFoodLogs, syncCreatedDietLogToRemote]
   );
 
+  const retryPendingDietLogUpdates = useCallback(
+    async (targetUserId: string) => {
+      if (!targetUserId) return;
+
+      if (isRetryingDietLogUpdatesRef.current) {
+        console.log('[FoodTab] Diet-log update retry skipped: already running');
+        return;
+      }
+
+      isRetryingDietLogUpdatesRef.current = true;
+      let shouldRefreshLogs = false;
+      try {
+        console.log('[FoodTab] Diet-log update retry begin');
+        const unsyncedLogs = await getUnsyncedEditedDietLogsByUser(targetUserId);
+        console.log(`[FoodTab] Unsynced edited diet logs found: ${unsyncedLogs.length}`);
+
+        for (const localLog of unsyncedLogs) {
+          if (!localLog.remote_id) {
+            console.log(`[FoodTab] Diet-log update retry skipped missing remote id: ${localLog.id}`);
+            continue;
+          }
+
+          console.log(`[FoodTab] Retrying edited local diet log: ${localLog.id}`);
+          const entry = localDietLogToFoodLogEntry(localLog);
+          const remoteInput = foodLogEntryToRemoteUpdateInput(entry, localLog.logged_at);
+
+          try {
+            await updateRemoteDietLog(localLog.remote_id, remoteInput);
+            await markDietLogSynced(targetUserId, localLog.id, localLog.remote_id);
+            shouldRefreshLogs = true;
+            console.log(`[FoodTab] Diet-log update retry synced: ${localLog.id}`);
+          } catch (error) {
+            const message = getErrorMessage(error);
+            console.log(`[FoodTab] Diet-log update retry failed: ${message}`);
+            await markDietLogSyncFailed(targetUserId, localLog.id).catch((markError) => {
+              console.error('[Gemi] Failed to mark edited diet log sync failed:', markError);
+            });
+          }
+        }
+
+        if (shouldRefreshLogs) {
+          await refreshFoodLogs();
+        }
+        console.log('[FoodTab] Diet-log update retry complete');
+      } catch (error) {
+        console.log(`[FoodTab] Diet-log update retry failed: ${getErrorMessage(error)}`);
+      } finally {
+        isRetryingDietLogUpdatesRef.current = false;
+      }
+    },
+    [refreshFoodLogs]
+  );
+
   // Custom Food Form
   const [customName, setCustomName] = useState('');
   const [customCals, setCustomCals] = useState('');
@@ -396,7 +453,8 @@ export function FoodTab({
   useEffect(() => {
     if (!userId) return;
     void retryPendingDietLogCreates(userId);
-  }, [retryPendingDietLogCreates, userId]);
+    void retryPendingDietLogUpdates(userId);
+  }, [retryPendingDietLogCreates, retryPendingDietLogUpdates, userId]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
@@ -409,13 +467,14 @@ export function FoodTab({
         (previousAppState === 'background' || previousAppState === 'inactive')
       ) {
         void retryPendingDietLogCreates(userId);
+        void retryPendingDietLogUpdates(userId);
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [retryPendingDietLogCreates, userId]);
+  }, [retryPendingDietLogCreates, retryPendingDietLogUpdates, userId]);
 
   // Derived macros totals
   const proteinTotal = Number(foodLogs.reduce((acc, f) => acc + f.protein, 0).toFixed(1));

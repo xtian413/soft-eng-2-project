@@ -8,6 +8,15 @@ function normalizeMealId(value: string | null | undefined): MealId {
     : 'snack';
 }
 
+function normalizeRemoteLoggedAt(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`Invalid diet log logged_at timestamp: ${value}`);
+  }
+
+  return value.endsWith('Z') ? value : parsed.toISOString();
+}
+
 export function localDietLogToFoodLogEntry(log: LocalDietLog): FoodLogEntry {
   return {
     id: log.id,
@@ -70,7 +79,7 @@ export function foodLogEntryToRemoteCreateInput(
     protein_g: entry.protein,
     carbs_g: entry.carbs,
     fat_g: entry.fat,
-    logged_at: loggedAt,
+    logged_at: normalizeRemoteLoggedAt(loggedAt),
   };
 }
 
@@ -85,7 +94,7 @@ export function foodLogEntryToRemoteUpdateInput(
     protein_g: entry.protein,
     carbs_g: entry.carbs,
     fat_g: entry.fat,
-    logged_at: loggedAt,
+    logged_at: normalizeRemoteLoggedAt(loggedAt),
   };
 }
 
