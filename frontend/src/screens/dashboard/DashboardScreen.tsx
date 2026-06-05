@@ -24,6 +24,11 @@ import {
   upsertRemoteDietLogForUser,
 } from '@/local/repositories/dietLogsRepository';
 import { getRecentWorkoutsByUser } from '@/local/repositories/workoutsRepository';
+import {
+  deleteOldAiInsightsByUser,
+  getLatestAiInsightByUser,
+  saveAiInsightLocal,
+} from '@/local/repositories/aiInsightsRepository';
 import { HomeTab } from '@/screens/dashboard/Home/HomeTab';
 import { FoodTab } from '@/screens/dashboard/Food/FoodTab';
 import { LiftTab } from '@/screens/dashboard/Lift/LiftTab';
@@ -32,7 +37,7 @@ import { ProfileTab } from '@/screens/dashboard/Profile/ProfileTab';
 import { LayoutDashboard, Utensils, Dumbbell, Sparkles, User } from 'lucide-react-native';
 import type { WorkoutLog } from '@/ai/prompts';
 import { initializeLfmOnStartup } from '@/ai/lfmInit';
-import { cancelLfmGeneration, generateFitnessInsightResponse, generateInsightChatResponse } from '@/ai/lfmService';
+import { generateFitnessInsightResponse, generateInsightChatResponse } from '@/ai/lfmService';
 import {
   assessFitnessInsightQuality,
   buildFitnessInsightChatPrompt,
@@ -41,14 +46,12 @@ import {
   createModelRetryFitnessInsight,
   createLoadingFitnessInsight,
   parseFitnessInsight,
+  type FitnessInsight,
   type FitnessInsightInput,
   type FitnessInsightChatMessage,
 } from '@/ai/insights/fitnessInsight';
-import {
-  buildFitnessInsightSignature,
-  loadCachedFitnessInsight,
-  saveCachedFitnessInsight,
-} from '@/ai/insights/fitnessInsightCache';
+import { buildFitnessInsightSignature } from '@/ai/insights/fitnessInsightCache';
+import type { LocalAiInsight } from '@/local/schema';
 
 type TabType = 'dashboard' | 'food' | 'insights' | 'lift' | 'profile';
 
@@ -59,6 +62,32 @@ const TABS: { key: TabType; label: string }[] = [
   { key: 'lift', label: 'Lift' },
   { key: 'profile', label: 'Profile' },
 ];
+
+function mapLocalAiInsightToFitnessInsight(row: LocalAiInsight): FitnessInsight | null {
+  if (
+    !row.title ||
+    !row.summary ||
+    !row.nutrition ||
+    !row.training ||
+    !row.next_step ||
+    !row.confidence
+  ) {
+    return null;
+  }
+
+  return {
+    title: row.title,
+    summary: row.summary,
+    nutrition: row.nutrition,
+    training: row.training,
+    nextStep: row.next_step,
+    confidence: row.confidence,
+  };
+}
+
+function isSameIsoDay(left: Date, right: Date) {
+  return left.toISOString().split('T')[0] === right.toISOString().split('T')[0];
+}
 
 export default function DashboardScreen() {
   const { user, signOut, profile, fetchProfile } = useAuthStore();
@@ -73,9 +102,14 @@ export default function DashboardScreen() {
   const [fitnessInsight, setFitnessInsight] = useState(createLoadingFitnessInsight);
   const [isFitnessInsightLoading, setFitnessInsightLoading] = useState(false);
   const [fitnessInsightGeneratedAt, setFitnessInsightGeneratedAt] = useState<Date | null>(null);
+  const [insightGenerationTick, setInsightGenerationTick] = useState(0);
   const currentInsightSignatureRef = React.useRef<string | null>(null);
-  const insightRequestIdRef = React.useRef(0);
-  const activeInsightRunRef = React.useRef(false);
+  const latestInsightRunIdRef = React.useRef(0);
+  const activeInsightRunRef = React.useRef<number | null>(null);
+  const activeInsightSignatureRef = React.useRef<string | null>(null);
+  const pendingInsightSignatureRef = React.useRef<string | null>(null);
+  const latestFitnessInsightSignatureRef = React.useRef<string | null>(null);
+  const insightDisplayVersionRef = React.useRef(0);
   const activeChatRunRef = React.useRef(false);
 
   const goal: GoalKey = profile?.goal || (user?.user_metadata?.goal as GoalKey) || 'build_muscle';
@@ -173,6 +207,26 @@ export default function DashboardScreen() {
     }
   }, [activeTab, loadWorkoutLogs]);
 
+  const triggerToast = useCallback(
+    (msg: string) => {
+      setToastMessage(msg);
+      Animated.sequence([
+        Animated.timing(toastOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+        Animated.delay(2000),
+        Animated.timing(toastOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: Platform.OS !== 'web',
+        }),
+      ]).start(() => setToastMessage(null));
+    },
+    [toastOpacity],
+  );
+
   const fitnessInsightInput = useMemo<FitnessInsightInput>(
     () => ({
       userName: fullName,
@@ -190,42 +244,162 @@ export default function DashboardScreen() {
     () => buildFitnessInsightSignature(fitnessInsightInput),
     [fitnessInsightInput],
   );
+  latestFitnessInsightSignatureRef.current = fitnessInsightSignature;
+
+  useEffect(() => {
+    let isMounted = true;
+    const hydrationDisplayVersion = insightDisplayVersionRef.current;
+    const hydrationRunId = latestInsightRunIdRef.current;
+
+    const loadLatestLocalInsight = async () => {
+      if (!user?.id) return;
+
+      try {
+        const latest = await getLatestAiInsightByUser(user.id);
+        if (!isMounted || !latest) return;
+
+        const localInsight = mapLocalAiInsightToFitnessInsight(latest);
+        if (!localInsight) return;
+
+        if (
+          insightDisplayVersionRef.current !== hydrationDisplayVersion ||
+          latestInsightRunIdRef.current !== hydrationRunId ||
+          activeInsightRunRef.current !== null
+        ) {
+          console.warn('[Gemi] Fitness insight cache hydration skipped: newer insight already applied');
+          return;
+        }
+
+        insightDisplayVersionRef.current += 1;
+        currentInsightSignatureRef.current = latest.data_snapshot_hash;
+        setFitnessInsight(localInsight);
+        setFitnessInsightGeneratedAt(new Date(latest.generated_at));
+        setFitnessInsightLoading(false);
+      } catch (error) {
+        console.warn('[Gemi] Failed to load local fitness insight:', error);
+      }
+    };
+
+    loadLatestLocalInsight();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
 
   const generateFitnessInsight = useCallback(
     async (options?: { force?: boolean }) => {
       if (isLoadingLogs || !hasLoadedWorkouts) return;
       const force = options?.force ?? false;
+      const now = new Date();
+      const hasFreshDisplayedInsight =
+        currentInsightSignatureRef.current === fitnessInsightSignature &&
+        fitnessInsightGeneratedAt &&
+        isSameIsoDay(fitnessInsightGeneratedAt, now);
 
-      if (activeChatRunRef.current) return;
-
-      if (activeInsightRunRef.current) {
-        if (!force) return;
-        await cancelLfmGeneration().catch((error) => {
-          console.warn('[Gemi] Failed to cancel previous insight generation:', error);
-        });
-      }
-
-      const requestId = insightRequestIdRef.current + 1;
-      insightRequestIdRef.current = requestId;
-
-      if (!force && currentInsightSignatureRef.current === fitnessInsightSignature && fitnessInsightGeneratedAt) {
+      if (activeChatRunRef.current) {
+        if (currentInsightSignatureRef.current !== fitnessInsightSignature) {
+          pendingInsightSignatureRef.current = fitnessInsightSignature;
+        } else if (force && hasFreshDisplayedInsight) {
+          triggerToast('Your insight is already up to date.');
+        }
+        console.warn('[Gemi] Fitness insight generation skipped: already running');
         return;
       }
 
-      if (!force) {
-        const cached = await loadCachedFitnessInsight(fitnessInsightSignature);
-        if (cached && insightRequestIdRef.current === requestId) {
-          currentInsightSignatureRef.current = fitnessInsightSignature;
-          setFitnessInsight(cached.insight);
-          setFitnessInsightGeneratedAt(cached.generatedAt);
+      if (activeInsightRunRef.current !== null) {
+        if (activeInsightSignatureRef.current !== fitnessInsightSignature) {
+          pendingInsightSignatureRef.current = fitnessInsightSignature;
+        }
+        console.warn('[Gemi] Fitness insight generation skipped: already running');
+        return;
+      }
+
+      if (hasFreshDisplayedInsight) {
+        if (force) {
+          pendingInsightSignatureRef.current = null;
           setFitnessInsightLoading(false);
-          return;
+          triggerToast('Your insight is already up to date.');
+        }
+        return;
+      }
+
+      if (force) {
+        try {
+          const cacheReadRunId = latestInsightRunIdRef.current;
+          const cached = user?.id ? await getLatestAiInsightByUser(user.id) : null;
+          const cachedInsight = cached ? mapLocalAiInsightToFitnessInsight(cached) : null;
+
+          if (cached && cachedInsight) {
+            const cachedGeneratedAt = new Date(cached.generated_at);
+            const cachedMatchesCurrentSnapshot = cached.data_snapshot_hash === fitnessInsightSignature;
+            const cachedIsFromToday = isSameIsoDay(cachedGeneratedAt, now);
+
+            if (cachedMatchesCurrentSnapshot && cachedIsFromToday) {
+              if (
+                activeInsightRunRef.current !== null ||
+                latestInsightRunIdRef.current !== cacheReadRunId ||
+                latestFitnessInsightSignatureRef.current !== fitnessInsightSignature
+              ) {
+                console.warn('[Gemi] Manual fitness insight cache result ignored: newer snapshot already active');
+                return;
+              }
+
+              insightDisplayVersionRef.current += 1;
+              currentInsightSignatureRef.current = cached.data_snapshot_hash;
+              pendingInsightSignatureRef.current = null;
+              setFitnessInsight(cachedInsight);
+              setFitnessInsightGeneratedAt(cachedGeneratedAt);
+              setFitnessInsightLoading(false);
+              triggerToast('Your insight is already up to date.');
+              return;
+            }
+          }
+        } catch (error) {
+          console.warn('[Gemi] Manual fitness insight cache read skipped:', error);
         }
       }
 
-      activeInsightRunRef.current = true;
+      const runId = latestInsightRunIdRef.current + 1;
+      latestInsightRunIdRef.current = runId;
+      activeInsightRunRef.current = runId;
+      activeInsightSignatureRef.current = fitnessInsightSignature;
+      console.log(`[Gemi] Fitness insight generation begin: ${runId}`);
       setFitnessInsightLoading(true);
+
+      let hasValidLocalInsight = Boolean(fitnessInsightGeneratedAt);
+
       try {
+        if (!force) {
+          try {
+            const cached = user?.id ? await getLatestAiInsightByUser(user.id) : null;
+            const cachedInsight = cached ? mapLocalAiInsightToFitnessInsight(cached) : null;
+
+            if (activeInsightRunRef.current !== runId) {
+              console.warn(`[Gemi] Fitness insight stale result ignored: ${runId}`);
+              return;
+            }
+
+            if (cached && cachedInsight) {
+              const cachedGeneratedAt = new Date(cached.generated_at);
+              const cachedMatchesCurrentSnapshot = cached.data_snapshot_hash === fitnessInsightSignature;
+              const cachedIsFromToday = isSameIsoDay(cachedGeneratedAt, new Date());
+
+              hasValidLocalInsight = true;
+              insightDisplayVersionRef.current += 1;
+              currentInsightSignatureRef.current = cached.data_snapshot_hash;
+              setFitnessInsight(cachedInsight);
+              setFitnessInsightGeneratedAt(cachedGeneratedAt);
+
+              if (cachedMatchesCurrentSnapshot && cachedIsFromToday) {
+                return;
+              }
+            }
+          } catch (error) {
+            console.warn('[Gemi] Local fitness insight cache read skipped:', error);
+          }
+        }
+
         const initialized = await initializeLfmOnStartup();
         if (!initialized) {
           throw new Error('LFM model failed to initialize.');
@@ -256,26 +430,54 @@ export default function DashboardScreen() {
 
         const generatedAt = new Date();
 
-        if (insightRequestIdRef.current !== requestId) return;
+        if (activeInsightRunRef.current !== runId) {
+          console.warn(`[Gemi] Fitness insight stale result ignored: ${runId}`);
+          return;
+        }
+
+        const pendingSignature = pendingInsightSignatureRef.current;
+        if (pendingSignature && pendingSignature !== fitnessInsightSignature) {
+          console.warn(`[Gemi] Fitness insight stale result ignored: ${runId}`);
+          return;
+        }
 
         if (quality.isUsable) {
+          insightDisplayVersionRef.current += 1;
           currentInsightSignatureRef.current = fitnessInsightSignature;
           setFitnessInsight(parsed);
           setFitnessInsightGeneratedAt(generatedAt);
-          await saveCachedFitnessInsight(fitnessInsightSignature, parsed, generatedAt);
+          if (user?.id) {
+            await saveAiInsightLocal({
+              user_id: user.id,
+              title: parsed.title,
+              summary: parsed.summary,
+              nutrition: parsed.nutrition,
+              training: parsed.training,
+              next_step: parsed.nextStep,
+              confidence: parsed.confidence,
+              data_snapshot_hash: fitnessInsightSignature,
+              generated_at: generatedAt.toISOString(),
+              payload_json: JSON.stringify(parsed),
+            });
+            await deleteOldAiInsightsByUser(user.id, 10);
+          }
         } else {
           console.warn('[Gemi] Fitness insight rejected after repair:', {
             reasons: quality.reasons,
             response,
             parsed,
           });
-          currentInsightSignatureRef.current = null;
-          setFitnessInsight(createModelRetryFitnessInsight());
-          setFitnessInsightGeneratedAt(null);
+          if (!hasValidLocalInsight) {
+            insightDisplayVersionRef.current += 1;
+            currentInsightSignatureRef.current = null;
+            setFitnessInsight(createModelRetryFitnessInsight());
+            setFitnessInsightGeneratedAt(null);
+          }
         }
       } catch (error) {
         console.warn('[Gemi] Failed to generate shared fitness insight:', error);
-        if (insightRequestIdRef.current === requestId) {
+        if (activeInsightRunRef.current === runId && !hasValidLocalInsight) {
+          insightDisplayVersionRef.current += 1;
           setFitnessInsight({
             title: 'Insight Paused',
             summary: 'Gemi could not finish the on-device insight yet.',
@@ -287,18 +489,34 @@ export default function DashboardScreen() {
           setFitnessInsightGeneratedAt(null);
         }
       } finally {
-        if (insightRequestIdRef.current === requestId) {
-          activeInsightRunRef.current = false;
+        if (activeInsightRunRef.current === runId) {
+          activeInsightRunRef.current = null;
+          activeInsightSignatureRef.current = null;
           setFitnessInsightLoading(false);
+          console.log(`[Gemi] Fitness insight generation complete: ${runId}`);
+
+          const pendingSignature = pendingInsightSignatureRef.current;
+          pendingInsightSignatureRef.current = null;
+          if (pendingSignature && pendingSignature !== currentInsightSignatureRef.current) {
+            setInsightGenerationTick((value) => value + 1);
+          }
         }
       }
     },
-    [fitnessInsightGeneratedAt, fitnessInsightInput, fitnessInsightSignature, hasLoadedWorkouts, isLoadingLogs],
+    [
+      fitnessInsightGeneratedAt,
+      fitnessInsightInput,
+      fitnessInsightSignature,
+      hasLoadedWorkouts,
+      isLoadingLogs,
+      triggerToast,
+      user?.id,
+    ],
   );
 
   useEffect(() => {
     generateFitnessInsight();
-  }, [generateFitnessInsight]);
+  }, [generateFitnessInsight, insightGenerationTick]);
 
   const sendInsightChatMessage = useCallback(
     async (history: FitnessInsightChatMessage[], question: string) => {
@@ -326,6 +544,11 @@ export default function DashboardScreen() {
         return answer;
       } finally {
         activeChatRunRef.current = false;
+        const pendingSignature = pendingInsightSignatureRef.current;
+        pendingInsightSignatureRef.current = null;
+        if (pendingSignature && pendingSignature !== currentInsightSignatureRef.current) {
+          setInsightGenerationTick((value) => value + 1);
+        }
       }
     },
     [fitnessInsight, fitnessInsightInput],
@@ -347,23 +570,6 @@ export default function DashboardScreen() {
       ]),
     ).start();
   }, [pulseAnim]);
-
-  const triggerToast = (msg: string) => {
-    setToastMessage(msg);
-    Animated.sequence([
-      Animated.timing(toastOpacity, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-      Animated.delay(2000),
-      Animated.timing(toastOpacity, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: Platform.OS !== 'web',
-      }),
-    ]).start(() => setToastMessage(null));
-  };
 
   const renderTab = () => {
     switch (activeTab) {

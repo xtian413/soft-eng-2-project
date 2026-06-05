@@ -309,6 +309,24 @@ const MIGRATIONS: Migration[] = [
       );
     },
   },
+  {
+    version: 7,
+    name: 'add_data_snapshot_hash_to_ai_insights',
+    apply: async (db) => {
+      const columns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${LOCAL_TABLES.aiInsights})`
+      );
+      const hasDataSnapshotHash = columns.some((column) => column.name === 'data_snapshot_hash');
+
+      if (!hasDataSnapshotHash) {
+        await db.execAsync(`ALTER TABLE ${LOCAL_TABLES.aiInsights} ADD COLUMN data_snapshot_hash TEXT`);
+      }
+
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_ai_insights_user_snapshot ON ${LOCAL_TABLES.aiInsights}(user_id, data_snapshot_hash)`
+      );
+    },
+  },
 ];
 
 type SchemaMigrationRow = {

@@ -15,6 +15,7 @@ function compactNumber(value: number) {
 
 export function buildFitnessInsightSignature(input: FitnessInsightInput) {
   return JSON.stringify({
+    date: new Date().toISOString().split('T')[0],
     userName: input.userName,
     goal: input.goal,
     body: [compactNumber(input.weightKg), compactNumber(input.heightCm)],
@@ -30,7 +31,9 @@ export function buildFitnessInsightSignature(input: FitnessInsightInput) {
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
     workouts: input.workouts
-      .slice(-5)
+      .slice()
+      .sort((a, b) => b.performedAt.localeCompare(a.performedAt) || a.id.localeCompare(b.id))
+      .slice(0, 5)
       .map((workout) => ({
         id: workout.id,
         name: workout.name,
