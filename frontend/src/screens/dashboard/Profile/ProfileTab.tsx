@@ -43,7 +43,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
   const [editGoal, setEditGoal] = useState<GoalKey>(goal);
   const [isSaving, setIsSaving] = useState(false);
 
-  const { totalVolumeKg, weekStreak, weightEntries, calendarDays, loading, error } = useProfileStats();
+  const { totalVolumeKg, weekStreak, weightEntries, calendarDays, loading, error, refetch } = useProfileStats();
 
   const handleOpenEdit = () => {
     setEditHeight(String(heightCm));
@@ -66,6 +66,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
       Alert.alert('Error', res.message);
     } else {
       setEditModalVisible(false);
+      refetch();
     }
   };
 

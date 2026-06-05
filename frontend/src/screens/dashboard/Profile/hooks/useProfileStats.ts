@@ -1,7 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { fetchWorkouts, type Workout } from '@/api/workoutApi';
 import { fetchProgressEntries, type ProgressEntry } from '@/api/progressApi';
 import { supabase } from '@/lib/supabase';
+import { retryPendingBodyProgressCreates } from '@/local/bodyProgressSync';
+import {
+  getBodyProgressByUser,
+  upsertRemoteBodyProgressForUser,
+} from '@/local/repositories/bodyProgressRepository';
+import type { LocalBodyProgress } from '@/local/schema';
+import { useAuthStore } from '@/store/authStore';
 import {
   startOfWeek, endOfWeek, isToday, parseISO, format
 } from 'date-fns';
@@ -27,6 +35,23 @@ export interface ProfileStats {
 }
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function bodyProgressToProgressEntry(row: LocalBodyProgress): ProgressEntry {
+  return {
+    id: row.remote_id ?? row.id,
+    weight_kg: row.weight_kg,
+    body_fat_pct: row.body_fat_pct,
+    recorded_at: row.recorded_at,
+  };
+}
+
+function getRecentProgressEntries(entries: ProgressEntry[]) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  return entries
+    .filter((entry) => new Date(entry.recorded_at) >= cutoff)
+    .sort((a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime());
+}
 
 /** Maps a workout name string to a color-code key */
 function classifyWorkout(name: string): string {
@@ -111,6 +136,7 @@ async function fetchTotalVolume(): Promise<number> {
 
 /** Main hook — fetches all profile stats in parallel */
 export function useProfileStats(): ProfileStats {
+  const userId = useAuthStore((state) => state.user?.id ?? null);
   const [totalVolumeKg, setTotalVolumeKg] = useState(0);
   const [weekStreak, setWeekStreak] = useState(0);
   const [weightEntries, setWeightEntries] = useState<ProgressEntry[]>([]);
@@ -118,8 +144,30 @@ export function useProfileStats(): ProfileStats {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const refetch = () => setTick(t => t + 1);
+
+  const refreshLocalBodyProgress = useCallback(async () => {
+    if (!userId) {
+      setWeightEntries([]);
+      return;
+    }
+
+    const localRows = await getBodyProgressByUser(userId);
+    setWeightEntries(getRecentProgressEntries(localRows.map(bodyProgressToProgressEntry)));
+  }, [userId]);
+
+  const retryAndRefreshLocalBodyProgress = useCallback(async () => {
+    if (!userId) return;
+
+    try {
+      await retryPendingBodyProgressCreates(userId);
+      await refreshLocalBodyProgress();
+    } catch (err) {
+      console.warn('[Gemi] Body-progress retry skipped:', err);
+    }
+  }, [refreshLocalBodyProgress, userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,10 +175,37 @@ export function useProfileStats(): ProfileStats {
     async function load() {
       setLoading(true);
       setError(null);
+
+      if (userId) {
+        try {
+          const localRows = await getBodyProgressByUser(userId);
+          if (cancelled) return;
+
+          setWeightEntries(getRecentProgressEntries(localRows.map(bodyProgressToProgressEntry)));
+          setLoading(false);
+
+          await retryPendingBodyProgressCreates(userId);
+          if (cancelled) return;
+
+          const retriedRows = await getBodyProgressByUser(userId);
+          if (cancelled) return;
+
+          setWeightEntries(getRecentProgressEntries(retriedRows.map(bodyProgressToProgressEntry)));
+        } catch (err) {
+          if (!cancelled) {
+            setError(err instanceof Error ? err.message : 'Failed to load local body progress');
+          }
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      } else {
+        setWeightEntries([]);
+        setLoading(false);
+      }
+
       try {
-        const [workouts, progress, volume] = await Promise.all([
+        const [workouts, volume] = await Promise.all([
           fetchWorkouts(),
-          fetchProgressEntries(),
           fetchTotalVolume(),
         ]);
 
@@ -141,14 +216,6 @@ export function useProfileStats(): ProfileStats {
 
         // Week streak
         setWeekStreak(calcStreak(workouts));
-
-        // Weight entries: last 30 days, oldest first for chart
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - 30);
-        const recent = progress
-          .filter(p => new Date(p.recorded_at) >= cutoff)
-          .reverse();
-        setWeightEntries(recent);
 
         // Calendar: filter to current week
         const weekStart = startOfWeek(new Date(), { weekStartsOn: 0 });
@@ -163,6 +230,25 @@ export function useProfileStats(): ProfileStats {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Failed to load profile stats');
         }
+      }
+
+      try {
+        const remoteProgress = await fetchProgressEntries();
+        if (cancelled) return;
+
+        if (userId) {
+          await upsertRemoteBodyProgressForUser(userId, remoteProgress);
+          if (cancelled) return;
+
+          const mergedRows = await getBodyProgressByUser(userId);
+          if (cancelled) return;
+
+          setWeightEntries(getRecentProgressEntries(mergedRows.map(bodyProgressToProgressEntry)));
+        } else {
+          setWeightEntries(getRecentProgressEntries(remoteProgress));
+        }
+      } catch (err) {
+        console.warn('[Gemi] Remote body-progress refresh skipped:', err);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -170,7 +256,25 @@ export function useProfileStats(): ProfileStats {
 
     load();
     return () => { cancelled = true; };
-  }, [tick]);
+  }, [tick, userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const previousAppState = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      if (
+        nextAppState === 'active' &&
+        (previousAppState === 'background' || previousAppState === 'inactive')
+      ) {
+        void retryAndRefreshLocalBodyProgress();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [retryAndRefreshLocalBodyProgress, userId]);
 
   return { totalVolumeKg, weekStreak, weightEntries, calendarDays, loading, error, refetch };
 }

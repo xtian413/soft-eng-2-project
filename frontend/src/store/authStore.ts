@@ -3,6 +3,7 @@ import type { Session, User } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { supabase } from '@/lib/supabase';
+import { createBodyProgressLocal } from '@/local/repositories/bodyProgressRepository';
 
 interface ProfileState {
   fullName: string | null;
@@ -222,19 +223,13 @@ export const useAuthStore = create<AuthState>()(
             return { message: profileError.message };
           }
 
-          // 2. Insert into body_progress if weight changed
+          // 2. Save body-progress locally first if weight changed
           if (currentProfile.weightKg !== weightKg) {
-            const { error: weightError } = await supabase
-              .from('body_progress')
-              .insert({
-                user_id: userId,
-                weight_kg: weightKg,
-                recorded_at: new Date().toISOString(),
-              });
-
-            if (weightError) {
-              console.warn('[Gemi] Failed to save new weight progress:', weightError.message);
-            }
+            await createBodyProgressLocal({
+              user_id: userId,
+              weight_kg: weightKg,
+              recorded_at: new Date().toISOString(),
+            });
           }
 
           // 3. Update Zustand local state so macros recalculate instantly
