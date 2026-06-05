@@ -31,6 +31,14 @@ export interface LocalBaseRecord {
   last_synced_at: string | null;
 }
 
+export interface LocalProfile extends LocalBaseRecord {
+  full_name: string | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+  gender: 'male' | 'female' | null;
+  goal: 'lose_weight' | 'build_muscle' | 'maintain' | null;
+}
+
 export interface LocalBodyProgress extends LocalBaseRecord {
   remote_id: string | null;
   weight_kg: number;

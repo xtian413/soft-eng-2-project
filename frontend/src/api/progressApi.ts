@@ -9,7 +9,6 @@ export interface ProgressEntry {
 
 export interface ProgressCreateInput {
   weight_kg: number;
-  body_fat_pct?: number | null;
   recorded_at: string;
 }
 

@@ -3,6 +3,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { fetchWorkouts, type Workout } from '@/api/workoutApi';
 import { fetchProgressEntries, type ProgressEntry } from '@/api/progressApi';
 import { supabase } from '@/lib/supabase';
+import { retryPendingProfileSync } from '@/local/profileSync';
 import { retryPendingBodyProgressCreates } from '@/local/bodyProgressSync';
 import {
   getBodyProgressByUser,
@@ -162,10 +163,11 @@ export function useProfileStats(): ProfileStats {
     if (!userId) return;
 
     try {
+      await retryPendingProfileSync(userId);
       await retryPendingBodyProgressCreates(userId);
       await refreshLocalBodyProgress();
     } catch (err) {
-      console.warn('[Gemi] Body-progress retry skipped:', err);
+      console.warn('[Gemi] Profile foreground retry skipped:', err);
     }
   }, [refreshLocalBodyProgress, userId]);
 
@@ -183,6 +185,9 @@ export function useProfileStats(): ProfileStats {
 
           setWeightEntries(getRecentProgressEntries(localRows.map(bodyProgressToProgressEntry)));
           setLoading(false);
+
+          await retryPendingProfileSync(userId);
+          if (cancelled) return;
 
           await retryPendingBodyProgressCreates(userId);
           if (cancelled) return;

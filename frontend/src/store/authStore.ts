@@ -3,7 +3,18 @@ import type { Session, User } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { supabase } from '@/lib/supabase';
+import { retryPendingProfileSync } from '@/local/profileSync';
+import {
+  getProfileByUser,
+  upsertLocalProfile,
+  upsertRemoteProfileForUser,
+} from '@/local/repositories/profilesRepository';
 import { createBodyProgressLocal } from '@/local/repositories/bodyProgressRepository';
+import {
+  getBodyProgressByUser,
+  upsertRemoteBodyProgressForUser,
+} from '@/local/repositories/bodyProgressRepository';
+import type { LocalProfile } from '@/local/schema';
 
 interface ProfileState {
   fullName: string | null;
@@ -42,6 +53,43 @@ type AuthError = {
 };
 
 let authSubscription: { unsubscribe: () => void } | null = null;
+
+function localProfileToState(
+  profile: LocalProfile,
+  weightKg: number | null
+): ProfileState {
+  return {
+    fullName: profile.full_name,
+    heightCm: profile.height_cm,
+    weightKg,
+    gender: profile.gender,
+    goal: profile.goal,
+  };
+}
+
+async function getLatestLocalWeightKg(userId: string, profile?: LocalProfile | null) {
+  const rows = await getBodyProgressByUser(userId);
+  return rows.length > 0 ? rows[rows.length - 1].weight_kg : profile?.weight_kg ?? null;
+}
+
+function normalizeNumber(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeGender(value: unknown): ProfileState['gender'] {
+  return value === 'male' || value === 'female' ? value : null;
+}
+
+function normalizeGoal(value: unknown): ProfileState['goal'] {
+  return value === 'lose_weight' || value === 'build_muscle' || value === 'maintain'
+    ? value
+    : null;
+}
 
 /** Stores Supabase session state for the app. */
 export const useAuthStore = create<AuthState>()(
@@ -209,21 +257,16 @@ export const useAuthStore = create<AuthState>()(
         if (!userId || !currentProfile) return { message: 'Not logged in' };
 
         try {
-          // 1. Update profiles table
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .update({
-              height_cm: heightCm,
-              goal: goal,
-            })
-            .eq('id', userId);
+          const localProfile = await upsertLocalProfile({
+            user_id: userId,
+            full_name: currentProfile.fullName,
+            height_cm: heightCm,
+            weight_kg: weightKg,
+            gender: currentProfile.gender,
+            goal,
+          });
 
-          if (profileError) {
-            console.warn('[Gemi] Failed to update profile stats:', profileError.message);
-            return { message: profileError.message };
-          }
-
-          // 2. Save body-progress locally first if weight changed
+          // Keep profile weight as a current-value cache; body_progress remains history.
           if (currentProfile.weightKg !== weightKg) {
             await createBodyProgressLocal({
               user_id: userId,
@@ -232,16 +275,11 @@ export const useAuthStore = create<AuthState>()(
             });
           }
 
-          // 3. Update Zustand local state so macros recalculate instantly
           set({
-            profile: {
-              ...currentProfile,
-              heightCm,
-              weightKg,
-              goal,
-            }
+            profile: localProfileToState(localProfile, weightKg)
           });
 
+          void retryPendingProfileSync(userId);
           return null; // Success
         } catch (e: any) {
           console.warn('[Gemi] updatePhysicalStats error:', e);
@@ -255,33 +293,80 @@ export const useAuthStore = create<AuthState>()(
           return;
         }
         try {
+          const localProfile = await getProfileByUser(userId);
+          if (localProfile) {
+            const localWeightKg = await getLatestLocalWeightKg(userId, localProfile);
+            set({ profile: localProfileToState(localProfile, localWeightKg) });
+          }
+
+          void retryPendingProfileSync(userId);
+
           const { data, error } = await supabase
             .from('profiles')
             .select('full_name, height_cm, goal, gender')
             .eq('id', userId)
             .maybeSingle();
 
-          const { data: weightData } = await supabase
+          if (error || !data) {
+            if (error) {
+              console.warn('[Gemi] Remote profile refresh skipped:', error.message);
+            }
+            return;
+          }
+
+          const { data: weightData, error: weightError } = await supabase
             .from('body_progress')
-            .select('weight_kg')
+            .select('id, weight_kg, body_fat_pct, recorded_at, created_at')
             .eq('user_id', userId)
             .order('recorded_at', { ascending: false })
             .limit(1)
             .maybeSingle();
 
-          if (!error && data) {
-            set({
-              profile: {
-                fullName: data.full_name,
-                heightCm: data.height_cm ? parseFloat(data.height_cm) : null,
-                weightKg: weightData?.weight_kg ? parseFloat(weightData.weight_kg) : null,
-                gender: data.gender as any,
-                goal: data.goal as any,
-              }
-            });
+          if (weightError) {
+            console.warn('[Gemi] Remote profile weight refresh skipped:', weightError.message);
           }
+
+          const remoteWeightKg = normalizeNumber(weightData?.weight_kg);
+          if (weightData?.id && weightData.recorded_at && remoteWeightKg !== null && remoteWeightKg > 0) {
+            await upsertRemoteBodyProgressForUser(userId, [{
+              id: String(weightData.id),
+              weight_kg: remoteWeightKg,
+              body_fat_pct: normalizeNumber(weightData.body_fat_pct),
+              recorded_at: String(weightData.recorded_at),
+              created_at: weightData.created_at ? String(weightData.created_at) : undefined,
+            }]);
+          }
+
+          const safeProfile = await upsertRemoteProfileForUser(userId, {
+            full_name: typeof data.full_name === 'string' ? data.full_name : null,
+            height_cm: normalizeNumber(data.height_cm),
+            weight_kg: remoteWeightKg,
+            gender: normalizeGender(data.gender),
+            goal: normalizeGoal(data.goal),
+          });
+
+          const finalLocalProfile = await getProfileByUser(userId) ?? safeProfile;
+          const finalWeightKg = await getLatestLocalWeightKg(userId, finalLocalProfile);
+          set({
+            profile: localProfileToState(
+              finalLocalProfile,
+              finalWeightKg ?? finalLocalProfile.weight_kg ?? remoteWeightKg
+            )
+          });
         } catch (e) {
-          console.warn('[Gemi] Failed to fetch user profile:', e);
+          if (!get().profile) {
+            try {
+              const localProfile = await getProfileByUser(userId);
+              if (localProfile) {
+                const localWeightKg = await getLatestLocalWeightKg(userId, localProfile);
+                set({ profile: localProfileToState(localProfile, localWeightKg) });
+              }
+            } catch (localError) {
+              console.warn('[Gemi] Failed to read cached user profile:', localError);
+            }
+          } else {
+            console.warn('[Gemi] Failed to refresh user profile:', e);
+          }
         }
       },
     }),

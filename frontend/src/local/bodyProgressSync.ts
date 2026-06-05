@@ -40,7 +40,6 @@ export async function syncBodyProgressCreateToRemote(
   try {
     const remoteRow = await createProgressEntry({
       weight_kg: localRow.weight_kg,
-      body_fat_pct: localRow.body_fat_pct,
       recorded_at: localRow.recorded_at,
     });
 
