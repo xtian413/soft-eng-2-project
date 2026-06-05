@@ -269,6 +269,26 @@ export async function getUnsyncedEditedDietLogsByUser(userId: string): Promise<L
   }
 }
 
+export async function getUnsyncedDeletedDietLogsByUser(userId: string): Promise<LocalDietLog[]> {
+  try {
+    assertUserId(userId);
+
+    const db = await initializeLocalDatabase();
+    return await db.getAllAsync<LocalDietLog>(
+      `SELECT ${DIET_LOG_COLUMNS}
+       FROM ${LOCAL_TABLES.dietLogs}
+       WHERE user_id = ?
+         AND deleted_at IS NOT NULL
+         AND remote_id IS NOT NULL
+         AND sync_status IN ('pending', 'failed')
+       ORDER BY updated_at ASC, created_at ASC`,
+      userId
+    );
+  } catch (error) {
+    wrapDietLogError('read unsynced deleted', error);
+  }
+}
+
 export async function updateDietLog(
   userId: string,
   id: string,
@@ -475,6 +495,31 @@ export async function markDietLogDeleteSynced(userId: string, id: string): Promi
     }
   } catch (error) {
     wrapDietLogError('mark delete synced', error);
+  }
+}
+
+export async function markDietLogDeleteSyncFailed(userId: string, id: string): Promise<void> {
+  try {
+    assertUserId(userId);
+
+    const db = await initializeLocalDatabase();
+    const now = new Date().toISOString();
+    const result = await db.runAsync(
+      `UPDATE ${LOCAL_TABLES.dietLogs}
+       SET sync_status = 'failed',
+           updated_at = ?,
+           last_synced_at = NULL
+       WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL`,
+      now,
+      id,
+      userId
+    );
+
+    if (result.changes === 0) {
+      throw new Error('Deleted diet log was not found for the supplied user.');
+    }
+  } catch (error) {
+    wrapDietLogError('mark delete sync failed', error);
   }
 }
 

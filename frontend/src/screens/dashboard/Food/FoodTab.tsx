@@ -27,8 +27,10 @@ import {
 import {
   createDietLog as createLocalDietLog,
   getDietLogByUserAndId,
+  getUnsyncedDeletedDietLogsByUser,
   getUnsyncedEditedDietLogsByUser,
   getUnsyncedNewDietLogsByUser,
+  markDietLogDeleteSyncFailed,
   markDietLogDeleteSynced,
   markDietLogSyncFailed,
   markDietLogSynced,
@@ -200,6 +202,7 @@ export function FoodTab({
   const latestSearchRef = useRef(0);
   const isRetryingDietLogsRef = useRef(false);
   const isRetryingDietLogUpdatesRef = useRef(false);
+  const isRetryingDietLogDeletesRef = useRef(false);
   const inFlightDietLogCreateIdsRef = useRef(new Set<string>());
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
@@ -385,6 +388,52 @@ export function FoodTab({
     [refreshFoodLogs]
   );
 
+  const retryPendingDietLogDeletes = useCallback(
+    async (targetUserId: string) => {
+      if (!targetUserId) return;
+
+      if (isRetryingDietLogDeletesRef.current) {
+        console.log('[FoodTab] Diet-log delete retry skipped: already running');
+        return;
+      }
+
+      isRetryingDietLogDeletesRef.current = true;
+      try {
+        console.log('[FoodTab] Diet-log delete retry begin');
+        const unsyncedLogs = await getUnsyncedDeletedDietLogsByUser(targetUserId);
+        console.log(`[FoodTab] Unsynced deleted diet logs found: ${unsyncedLogs.length}`);
+
+        for (const localLog of unsyncedLogs) {
+          if (!localLog.remote_id) {
+            console.log(`[FoodTab] Diet-log delete retry skipped missing remote id: ${localLog.id}`);
+            continue;
+          }
+
+          console.log(`[FoodTab] Retrying deleted local diet log: ${localLog.id}`);
+
+          try {
+            await deleteRemoteDietLog(localLog.remote_id);
+            await markDietLogDeleteSynced(targetUserId, localLog.id);
+            console.log(`[FoodTab] Diet-log delete retry synced: ${localLog.id}`);
+          } catch (error) {
+            const message = getErrorMessage(error);
+            console.log(`[FoodTab] Diet-log delete retry failed: ${message}`);
+            await markDietLogDeleteSyncFailed(targetUserId, localLog.id).catch((markError) => {
+              console.error('[Gemi] Failed to mark deleted diet log sync failed:', markError);
+            });
+          }
+        }
+
+        console.log('[FoodTab] Diet-log delete retry complete');
+      } catch (error) {
+        console.log(`[FoodTab] Diet-log delete retry failed: ${getErrorMessage(error)}`);
+      } finally {
+        isRetryingDietLogDeletesRef.current = false;
+      }
+    },
+    []
+  );
+
   // Custom Food Form
   const [customName, setCustomName] = useState('');
   const [customCals, setCustomCals] = useState('');
@@ -454,7 +503,8 @@ export function FoodTab({
     if (!userId) return;
     void retryPendingDietLogCreates(userId);
     void retryPendingDietLogUpdates(userId);
-  }, [retryPendingDietLogCreates, retryPendingDietLogUpdates, userId]);
+    void retryPendingDietLogDeletes(userId);
+  }, [retryPendingDietLogCreates, retryPendingDietLogDeletes, retryPendingDietLogUpdates, userId]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
@@ -468,13 +518,14 @@ export function FoodTab({
       ) {
         void retryPendingDietLogCreates(userId);
         void retryPendingDietLogUpdates(userId);
+        void retryPendingDietLogDeletes(userId);
       }
     });
 
     return () => {
       subscription.remove();
     };
-  }, [retryPendingDietLogCreates, retryPendingDietLogUpdates, userId]);
+  }, [retryPendingDietLogCreates, retryPendingDietLogDeletes, retryPendingDietLogUpdates, userId]);
 
   // Derived macros totals
   const proteinTotal = Number(foodLogs.reduce((acc, f) => acc + f.protein, 0).toFixed(1));
@@ -673,6 +724,9 @@ export function FoodTab({
             await markDietLogDeleteSynced(userId, id);
           } catch (error) {
             console.error('[Gemi] Failed to sync diet-log delete to backend:', getErrorMessage(error));
+            await markDietLogDeleteSyncFailed(userId, id).catch((markError) => {
+              console.error('[Gemi] Failed to mark deleted diet log sync failed:', markError);
+            });
           }
         })();
       }
