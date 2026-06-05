@@ -291,6 +291,24 @@ const MIGRATIONS: Migration[] = [
       }
     },
   },
+  {
+    version: 6,
+    name: 'add_remote_id_to_body_progress',
+    apply: async (db) => {
+      const columns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${LOCAL_TABLES.bodyProgress})`
+      );
+      const hasRemoteId = columns.some((column) => column.name === 'remote_id');
+
+      if (!hasRemoteId) {
+        await db.execAsync(`ALTER TABLE ${LOCAL_TABLES.bodyProgress} ADD COLUMN remote_id TEXT`);
+      }
+
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_body_progress_remote_id ON ${LOCAL_TABLES.bodyProgress}(remote_id)`
+      );
+    },
+  },
 ];
 
 type SchemaMigrationRow = {

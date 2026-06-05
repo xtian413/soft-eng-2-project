@@ -2,7 +2,7 @@ import type { MealId } from '@/screens/dashboard/types';
 
 export const GEMI_USER_DATABASE_NAME = 'gemi_user.db';
 
-export const LOCAL_SCHEMA_VERSION = 5;
+export const LOCAL_SCHEMA_VERSION = 6;
 
 export const LOCAL_TABLES = {
   schemaMigrations: 'schema_migrations',
@@ -29,6 +29,13 @@ export interface LocalBaseRecord {
   deleted_at: string | null;
   sync_status: SyncStatus;
   last_synced_at: string | null;
+}
+
+export interface LocalBodyProgress extends LocalBaseRecord {
+  remote_id: string | null;
+  weight_kg: number;
+  body_fat_pct: number | null;
+  recorded_at: string;
 }
 
 export interface LocalDietLog extends LocalBaseRecord {
