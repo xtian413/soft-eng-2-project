@@ -41,7 +41,6 @@ function bodyProgressToProgressEntry(row: LocalBodyProgress): ProgressEntry {
   return {
     id: row.remote_id ?? row.id,
     weight_kg: row.weight_kg,
-    body_fat_pct: row.body_fat_pct,
     recorded_at: row.recorded_at,
   };
 }

@@ -7,7 +7,6 @@ import {
   Text,
   View,
   TouchableOpacity,
-  TextInput,
 } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
@@ -49,10 +48,9 @@ import { HydrationTrackerCard } from './HydrationTrackerCard';
 import { SleepRecoveryCard } from './SleepRecoveryCard';
 import { LoggedItemDetailsModal } from './LoggedItemDetailsModal';
 import { FoodSearchModal } from './FoodSearchModal';
-import {
-  Lock,
-  Sparkles,
-} from 'lucide-react-native';
+import { QuickParserCard, type QuickParserReviewItem } from './QuickParserCard';
+import { parseFoodDescription, type ParsedFoodItem, type ParsedFoodUnit } from '@/ai/foodParser';
+import { Lock } from 'lucide-react-native';
 
 interface FoodTabProps {
   userId: string | null;
@@ -68,6 +66,10 @@ type SyncCreatedDietLogResult = {
   didSync: boolean;
   message?: string;
   skippedInFlight?: boolean;
+};
+type QuickParserMatchedItem = QuickParserReviewItem & {
+  entry: FoodLogEntry | null;
+  sourceFoodId: string | null;
 };
 
 const REMOTE_FOOD_ID_PREFIX = 'supabase_usda:';
@@ -110,6 +112,89 @@ function mergeLocalAndRemoteFoodResults(
   }
 
   return merged;
+}
+
+function normalizePortionText(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getPortionGramWeight(food: GemiFoodItem, unit: ParsedFoodUnit) {
+  const defaultUnit = normalizePortionText(food.defaultServingUnit);
+
+  if (
+    unit === 'serving' &&
+    food.defaultServingSize > 0 &&
+    defaultUnit !== '100g' &&
+    defaultUnit !== '1g'
+  ) {
+    return food.defaultServingSize;
+  }
+
+  if (defaultUnit === unit && food.defaultServingSize > 0) {
+    return food.defaultServingSize;
+  }
+
+  const unitMatchers: Record<ParsedFoodUnit, string[]> = {
+    g: [],
+    kg: [],
+    ml: ['ml', 'milliliter', 'milliliters'],
+    piece: ['piece', 'whole', 'unit', 'egg', 'large', 'medium', 'small'],
+    serving: ['serving', 'portion'],
+    tbsp: ['tbsp', 'tablespoon', 'tablespoons'],
+    tsp: ['tsp', 'teaspoon', 'teaspoons'],
+    cup: ['cup', 'cups'],
+    oz: ['oz', 'ounce', 'ounces'],
+  };
+
+  const matchers = unitMatchers[unit];
+  const portion = food.portions.find((candidate) => {
+    if (!candidate.gramWeight || candidate.gramWeight <= 0 || !candidate.amount || candidate.amount <= 0) {
+      return false;
+    }
+
+    const name = normalizePortionText(candidate.name);
+    return matchers.some((matcher) => name.includes(matcher));
+  });
+
+  return portion ? portion.gramWeight / portion.amount : null;
+}
+
+function resolveParsedFoodWeight(food: GemiFoodItem, item: ParsedFoodItem) {
+  if (item.unit === 'g') return item.quantity;
+  if (item.unit === 'kg') return item.quantity * 1000;
+
+  const gramWeight = getPortionGramWeight(food, item.unit);
+  return gramWeight ? item.quantity * gramWeight : null;
+}
+
+function buildQuickParserEntry(
+  item: ParsedFoodItem,
+  food: GemiFoodItem,
+  mealId: MealId,
+  index: number
+): FoodLogEntry | null {
+  const grams = resolveParsedFoodWeight(food, item);
+  if (!grams || grams <= 0) return null;
+
+  const multiplier = grams / 100;
+  return {
+    id: `quick_${Date.now()}_${index}`,
+    name: food.name,
+    mealId,
+    calories: Math.round(food.calories * multiplier),
+    protein: Number((food.protein * multiplier).toFixed(1)),
+    carbs: Number((food.carbs * multiplier).toFixed(1)),
+    fat: Number((food.fat * multiplier).toFixed(1)),
+    fiber: Number((food.fiber * multiplier).toFixed(1)),
+    sodium: Math.round(food.sodium * multiplier),
+    potassium: Math.round(food.potassium * multiplier),
+    calcium: Math.round(food.calcium * multiplier),
+    iron: Number((food.iron * multiplier).toFixed(2)),
+    vitaminC: Number((food.vitaminC * multiplier).toFixed(1)),
+    folate: Math.round(food.folate * multiplier),
+    servingSize: item.quantity,
+    servingUnit: item.unit,
+  };
 }
 
 export function FoodTab({
@@ -183,8 +268,13 @@ export function FoodTab({
     return { sleepQuality, sleepQualityColor };
   }, [sleepHours]);
 
-  // Natural Language Input
-  const [aiInput, setAiInput] = useState('');
+  // Natural-language quick log state
+  const [quickInput, setQuickInput] = useState('');
+  const [quickMealId, setQuickMealId] = useState<MealId>('snack');
+  const [quickItems, setQuickItems] = useState<QuickParserMatchedItem[]>([]);
+  const [quickError, setQuickError] = useState<string | null>(null);
+  const [isQuickParsing, setQuickParsing] = useState(false);
+  const [isQuickSaving, setQuickSaving] = useState(false);
 
   // Modal search state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -545,56 +635,178 @@ export function FoodTab({
   const ironTotal = Number(foodLogs.reduce((acc, f) => acc + (f.iron || 0), 0).toFixed(1));
   const vitaminCTotal = Number(foodLogs.reduce((acc, f) => acc + (f.vitaminC || 0), 0).toFixed(1));
 
-  // Handle Natural Language quick logging
-  const handleAiQuickLog = () => {
-    if (!aiInput.trim()) return;
-    const q = aiInput.toLowerCase();
-    let matchedFood: Partial<FoodLogEntry> | null = null;
-    let qty = 1;
+  const findQuickFoodMatch = useCallback(async (item: ParsedFoodItem) => {
+    const localMatches = await searchLocalFoods(item.foodName, 1).catch((error) => {
+      console.warn('[FoodTab] Quick Log local food search failed:', getErrorMessage(error));
+      return [];
+    });
 
-    // Local mock queries matching web staple keywords
-    if (q.includes('egg')) {
-      matchedFood = { name: 'Boiled Egg', calories: 78, protein: 6.3, carbs: 0.6, fat: 5.3, fiber: 0, sodium: 62 };
-      const m = q.match(/(\d+)\s*egg/);
-      if (m) qty = Number(m[1]);
-    } else if (q.includes('toast') || q.includes('bread')) {
-      matchedFood = { name: 'Whole Wheat Toast (slice)', calories: 80, protein: 4.0, carbs: 15.0, fat: 1.0, fiber: 2.0, sodium: 130 };
-      const m = q.match(/(\d+)\s*(toast|slice|bread)/);
-      if (m) qty = Number(m[1]);
-    } else if (q.includes('hummus')) {
-      matchedFood = { name: 'Hummus commercial', calories: 177, protein: 4.8, carbs: 8.6, fat: 14.3, fiber: 4.0, sodium: 300 };
-    } else if (q.includes('chicken') || q.includes('breast')) {
-      matchedFood = { name: 'Chicken breast grilled', calories: 165, protein: 31.0, carbs: 0.0, fat: 3.6, fiber: 0, sodium: 74 };
-    } else if (q.includes('salmon') || q.includes('fish')) {
-      matchedFood = { name: 'Oven Baked Salmon', calories: 200, protein: 22.0, carbs: 0.0, fat: 12.0, fiber: 0, sodium: 60 };
+    if (localMatches[0]) {
+      return localMatches[0];
     }
 
-    if (matchedFood) {
-      const entry: FoodLogEntry = {
-        id: `ai_${Date.now()}`,
-        name: matchedFood.name || 'Quick Logged Item',
-        mealId: 'snack',
-        calories: Math.round((matchedFood.calories || 0) * qty),
-        protein: Number(((matchedFood.protein || 0) * qty).toFixed(1)),
-        carbs: Number(((matchedFood.carbs || 0) * qty).toFixed(1)),
-        fat: Number(((matchedFood.fat || 0) * qty).toFixed(1)),
-        fiber: Number(((matchedFood.fiber || 0) * qty).toFixed(1)),
-        sodium: Math.round((matchedFood.sodium || 0) * qty),
-        potassium: 100 * qty,
-        calcium: 20 * qty,
-        iron: 0.5 * qty,
-        vitaminC: 0,
-        folate: 0,
-        servingSize: qty,
-        servingUnit: 'portion',
-      };
-      setFoodLogs((prev) => [...prev, entry]);
-      setAiInput('');
-      triggerToast(`AI Parser: Logged ${entry.name} x${qty} (+${entry.calories} kcal)`);
-    } else {
-      triggerToast("AI Parser: Try '2 eggs' or 'chicken breast'");
+    try {
+      const remoteMatches = await searchFoodDatabase({
+        query: item.foodName,
+        limit: 3,
+      });
+
+      if (remoteMatches.length > 0) {
+        void cacheRemoteFoodItems(remoteMatches).catch((cacheError) => {
+          console.warn('[FoodTab] Failed to cache Quick Log food results:', getErrorMessage(cacheError));
+        });
+      }
+
+      return remoteMatches[0] ?? null;
+    } catch (error) {
+      console.warn('[FoodTab] Quick Log backend food search skipped:', getErrorMessage(error));
+      return null;
     }
-  };
+  }, []);
+
+  const handleQuickParse = useCallback(async () => {
+    if (isQuickParsing || isQuickSaving) return;
+
+    setQuickParsing(true);
+    setQuickError(null);
+
+    try {
+      const parsed = await parseFoodDescription(quickInput);
+      const nextItems: QuickParserMatchedItem[] = [];
+
+      for (const [index, item] of parsed.items.entries()) {
+        const matchedFood = await findQuickFoodMatch(item);
+
+        if (!matchedFood) {
+          nextItems.push({
+            id: `quick_unmatched_${Date.now()}_${index}`,
+            parsedName: item.foodName,
+            quantity: item.quantity,
+            unit: item.unit,
+            matchedName: null,
+            calories: null,
+            protein: null,
+            carbs: null,
+            fat: null,
+            status: 'unmatched',
+            message: 'No database match found. Remove it or add it manually from search.',
+            entry: null,
+            sourceFoodId: null,
+          });
+          continue;
+        }
+
+        const entry = buildQuickParserEntry(item, matchedFood, quickMealId, index);
+        if (!entry) {
+          nextItems.push({
+            id: `quick_review_${Date.now()}_${index}`,
+            parsedName: item.foodName,
+            quantity: item.quantity,
+            unit: item.unit,
+            matchedName: matchedFood.name,
+            calories: null,
+            protein: null,
+            carbs: null,
+            fat: null,
+            status: 'needs_review',
+            message: `Matched ${matchedFood.name}, but ${item.unit} needs a known portion. Add it manually from search.`,
+            entry: null,
+            sourceFoodId: matchedFood.id,
+          });
+          continue;
+        }
+
+        nextItems.push({
+          id: entry.id,
+          parsedName: item.foodName,
+          quantity: item.quantity,
+          unit: item.unit,
+          matchedName: matchedFood.name,
+          calories: entry.calories,
+          protein: entry.protein,
+          carbs: entry.carbs,
+          fat: entry.fat,
+          status: 'ready',
+          message: 'Ready to add.',
+          entry,
+          sourceFoodId: matchedFood.id,
+        });
+      }
+
+      setQuickItems(nextItems);
+      if (!nextItems.some((item) => item.status === 'ready')) {
+        setQuickError('No parsed foods are ready to add yet. Remove unresolved items or add them manually from search.');
+      }
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setQuickItems([]);
+      setQuickError(message);
+    } finally {
+      setQuickParsing(false);
+    }
+  }, [findQuickFoodMatch, isQuickParsing, isQuickSaving, quickInput, quickMealId]);
+
+  const handleQuickConfirm = useCallback(async () => {
+    if (isQuickSaving || isSavingLog) return;
+
+    const readyItems = quickItems.filter((item) => item.status === 'ready' && item.entry);
+    if (readyItems.length === 0) {
+      setQuickError('No matched foods are ready to add.');
+      return;
+    }
+
+    setQuickSaving(true);
+    setIsSavingLog(true);
+    setQuickError(null);
+
+    try {
+      const loggedAt = new Date().toISOString();
+      for (const item of readyItems) {
+        if (!item.entry) continue;
+        const entry = {
+          ...item.entry,
+          mealId: quickMealId,
+        };
+
+        await saveDietLogLocalFirst(
+          entry,
+          loggedAt,
+          item.sourceFoodId,
+          `Logged to ${quickMealId}: ${entry.name}`
+        );
+
+        if (item.sourceFoodId) {
+          void markFoodLastUsed(item.sourceFoodId).catch((error) => {
+            console.warn('[FoodTab] Failed to mark Quick Log food used:', getErrorMessage(error));
+          });
+        }
+      }
+
+      setQuickItems((items) => items.filter((item) => item.status !== 'ready'));
+      if (quickItems.length === readyItems.length) {
+        setQuickInput('');
+      }
+      triggerToast(`Added ${readyItems.length} Quick Log item${readyItems.length === 1 ? '' : 's'}.`);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      console.error('[Gemi] Failed to save Quick Log items:', message);
+      setQuickError(`Failed to save: ${message}`);
+      triggerToast(`Failed to save: ${message}`);
+    } finally {
+      setIsSavingLog(false);
+      setQuickSaving(false);
+    }
+  }, [isQuickSaving, isSavingLog, quickItems, quickMealId, saveDietLogLocalFirst, triggerToast]);
+
+  const handleQuickClear = useCallback(() => {
+    setQuickInput('');
+    setQuickItems([]);
+    setQuickError(null);
+  }, []);
+
+  const handleQuickRemoveItem = useCallback((id: string) => {
+    setQuickItems((items) => items.filter((item) => item.id !== id));
+  }, []);
 
   const handleOpenSearchModal = (meal: MealId) => {
     setActiveMealId(meal);
@@ -817,32 +1029,20 @@ export function FoodTab({
           triggerToast={triggerToast}
         />
 
-        {/* AI Natural Language Log Card */}
-        <View style={styles.aiLogCard}>
-          <View style={styles.aiLogHeader}>
-            <Sparkles size={14} color={Colors.primaryContainer} />
-            <Text style={styles.aiLogTitle}>AI QUICK PARSER</Text>
-          </View>
-          <View style={styles.aiLogInputRow}>
-            <TextInput
-              style={styles.aiLogInput}
-              placeholder="e.g. '2 boiled eggs' or 'chicken breast'"
-              placeholderTextColor={Colors.outline}
-              value={aiInput}
-              onChangeText={setAiInput}
-              accessibilityLabel="Quick food log input"
-            />
-            <TouchableOpacity
-              style={styles.aiLogBtn}
-              onPress={handleAiQuickLog}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="Log quick food"
-            >
-              <Text style={styles.aiLogBtnText}>Log</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <QuickParserCard
+          value={quickInput}
+          mealId={quickMealId}
+          items={quickItems}
+          isParsing={isQuickParsing}
+          isSaving={isQuickSaving}
+          error={quickError}
+          onChangeText={setQuickInput}
+          onMealChange={setQuickMealId}
+          onParse={handleQuickParse}
+          onConfirm={handleQuickConfirm}
+          onClear={handleQuickClear}
+          onRemoveItem={handleQuickRemoveItem}
+        />
 
         <MealDiarySection
           foodLogs={foodLogs}
@@ -1058,54 +1258,6 @@ const styles = StyleSheet.create({
     color: Colors.outline,
     marginTop: 2,
     fontWeight: fontWeight.medium,
-  },
-  aiLogCard: {
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: radius.lg,
-    padding: spacing.base,
-    marginBottom: spacing.base,
-    borderWidth: 1.5,
-    borderColor: 'rgba(14, 165, 233, 0.25)',
-  },
-  aiLogHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  aiLogTitle: {
-    fontSize: typography.xs,
-    fontWeight: fontWeight.bold,
-    color: Colors.primaryContainer,
-    letterSpacing: 0.8,
-  },
-  aiLogInputRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  aiLogInput: {
-    flex: 1,
-    minHeight: layout.minTouchTarget,
-    backgroundColor: Colors.background,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.base,
-    fontSize: typography.sm,
-    color: Colors.onSurface,
-    borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.15)',
-  },
-  aiLogBtn: {
-    backgroundColor: Colors.primaryContainer,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.base,
-    justifyContent: 'center',
-    minHeight: layout.minTouchTarget,
-    alignItems: 'center',
-  },
-  aiLogBtnText: {
-    color: Colors.onPrimary,
-    fontWeight: fontWeight.bold,
-    fontSize: typography.sm,
   },
   mealSectionCard: {
     backgroundColor: Colors.surfaceContainerLowest,

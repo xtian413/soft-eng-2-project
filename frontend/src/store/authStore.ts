@@ -316,7 +316,7 @@ export const useAuthStore = create<AuthState>()(
 
           const { data: weightData, error: weightError } = await supabase
             .from('body_progress')
-            .select('id, weight_kg, body_fat_pct, recorded_at, created_at')
+            .select('id, weight_kg, recorded_at, created_at')
             .eq('user_id', userId)
             .order('recorded_at', { ascending: false })
             .limit(1)
@@ -331,7 +331,6 @@ export const useAuthStore = create<AuthState>()(
             await upsertRemoteBodyProgressForUser(userId, [{
               id: String(weightData.id),
               weight_kg: remoteWeightKg,
-              body_fat_pct: normalizeNumber(weightData.body_fat_pct),
               recorded_at: String(weightData.recorded_at),
               created_at: weightData.created_at ? String(weightData.created_at) : undefined,
             }]);

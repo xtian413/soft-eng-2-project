@@ -12,7 +12,6 @@ const router = Router();
 
 const progressSchema = z.object({
   weight_kg: z.number().positive(),
-  body_fat_pct: z.number().min(0).max(100).optional(),
   recorded_at: z.string().datetime(),
 });
 

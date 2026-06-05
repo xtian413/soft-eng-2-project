@@ -2,13 +2,11 @@ import { supabaseAdmin } from '../config/supabase.js';
 
 export interface ProgressCreateInput {
   weight_kg: number;
-  body_fat_pct?: number | null;
   recorded_at: string;
 }
 
 export interface ProgressUpdateInput {
   weight_kg?: number;
-  body_fat_pct?: number | null;
   recorded_at?: string;
 }
 
@@ -37,7 +35,6 @@ export async function createProgressEntry(
     .insert({
       user_id: userId,
       weight_kg: input.weight_kg,
-      body_fat_pct: input.body_fat_pct ?? null,
       recorded_at: input.recorded_at,
     })
     .select('*')

@@ -22,6 +22,9 @@ const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_TOP_P = 0.9;
 const DEFAULT_TOP_K = 40;
 const DEFAULT_REPEAT_PENALTY = 1.05;
+const LFM_BUSY_MESSAGE = 'AI is currently busy. Please try again in a moment.';
+
+let activeGenerationPromise: Promise<string> | null = null;
 
 type LfmNativeModule = {
   initModel: (modelPath: string, nCtx: number, nThreads: number, nBatch: number) => Promise<void>;
@@ -159,30 +162,40 @@ async function generateResponseWithTimeout(
   repeatPenalty: number,
   timeoutMs: number,
 ) {
+  if (activeGenerationPromise) {
+    throw new Error(LFM_BUSY_MESSAGE);
+  }
+
   const module = getLfmModule();
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   const startedAt = Date.now();
-  const generationPromise = module.generateResponse(
-    prompt,
-    maxTokens,
-    temperature,
-    topP,
-    topK,
-    repeatPenalty,
-  );
-
-  const timeoutPromise = new Promise<string>((_, reject) => {
-    timeoutId = setTimeout(() => {
-      module.cancelGeneration().catch((error) => {
-        console.warn('[Gemi] Failed to cancel timed-out generation:', error);
-      });
-      reject(new Error(`On-device generation exceeded ${Math.round(timeoutMs / 1000)} seconds.`));
-    }, timeoutMs);
-  });
+  const generationLock = Promise.resolve('');
+  activeGenerationPromise = generationLock;
 
   try {
+    const generationPromise = module.generateResponse(
+      prompt,
+      maxTokens,
+      temperature,
+      topP,
+      topK,
+      repeatPenalty,
+    );
+
+    const timeoutPromise = new Promise<string>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        module.cancelGeneration().catch((error) => {
+          console.warn('[Gemi] Failed to cancel timed-out generation:', error);
+        });
+        reject(new Error(`On-device generation exceeded ${Math.round(timeoutMs / 1000)} seconds.`));
+      }, timeoutMs);
+    });
+
     return await Promise.race([generationPromise, timeoutPromise]);
   } finally {
+    if (activeGenerationPromise === generationLock) {
+      activeGenerationPromise = null;
+    }
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
