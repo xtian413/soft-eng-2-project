@@ -1,4 +1,4 @@
-import type { DietLog, DietLogCreateInput } from '@/api/dietApi';
+import type { DietLog, DietLogCreateInput, DietLogUpdateInput } from '@/api/dietApi';
 import type { CreateLocalDietLogInput, LocalDietLog } from '@/local/schema';
 import type { FoodLogEntry, MealId } from '@/screens/dashboard/types';
 
@@ -64,6 +64,22 @@ export function foodLogEntryToRemoteCreateInput(
   loggedAt: string
 ): DietLogCreateInput {
   return {
+    meal_id: normalizeMealId(entry.mealId),
+    meal_name: entry.name,
+    calories: entry.calories,
+    protein_g: entry.protein,
+    carbs_g: entry.carbs,
+    fat_g: entry.fat,
+    logged_at: loggedAt,
+  };
+}
+
+export function foodLogEntryToRemoteUpdateInput(
+  entry: FoodLogEntry,
+  loggedAt: string
+): DietLogUpdateInput {
+  return {
+    meal_id: normalizeMealId(entry.mealId),
     meal_name: entry.name,
     calories: entry.calories,
     protein_g: entry.protein,
@@ -76,6 +92,7 @@ export function foodLogEntryToRemoteCreateInput(
 export function remoteDietLogToLocalRemoteInput(log: DietLog) {
   return {
     id: log.id,
+    meal_id: normalizeMealId(log.meal_id),
     meal_name: log.meal_name,
     calories: log.calories,
     protein_g: log.protein_g,

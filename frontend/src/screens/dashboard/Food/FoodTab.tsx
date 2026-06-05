@@ -59,7 +59,11 @@ interface FoodTabProps {
 }
 
 type NutrientSlideType = 'energy' | 'macros' | 'micros';
-type SyncCreatedDietLogResult = { didSync: boolean; message?: string };
+type SyncCreatedDietLogResult = {
+  didSync: boolean;
+  message?: string;
+  skippedInFlight?: boolean;
+};
 
 const REMOTE_FOOD_ID_PREFIX = 'supabase_usda:';
 
@@ -192,6 +196,7 @@ export function FoodTab({
   const [configWeight, setConfigWeight] = useState(100);
   const latestSearchRef = useRef(0);
   const isRetryingDietLogsRef = useRef(false);
+  const inFlightDietLogCreateIdsRef = useRef(new Set<string>());
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   // Viewing Logged Item Detail Modal State
@@ -211,6 +216,16 @@ export function FoodTab({
       const showFailureToast = options?.showFailureToast ?? true;
       const refreshAfterSync = options?.refreshAfterSync ?? true;
 
+      if (inFlightDietLogCreateIdsRef.current.has(localId)) {
+        return {
+          didSync: false,
+          message: 'Diet log create sync already in progress.',
+          skippedInFlight: true,
+        };
+      }
+
+      inFlightDietLogCreateIdsRef.current.add(localId);
+
       try {
         const remoteLog = await createRemoteDietLog(remoteInput);
         await markDietLogSynced(userId, localId, remoteLog.id);
@@ -228,6 +243,8 @@ export function FoodTab({
           triggerToast(`Saved locally. Remote sync pending: ${message}`);
         }
         return { didSync: false, message };
+      } finally {
+        inFlightDietLogCreateIdsRef.current.delete(localId);
       }
     },
     [refreshFoodLogs, triggerToast, userId]
@@ -275,6 +292,11 @@ export function FoodTab({
         console.log(`[FoodTab] Unsynced new diet logs found: ${unsyncedLogs.length}`);
 
         for (const localLog of unsyncedLogs) {
+          if (inFlightDietLogCreateIdsRef.current.has(localLog.id)) {
+            console.log(`[FoodTab] Diet-log create retry skipped in-flight row: ${localLog.id}`);
+            continue;
+          }
+
           console.log(`[FoodTab] Retrying local diet log: ${localLog.id}`);
           const entry = localDietLogToFoodLogEntry(localLog);
           const remoteInput = foodLogEntryToRemoteCreateInput(entry, localLog.logged_at);
@@ -286,6 +308,8 @@ export function FoodTab({
           if (result.didSync) {
             shouldRefreshLogs = true;
             console.log(`[FoodTab] Diet-log create retry synced: ${localLog.id}`);
+          } else if (result.skippedInFlight) {
+            console.log(`[FoodTab] Diet-log create retry skipped in-flight row: ${localLog.id}`);
           } else {
             console.log(`[FoodTab] Diet-log create retry failed: ${result.message ?? 'Unknown error'}`);
           }

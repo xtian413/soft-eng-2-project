@@ -9,6 +9,7 @@ import type { MealId } from '@/screens/dashboard/types';
 
 export interface RemoteDietLogInput {
   id: string;
+  meal_id: MealId;
   meal_name: string;
   calories: number | null;
   protein_g: number | null;
@@ -354,6 +355,19 @@ export async function markDietLogSynced(
 
     const db = await initializeLocalDatabase();
     const now = new Date().toISOString();
+    const duplicateRemoteRow = await db.getFirstAsync<{ id: string }>(
+      `SELECT id
+       FROM ${LOCAL_TABLES.dietLogs}
+       WHERE user_id = ?
+         AND remote_id = ?
+         AND id <> ?
+         AND deleted_at IS NULL
+         AND sync_status = 'synced'
+       LIMIT 1`,
+      userId,
+      remoteId,
+      id
+    );
     const result = await db.runAsync(
       `UPDATE ${LOCAL_TABLES.dietLogs}
        SET remote_id = ?,
@@ -370,6 +384,16 @@ export async function markDietLogSynced(
 
     if (result.changes === 0) {
       throw new Error('Diet log was not found for the supplied user.');
+    }
+
+    if (duplicateRemoteRow) {
+      await db.runAsync(
+        `DELETE FROM ${LOCAL_TABLES.dietLogs}
+         WHERE id = ? AND user_id = ? AND remote_id = ? AND sync_status = 'synced'`,
+        duplicateRemoteRow.id,
+        userId,
+        remoteId
+      );
     }
 
     const synced = await getDietLogByUserAndId(userId, id);
@@ -461,7 +485,7 @@ export async function upsertRemoteDietLogForUser(
       await db.runAsync(
         `UPDATE ${LOCAL_TABLES.dietLogs}
          SET meal_name = ?,
-             meal_id = COALESCE(meal_id, 'snack'),
+             meal_id = ?,
              calories = ?,
              protein_g = ?,
              carbs_g = ?,
@@ -472,6 +496,7 @@ export async function upsertRemoteDietLogForUser(
              last_synced_at = ?
          WHERE id = ? AND user_id = ? AND remote_id = ? AND deleted_at IS NULL AND sync_status = 'synced'`,
         remoteLog.meal_name.trim(),
+        normalizeMealId(remoteLog.meal_id),
         normalizeNullableNumber(remoteLog.calories),
         normalizeNullableNumber(remoteLog.protein_g),
         normalizeNullableNumber(remoteLog.carbs_g),
@@ -523,10 +548,11 @@ export async function upsertRemoteDietLogForUser(
         deleted_at,
         sync_status,
         last_synced_at
-      ) VALUES (?, ?, ?, 'snack', ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 'serving', NULL, ?, ?, ?, NULL, 'synced', ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 'serving', NULL, ?, ?, ?, NULL, 'synced', ?)`,
       id,
       userId,
       remoteLog.id,
+      normalizeMealId(remoteLog.meal_id),
       remoteLog.meal_name.trim(),
       normalizeNullableNumber(remoteLog.calories),
       normalizeNullableNumber(remoteLog.protein_g),
