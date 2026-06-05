@@ -44,9 +44,10 @@ import {
 import {
   createWorkoutWithSetsLocal,
   getRecentWorkoutsByUser,
+  getUnsyncedNewWorkoutsByUser,
+  markWorkoutRemoteCreateIncomplete,
   markWorkoutSyncFailed,
   markWorkoutSynced,
-  type WorkoutSetRemoteMatch,
 } from '@/local/repositories/workoutsRepository';
 import {
   createRoutineWithExercisesLocal,
@@ -172,6 +173,8 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const uniqueIdRef = useRef(0);
   const isLoadingRoutinesRef = useRef(false);
   const isRetryingRoutineSyncsRef = useRef(false);
+  const isRetryingWorkoutCreatesRef = useRef(false);
+  const inFlightWorkoutCreateIdsRef = useRef(new Set<string>());
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const createUniqueId = (prefix: string) => {
@@ -225,20 +228,29 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     return candidate?.message ?? String(error);
   };
 
+  type SyncWorkoutResult = {
+    didSync: boolean;
+    message?: string;
+    skippedInFlight?: boolean;
+  };
+
   const logRoutineError = (label: string, error: unknown) => {
     const candidate = error as {
+      name?: string;
       message?: string;
       details?: string;
       hint?: string;
       code?: string;
+      stack?: string;
     };
 
     console.warn(label, {
+      name: error instanceof Error ? error.name : candidate?.name,
       message: error instanceof Error ? error.message : candidate?.message ?? String(error),
+      code: candidate?.code,
       details: candidate?.details,
       hint: candidate?.hint,
-      code: candidate?.code,
-      error,
+      stack: error instanceof Error ? error.stack : candidate?.stack,
     });
   };
 
@@ -336,38 +348,140 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     return activeRoutine ? buildRoutineCompletedWorkoutPayload() : buildFreeformCompletedWorkoutPayload();
   };
 
+  const completedWorkoutPayloadFromLocal = (workout: LocalWorkoutWithSets): CompletedWorkoutInput => ({
+    name: workout.name,
+    performedAt: workout.performed_at,
+    notes: workout.notes,
+    sets: workout.sets.map((set) => ({
+      exerciseName: set.exercise_name,
+      muscleGroup: set.muscle_group,
+      setNumber: set.set_number,
+      reps: set.reps,
+      weightKg: set.weight_kg,
+      durationSeconds: set.duration_seconds,
+      rir: set.rir,
+      estimated1rm: set.est_1rm,
+    })),
+  });
+
   const syncWorkoutToRemote = async (
     localWorkout: LocalWorkoutWithSets,
-    payload: CompletedWorkoutInput
-  ) => {
-    if (!user?.id) return;
+    payload: CompletedWorkoutInput,
+    options?: {
+      showFailureToast?: boolean;
+      authenticatedUserId?: string;
+      updateVisibleHistory?: boolean;
+    }
+  ): Promise<SyncWorkoutResult> => {
+    const authenticatedUserId = options?.authenticatedUserId ?? user?.id;
+    if (!authenticatedUserId) return { didSync: false, message: 'Missing authenticated user.' };
+    if (localWorkout.user_id !== authenticatedUserId) {
+      const message = 'Skipping workout sync for a different authenticated user.';
+      console.warn('[LiftTab]', message);
+      return { didSync: false, message };
+    }
+    if (inFlightWorkoutCreateIdsRef.current.has(localWorkout.id)) {
+      console.log('[LiftTab] Workout create sync skipped: already in-flight', {
+        localWorkoutId: localWorkout.id,
+      });
+      return { didSync: false, skippedInFlight: true };
+    }
 
+    const showFailureToast = options?.showFailureToast ?? true;
+    const updateVisibleHistory = options?.updateVisibleHistory ?? true;
+    inFlightWorkoutCreateIdsRef.current.add(localWorkout.id);
+    let remoteWorkoutId: string | null = null;
     try {
       const remoteWorkout = await createWorkout(completedWorkoutToRemoteCreateInput(payload));
-      let setMatches: WorkoutSetRemoteMatch[] = [];
+      remoteWorkoutId = remoteWorkout.id;
 
-      try {
-        const remoteWithSets = await fetchWorkoutById(remoteWorkout.id);
-        const matchResult = matchRemoteWorkoutSets(localWorkout.sets, remoteWithSets.workout_sets ?? []);
-        setMatches = matchResult.matches;
-        if (matchResult.unmatchedLocalSetIds.length > 0) {
-          console.warn('[LiftTab] Some local workout sets could not be matched to remote IDs:', {
-            workoutId: localWorkout.id,
-            unmatchedLocalSetIds: matchResult.unmatchedLocalSetIds,
-          });
-        }
-      } catch (detailError) {
-        console.warn('[LiftTab] Remote workout saved but set IDs could not be fetched:', detailError);
+      const remoteWithSets = await fetchWorkoutById(remoteWorkout.id);
+      const matchResult = matchRemoteWorkoutSets(localWorkout.sets, remoteWithSets.workout_sets ?? []);
+      if (matchResult.unmatchedLocalSetIds.length > 0) {
+        throw new Error(
+          `Remote workout saved, but ${matchResult.unmatchedLocalSetIds.length} local set(s) could not be matched.`
+        );
       }
 
-      const synced = await markWorkoutSynced(user.id, localWorkout.id, remoteWorkout.id, setMatches);
-      setCompletedWorkouts((prev) => [synced, ...prev.filter((workout) => workout.id !== synced.id)]);
+      const synced = await markWorkoutSynced(
+        authenticatedUserId,
+        localWorkout.id,
+        remoteWorkout.id,
+        matchResult.matches
+      );
+      if (updateVisibleHistory) {
+        setCompletedWorkouts((prev) => [synced, ...prev.filter((workout) => workout.id !== synced.id)]);
+      }
+      return { didSync: true };
     } catch (error) {
       console.error('[LiftTab] Failed to sync workout to backend:', getErrorMessage(error));
-      await markWorkoutSyncFailed(user.id, localWorkout.id).catch((markError) => {
-        console.error('[LiftTab] Failed to mark workout sync failed:', markError);
-      });
-      triggerToast(`Workout saved locally. Remote sync pending.`);
+      if (remoteWorkoutId) {
+        await markWorkoutRemoteCreateIncomplete(authenticatedUserId, localWorkout.id, remoteWorkoutId).catch(
+          (markError) => {
+            console.error('[LiftTab] Failed to mark workout remote create incomplete:', markError);
+          }
+        );
+      } else {
+        await markWorkoutSyncFailed(authenticatedUserId, localWorkout.id).catch((markError) => {
+          console.error('[LiftTab] Failed to mark workout sync failed:', markError);
+        });
+      }
+      if (showFailureToast) {
+        triggerToast(`Workout saved locally. Remote sync pending.`);
+      }
+      return { didSync: false, message: getErrorMessage(error) };
+    } finally {
+      inFlightWorkoutCreateIdsRef.current.delete(localWorkout.id);
+    }
+  };
+
+  const retryPendingWorkoutCreates = async (userId: string) => {
+    if (isRetryingWorkoutCreatesRef.current) {
+      console.log('[LiftTab] Workout create retry skipped: already running');
+      return;
+    }
+
+    isRetryingWorkoutCreatesRef.current = true;
+    try {
+      console.log('[LiftTab] Workout create retry begin');
+      const unsyncedWorkouts = await getUnsyncedNewWorkoutsByUser(userId);
+      console.log('[LiftTab] Unsynced new workouts found:', unsyncedWorkouts.length);
+      let syncedAnyWorkout = false;
+
+      for (const workout of unsyncedWorkouts) {
+        if (inFlightWorkoutCreateIdsRef.current.has(workout.id)) {
+          console.log('[LiftTab] Workout create retry skipped: already in-flight', {
+            localWorkoutId: workout.id,
+          });
+          continue;
+        }
+
+        console.log('[LiftTab] Retrying workout create:', { localWorkoutId: workout.id });
+        const result = await syncWorkoutToRemote(workout, completedWorkoutPayloadFromLocal(workout), {
+          showFailureToast: false,
+          authenticatedUserId: userId,
+          updateVisibleHistory: false,
+        });
+        if (result.didSync) {
+          syncedAnyWorkout = true;
+        }
+        if (!result.didSync && !result.skippedInFlight) {
+          console.log('[LiftTab] Workout create retry left pending:', {
+            localWorkoutId: workout.id,
+            message: result.message,
+          });
+        }
+      }
+
+      if (syncedAnyWorkout) {
+        const recentWorkouts = await getRecentWorkoutsByUser(userId, 10);
+        setCompletedWorkouts(recentWorkouts);
+      }
+      console.log('[LiftTab] Workout create retry complete');
+    } catch (error) {
+      console.error('[LiftTab] Workout create retry pass failed:', getErrorMessage(error));
+    } finally {
+      isRetryingWorkoutCreatesRef.current = false;
     }
   };
 
@@ -504,9 +618,12 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       const localRows = await getRoutinesByUser(authUser.id);
       console.log('[LiftTab] Local routines loaded:', localRows.length);
       applyRoutinesToState(localRoutinesToViews(localRows));
+      setIsRoutineLoading(false);
 
+      console.log('[LiftTab] Workout background retry started for authenticated user:', authUser.id);
+      void retryPendingWorkoutCreates(authUser.id);
       console.log('[LiftTab] Routine background retry started');
-      await retryPendingRoutineSyncs(authUser.id);
+      void retryPendingRoutineSyncs(authUser.id);
     } catch (error) {
       logRoutineError('[LiftTab] Failed to load local routines:', error);
       triggerToast('Failed to load routines');

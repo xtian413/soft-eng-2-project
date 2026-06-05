@@ -299,6 +299,28 @@ export async function getRecentWorkoutsByUser(
   }
 }
 
+export async function getUnsyncedNewWorkoutsByUser(userId: string): Promise<LocalWorkoutWithSets[]> {
+  try {
+    assertUserId(userId);
+
+    const db = await initializeLocalDatabase();
+    const workouts = await db.getAllAsync<LocalWorkout>(
+      `SELECT ${WORKOUT_COLUMNS}
+       FROM ${LOCAL_TABLES.workouts}
+       WHERE user_id = ?
+         AND deleted_at IS NULL
+         AND remote_id IS NULL
+         AND sync_status IN ('pending', 'failed')
+       ORDER BY updated_at ASC, created_at ASC`,
+      userId
+    );
+
+    return await attachSets(userId, workouts);
+  } catch (error) {
+    wrapWorkoutError('read unsynced new', error);
+  }
+}
+
 export async function softDeleteWorkout(userId: string, workoutId: string): Promise<void> {
   try {
     assertUserId(userId);
@@ -376,6 +398,53 @@ export async function markWorkoutSyncFailed(userId: string, workoutId: string): 
     });
   } catch (error) {
     wrapWorkoutError('mark sync failed', error);
+  }
+}
+
+export async function markWorkoutRemoteCreateIncomplete(
+  userId: string,
+  workoutId: string,
+  remoteWorkoutId: string
+): Promise<void> {
+  try {
+    assertUserId(userId);
+    if (!remoteWorkoutId.trim()) {
+      throw new Error('Remote workout ID is required.');
+    }
+
+    const db = await initializeLocalDatabase();
+    const now = new Date().toISOString();
+    await db.withTransactionAsync(async () => {
+      const workoutResult = await db.runAsync(
+        `UPDATE ${LOCAL_TABLES.workouts}
+         SET remote_id = ?,
+             sync_status = 'failed',
+             updated_at = ?,
+             last_synced_at = NULL
+         WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+        remoteWorkoutId,
+        now,
+        workoutId,
+        userId
+      );
+
+      if (workoutResult.changes === 0) {
+        throw new Error('Workout was not found for the supplied user.');
+      }
+
+      await db.runAsync(
+        `UPDATE ${LOCAL_TABLES.workoutSets}
+         SET sync_status = 'failed',
+             updated_at = ?,
+             last_synced_at = NULL
+         WHERE workout_id = ? AND user_id = ? AND deleted_at IS NULL`,
+        now,
+        workoutId,
+        userId
+      );
+    });
+  } catch (error) {
+    wrapWorkoutError('mark remote create incomplete', error);
   }
 }
 
