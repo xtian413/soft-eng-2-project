@@ -4,6 +4,26 @@
 
 ---
 ---
+### [2026-06-07 14:15 +0800] FIX: Resolve mealId defaults, reorder Daily Targets, and fix Android 403/colors
+- **Branch**: `jb-branch`
+- **Files Modified**:
+  - `frontend/src/screens/dashboard/Profile/ProfileTab.tsx`
+  - `frontend/src/screens/dashboard/Food/FoodTab.tsx`
+  - `frontend/src/screens/dashboard/Food/LoggedItemDetailsModal.tsx`
+  - `frontend/src/local/dietLogsMapper.ts`
+  - `frontend/src/local/repositories/dietLogsRepository.ts`
+  - `frontend/src/lib/api.ts`
+  - `.agent/errors.md`
+  - `.agent/context.md`
+- **Changes**:
+  - ✅ **Profile Layout Update**: Moved the `Daily Targets Card` to be positioned directly above the `Physical Stats Card` in `ProfileTab.tsx` per user request.
+  - ✅ **Meal ID Fallback Fix**: Changed default fallback `meal_id` from `'snack'` to `'breakfast'` across `FoodTab.tsx`, `LoggedItemDetailsModal.tsx`, `dietLogsMapper.ts`, and `dietLogsRepository.ts` to prevent unexpected overwriting of local breakfast entries during remote sync.
+  - ✅ **Meal ID Warnings**: Added console warnings when normalizing invalid or null `meal_id` inputs in repositories and mappers.
+  - ✅ **Android API Host IP Update**: Changed hardcoded host IP from `192.168.100.5` to `192.168.101.73` in `frontend/src/lib/api.ts` to match the development machine's active network IP. This resolved the `403 Forbidden` errors returned from the incorrect local gateway.
+  - ✅ **Profile UI Color Alignment**: Refactored hardcoded colors (`#10b981`, `#f97316`, `#3b82f6`) in `ProfileTab.tsx` to align with the core blue theme palette (`Colors.primaryContainer`, `Colors.primary`, `Colors.proteinAccent`) for maintenance, deficit, and surplus goal visualizers.
+  - ✅ **Macro Targets Grid & Sliders**: Updated Carbs/Fats target item icons and macro adjustment sliders (Protein/Carbs/Fats segments and control colors) to use unified blue tokens from `Colors`.
+  - **Build**: ✅ Typecheck successful — 0 type errors.
+
 ### [2026-06-07 22:00 +0800] STYLE: Compact calendar card container + centered "Fitness Journey" header
 - **Branch**: `jb-branch`
 - **Commit**: `6ecdeda`

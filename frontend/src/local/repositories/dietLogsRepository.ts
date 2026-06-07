@@ -82,9 +82,14 @@ function normalizeNullableText(value: string | null | undefined) {
 }
 
 function normalizeMealId(value: string | null | undefined): MealId {
-  return value === 'breakfast' || value === 'lunch' || value === 'dinner' || value === 'snack'
-    ? value
-    : 'snack';
+  const isValid = value === 'breakfast' || value === 'lunch' || value === 'dinner' || value === 'snack';
+  if (!isValid && value != null) {
+    console.warn(`[dietLogsRepository.normalizeMealId] Unexpected meal_id "${value}" — defaulting to 'breakfast'`);
+  }
+  if (value == null) {
+    console.warn(`[dietLogsRepository.normalizeMealId] Received null/undefined meal_id — defaulting to 'breakfast'`);
+  }
+  return isValid ? value : 'breakfast';
 }
 
 function wrapDietLogError(action: string, error: unknown): never {

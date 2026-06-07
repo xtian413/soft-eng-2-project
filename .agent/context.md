@@ -1,6 +1,6 @@
 # context.md — Project-Wide Context & Notes
 ## Gemi
-**Last Updated**: 2026-06-07T22:00:00+08:00
+**Last Updated**: 2026-06-07T14:00:00+08:00
 
 ---
 
@@ -133,6 +133,15 @@ Profile data passed: `navigate('/dashboard', { state: { fullName, email, gender,
 | `maintain` | 2400 kcal | 140g | 250g | 70g |
 
 ### Food Logging & State Synchronization Context
+* **MealId Lifecycle & `'snack'` Default Bias (2026-06-07)**:
+  - The `MealId` type is `'breakfast' | 'lunch' | 'dinner' | 'snack'`.
+  - **Critical pattern**: Every layer that touches `meal_id` defaults unknown/null values to `'snack'`:
+    - `normalizeMealId()` in `dietLogsMapper.ts` and `dietLogsRepository.ts` → `'snack'`
+    - Backend `diet.service.ts:70` → `input.meal_id ?? 'snack'`
+    - Supabase migration `008` → `set meal_id = 'snack' where meal_id is null;` + column default `'snack'`
+  - **Consequence**: If `meal_id` is absent/null at any point (e.g., migration not applied, backend drops the field), every returning diet log silently gets `'snack'` — overwriting the correct local value during remote sync.
+  - **Quick Log default**: `quickMealId` state in `FoodTab.tsx` initializes to `'snack'`. The Quick Log meal selector chip defaults to Snack — user must explicitly tap Breakfast/Lunch/Dinner before parsing.
+  - See ERR-009.
 * **Initial Balanced Load**: The Stitch prototype default of `1,450 kcal` eaten, `850 kcal` remaining under a calorie target of `2,300 kcal` is represented by setting `80g Protein`, `120g Carbs`, `45g Fats`, and a `baseSnackCalories` offset of `245 kcal`.
 * **Dynamic Calculations**:
   * $\text{Calories Eaten} = (\text{Protein} \times 4) + (\text{Carbs} \times 4) + (\text{Fats} \times 9) + \text{baseSnackCalories}$
@@ -157,6 +166,8 @@ Profile data passed: `navigate('/dashboard', { state: { fullName, email, gender,
 6. **Profile data is transient**: User profile from registration lives in React Router location state. No persistence until Supabase auth is wired (TASK-001).
 7. **Stitch images**: The profile avatar image in Dashboard uses a Google AIDA public URL. Should be replaced with actual user avatar from Supabase Storage in production.
 8. **Supabase migration duplicates**: There are both named (`001_profiles.sql`) and timestamped (`20260522055821_001_profiles.sql`) migration files. The timestamped ones are the ones Supabase CLI actually uses.
+9. **`normalizeMealId` silently defaults unknown values to `'snack'`**: Both `dietLogsMapper.ts` and `dietLogsRepository.ts` contain a `normalizeMealId()` function that returns `'snack'` for any value not strictly matching one of the four valid MealId values. This means `null`, `undefined`, or any unexpected string silently maps to `'snack'`. Combined with the remote sync cycle (`fetchDietLogs → upsertRemoteDietLogForUser → normalizeMealId(log.meal_id)`), a missing `meal_id` on the remote side overwrites a correct local value with `'snack'`. The backend service (`diet.service.ts:70`) and Supabase migration (`008`) also default to `'snack'`. See ERR-009.
+10. **Quick Log defaults to `'snack'` meal**: The `quickMealId` state in `FoodTab.tsx` initializes to `'snack'`. The Quick Log card renders meal selector chips (Breakfast, Lunch, Dinner, Snack) with Snack pre-selected. If a user types a food description and hits "Parse" without first tapping the Breakfast chip, the entry is saved under Snacks. See ERR-009.
 
 ---
 

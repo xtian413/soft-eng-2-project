@@ -138,4 +138,56 @@
 
 ---
 
+### [ERR-009] Food Logged on Breakfast Appears Under Snacks
+- **Date**: 2026-06-07
+- **Severity**: Data integrity — user-facing misattribution
+- **Symptom**: When a user logs food on breakfast (either via the meal diary "+" button or the Quick Log parser), the entry appears under the "Snacks & Extras" section instead of "Breakfast." The calorie totals still compute, but meal grouping is wrong.
+- **Root Cause**: Three interacting factors:
+
+  1. **Quick Log defaults to `'snack'`** (`frontend/src/screens/dashboard/Food/FoodTab.tsx:273`):
+     ```typescript
+     const [quickMealId, setQuickMealId] = useState<MealId>('snack');
+     ```
+     The Quick Log meal selector chip defaults to Snack. If a user types a food description and hits Parse without first tapping the Breakfast chip, the entry is saved with `mealId='snack'`.
+
+  2. **`normalizeMealId` silently defaults unknown values to `'snack'`** — duplicated in both:
+     - `frontend/src/local/dietLogsMapper.ts:5-9`
+     - `frontend/src/local/repositories/dietLogsRepository.ts:84-88`
+     ```typescript
+     function normalizeMealId(value: string | null | undefined): MealId {
+       return value === 'breakfast' || value === 'lunch' || value === 'dinner' || value === 'snack'
+         ? value
+         : 'snack';  // anything else → 'snack'
+     }
+     ```
+     If `meal_id` comes back as `null`/`undefined` from any source (e.g., Supabase migration not applied, backend column missing), the entry is silently reassigned to `'snack'`. This propagates through the remote sync cycle:
+     ```
+     saveDietLogLocalFirst → syncCreatedDietLogToRemote → refreshFoodLogs →
+       fetchDietLogs → upsertRemoteDietLogForUser(…normalizeMealId(log.meal_id)) →
+       if log.meal_id is null → overwrites local 'breakfast' with 'snack'
+     ```
+
+  3. **Backend and Supabase migration also default to `'snack'`**:
+     - `backend/src/services/diet.service.ts:70`: `meal_id: input.meal_id ?? 'snack'`
+     - `supabase/migrations/20260605090000_008_diet_logs_meal_id.sql:5`: `set meal_id = 'snack' where meal_id is null;`
+     - Column default is `'snack'`, so any insert omitting `meal_id` gets `'snack'`.
+
+  4. **Minor race condition**: `LoggedItemDetailsModal` initializes `editMealId` to `'snack'` before the `useEffect` syncs it from the actual entry's `mealId` (`frontend/src/screens/dashboard/Food/LoggedItemDetailsModal.tsx:50`).
+
+- **Fix**:
+  - **P0**: Change Quick Log default to `'breakfast'` (`FoodTab.tsx:273`): `useState<MealId>('breakfast')`
+  - **P1**: Add warning logs in `normalizeMealId()` when receiving unexpected values instead of silently defaulting to `'snack'`
+  - **P2**: Verify Supabase migration `008` has been applied to the remote instance
+  - **P2**: Initialize `editMealId` from `viewingLoggedItem.mealId` directly instead of defaulting to `'snack'` in `LoggedItemDetailsModal`
+- **Files**:
+  - `frontend/src/screens/dashboard/Food/FoodTab.tsx`
+  - `frontend/src/local/dietLogsMapper.ts`
+  - `frontend/src/local/repositories/dietLogsRepository.ts`
+  - `frontend/src/screens/dashboard/Food/LoggedItemDetailsModal.tsx`
+  - `backend/src/services/diet.service.ts`
+  - `supabase/migrations/20260605090000_008_diet_logs_meal_id.sql`
+- **Status**: ✅ Resolved
+
+---
+
 *Append new errors below using the `[ERR-NNN]` format.*

@@ -270,7 +270,7 @@ export function FoodTab({
 
   // Natural-language quick log state
   const [quickInput, setQuickInput] = useState('');
-  const [quickMealId, setQuickMealId] = useState<MealId>('snack');
+  const [quickMealId, setQuickMealId] = useState<MealId>('breakfast');
   const [quickItems, setQuickItems] = useState<QuickParserMatchedItem[]>([]);
   const [quickError, setQuickError] = useState<string | null>(null);
   const [isQuickParsing, setQuickParsing] = useState(false);

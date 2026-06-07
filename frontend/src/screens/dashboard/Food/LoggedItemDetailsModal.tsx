@@ -47,7 +47,7 @@ export function LoggedItemDetailsModal({
   const [editQuantity, setEditQuantity] = useState<number>(1);
   const [editUnit, setEditUnit] = useState<string>('portion');
   const [editWeight, setEditWeight] = useState<number>(100);
-  const [editMealId, setEditMealId] = useState<MealId>('snack');
+  const [editMealId, setEditMealId] = useState<MealId>(viewingLoggedItem?.mealId ?? 'breakfast');
   const [hydratedFood, setHydratedFood] = useState<GemiFoodItem | null>(null);
   const [validationMessage, setValidationMessage] = useState('');
   const [isServingDropdownOpen, setIsServingDropdownOpen] = useState(false);
@@ -63,7 +63,7 @@ export function LoggedItemDetailsModal({
     if (viewingLoggedItem && isOpen) {
       setEditQuantity(viewingLoggedItem.servingSize || 1);
       setEditUnit(viewingLoggedItem.servingUnit || 'portion');
-      setEditMealId(viewingLoggedItem.mealId || 'snack');
+      setEditMealId(viewingLoggedItem.mealId || 'breakfast');
       setHydratedFood(null);
       setValidationMessage('');
       setIsServingDropdownOpen(false);

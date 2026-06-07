@@ -141,16 +141,16 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
     }
   }
 
-  let goalColor = '#10b981'; // Green for maintain
+  let goalColor: string = Colors.primaryContainer; // Light blue for maintain
   let goalTitle = 'Maintenance';
   let goalDescription = `Your calorie goal matches your maintenance level of ${tdee} kcal.`;
 
   if (goal === 'moderate_cut' || goal === 'aggressive_cut') {
-    goalColor = '#f97316'; // Orange for deficit
+    goalColor = Colors.primary; // Dark blue for deficit
     goalTitle = `Calorie Deficit (-${tdee - targetCalories} kcal)`;
     goalDescription = `Your daily target is ${targetCalories} kcal, which creates a calorie deficit of ${tdee - targetCalories} kcal below your maintenance level (${tdee} kcal) to promote weight loss.`;
   } else if (goal === 'lean_bulk') {
-    goalColor = '#3b82f6'; // Blue for surplus
+    goalColor = Colors.proteinAccent; // Sky blue for surplus
     goalTitle = `Calorie Surplus (+${targetCalories - tdee} kcal)`;
     goalDescription = `Your daily target is ${targetCalories} kcal, which creates a calorie surplus of ${targetCalories - tdee} kcal above your maintenance level (${tdee} kcal) to promote muscle growth.`;
   }
@@ -344,6 +344,16 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
         }}
       />
 
+      {/* Daily Targets Card */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Daily Targets</Text>
+        <View style={styles.targetsGrid}>
+          <TargetItem label="Calories" value={String(targets.calories)} unit="kcal" color={Colors.primary} />
+          <TargetItem label="Protein" value={String(targets.protein)} unit="g" color={Colors.proteinAccent} />
+          <TargetItem label="Carbs" value={String(targets.carbs)} unit="g" color={Colors.primaryContainer} />
+          <TargetItem label="Fats" value={String(targets.fats)} unit="g" color={Colors.primary} />
+        </View>
+      </View>
 
       {/* Physical Stats Card */}
       <View style={styles.card}>
@@ -462,19 +472,6 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
           </View>
         )}
       </View>
-
-      {/* Daily Targets Card */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Daily Targets</Text>
-        <View style={styles.targetsGrid}>
-          <TargetItem label="Calories" value={String(targets.calories)} unit="kcal" color={Colors.primary} />
-          <TargetItem label="Protein" value={String(targets.protein)} unit="g" color={Colors.proteinAccent} />
-          <TargetItem label="Carbs" value={String(targets.carbs)} unit="g" color={Colors.tertiaryFixedDim} />
-          <TargetItem label="Fats" value={String(targets.fats)} unit="g" color={Colors.secondaryContainer} />
-        </View>
-      </View>
-
-
 
       {/* Sign Out */}
       <TouchableOpacity
@@ -671,9 +668,9 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
                     </View>
                     {/* Segmented Color Bar */}
                     <View style={styles.segmentedBar}>
-                      <View style={[styles.barSegment, { flex: editProteinPct, backgroundColor: '#0284c7' }]} />
-                      <View style={[styles.barSegment, { flex: editCarbsPct, backgroundColor: '#10b981' }]} />
-                      <View style={[styles.barSegment, { flex: editFatsPct, backgroundColor: '#f59e0b' }]} />
+                      <View style={[styles.barSegment, { flex: editProteinPct, backgroundColor: Colors.proteinAccent }]} />
+                      <View style={[styles.barSegment, { flex: editCarbsPct, backgroundColor: Colors.primaryContainer }]} />
+                      <View style={[styles.barSegment, { flex: editFatsPct, backgroundColor: Colors.primary }]} />
                     </View>
 
                     {/* Macro Adjustment Rows */}
@@ -681,7 +678,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
                       label="Protein"
                       value={editProteinPct}
                       grams={previewMacroGrams.proteinG}
-                      color="#0284c7"
+                      color={Colors.proteinAccent}
                       onDecrease={() => setEditProteinPct(Math.max(0, editProteinPct - 5))}
                       onIncrease={() => setEditProteinPct(Math.min(100, editProteinPct + 5))}
                     />
@@ -689,7 +686,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
                       label="Carbs"
                       value={editCarbsPct}
                       grams={previewMacroGrams.carbsG}
-                      color="#10b981"
+                      color={Colors.primaryContainer}
                       onDecrease={() => setEditCarbsPct(Math.max(0, editCarbsPct - 5))}
                       onIncrease={() => setEditCarbsPct(Math.min(100, editCarbsPct + 5))}
                     />
@@ -697,7 +694,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
                       label="Fats"
                       value={editFatsPct}
                       grams={previewMacroGrams.fatsG}
-                      color="#f59e0b"
+                      color={Colors.primary}
                       onDecrease={() => setEditFatsPct(Math.max(0, editFatsPct - 5))}
                       onIncrease={() => setEditFatsPct(Math.min(100, editFatsPct + 5))}
                     />
