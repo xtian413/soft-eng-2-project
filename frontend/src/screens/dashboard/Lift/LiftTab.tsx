@@ -1824,7 +1824,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                             </Text>
                             {isDone && (
                               <View style={styles.routineSetCardCheck}>
-                                <Check size={10} color="#10b981" strokeWidth={3} />
+                                <Check size={10} color="#ffffff" strokeWidth={3} />
                               </View>
                             )}
                           </TouchableOpacity>
@@ -1869,7 +1869,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                         transform: [{ translateX: animValue }],
                         backgroundColor: animValue.interpolate({
                           inputRange: [0, 100],
-                          outputRange: [set.isChecked ? '#10b98144' : 'transparent', '#10b981'],
+                          outputRange: [set.isChecked ? 'rgba(16, 185, 129, 0.15)' : 'transparent', '#10b981'],
                         }),
                       },
                     ]}
@@ -1906,22 +1906,46 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>RECENT SAVED WORKOUTS</Text>
             <View style={styles.savedWorkoutList}>
-              {completedWorkouts.map((workout) => (
-                <View key={workout.id} style={styles.savedWorkoutRow}>
-                  <View style={styles.savedWorkoutHeader}>
-                    <Text style={styles.savedWorkoutName}>{workout.name}</Text>
-                    <Text style={styles.savedWorkoutMeta}>
-                      {workout.sets.length} sets · {workout.sync_status}
-                    </Text>
+              {completedWorkouts.map((workout, index) => {
+                const syncStatus = workout.sync_status || 'pending';
+                return (
+                  <View
+                    key={workout.id}
+                    style={[
+                      styles.savedWorkoutRow,
+                      index > 0 && styles.savedWorkoutRowBorder
+                    ]}
+                  >
+                    <View style={styles.savedWorkoutLeft}>
+                      <View style={styles.savedWorkoutIconWrapper}>
+                        <Dumbbell size={18} color={Colors.primary} />
+                      </View>
+                      <View style={styles.savedWorkoutInfo}>
+                        <View style={styles.savedWorkoutNameRow}>
+                          <Text style={styles.savedWorkoutName} numberOfLines={1}>
+                            {workout.name}
+                          </Text>
+                          <Text style={[styles.syncStatusPill, styles[`syncStatus_${syncStatus}`]]}>
+                            {syncStatus}
+                          </Text>
+                        </View>
+                        <Text style={styles.savedWorkoutDate}>
+                          {workout.performed_at.split('T')[0]}
+                        </Text>
+                        <Text style={styles.savedWorkoutSetsText} numberOfLines={1}>
+                          {[...new Set(workout.sets.map((s) => s.exercise_name))]
+                            .slice(0, 3)
+                            .join(', ') || 'No exercises'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.savedWorkoutStats}>
+                      <Text style={styles.savedWorkoutSetsNumber}>{workout.sets.length}</Text>
+                      <Text style={styles.savedWorkoutSetsLabel}>sets</Text>
+                    </View>
                   </View>
-                  <Text style={styles.savedWorkoutDate}>{workout.performed_at.split('T')[0]}</Text>
-                  <Text style={styles.savedWorkoutSets}>
-                    {[...new Set(workout.sets.map((set) => set.exercise_name))]
-                      .slice(0, 3)
-                      .join(', ') || 'No sets'}
-                  </Text>
-                </View>
-              ))}
+                );
+              })}
             </View>
           </View>
         )}
@@ -2562,41 +2586,97 @@ const styles = StyleSheet.create({
     marginBottom: spacing.base,
   },
   savedWorkoutList: {
-    gap: spacing.sm,
+    marginTop: spacing.xs,
   },
   savedWorkoutRow: {
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: radius.md,
-    padding: spacing.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.12)',
-  },
-  savedWorkoutHeader: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    backgroundColor: Colors.surfaceContainerLowest,
+  },
+  savedWorkoutRowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(190, 200, 210, 0.15)',
+  },
+  savedWorkoutLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    flex: 1,
+    paddingRight: spacing.sm,
+  },
+  savedWorkoutIconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 101, 145, 0.08)',
+  },
+  savedWorkoutInfo: {
+    flex: 1,
+  },
+  savedWorkoutNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   savedWorkoutName: {
-    flex: 1,
+    flexShrink: 1,
     fontSize: typography.sm,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,
-  },
-  savedWorkoutMeta: {
-    fontSize: 10,
-    fontWeight: fontWeight.bold,
-    color: Colors.outline,
   },
   savedWorkoutDate: {
     fontSize: 10,
     color: Colors.outline,
     marginTop: 2,
+    fontWeight: fontWeight.medium,
   },
-  savedWorkoutSets: {
+  savedWorkoutSetsText: {
     fontSize: typography.xs,
     color: Colors.onSurfaceVariant,
-    marginTop: spacing.xs,
+    marginTop: 4,
+  },
+  savedWorkoutStats: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 40,
+  },
+  savedWorkoutSetsNumber: {
+    fontSize: typography.sm + 1,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    textAlign: 'center',
+  },
+  savedWorkoutSetsLabel: {
+    fontSize: 8,
+    fontWeight: fontWeight.medium,
+    color: Colors.outline,
+    textAlign: 'center',
+    marginTop: -2,
+  },
+  syncStatusPill: {
+    overflow: 'hidden',
+    borderRadius: radius.full,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    fontSize: 9,
+    fontWeight: fontWeight.bold,
+    textTransform: 'lowercase',
+  },
+  syncStatus_synced: {
+    color: Colors.outline,
+    backgroundColor: 'rgba(110, 120, 129, 0.08)',
+  },
+  syncStatus_pending: {
+    color: Colors.primary,
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+  },
+  syncStatus_failed: {
+    color: Colors.error,
+    backgroundColor: 'rgba(186, 26, 26, 0.08)',
   },
   exerciseHeader: {
     flexDirection: 'row',
@@ -2747,13 +2827,16 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: 'row',
     paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(190, 200, 210, 0.25)',
+    borderBottomColor: 'rgba(190, 200, 210, 0.15)',
   },
   thText: {
     fontSize: 10,
     fontWeight: fontWeight.bold,
     color: Colors.outline,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   tableBody: {
     marginTop: spacing.xs,
@@ -2762,21 +2845,25 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     overflow: 'hidden',
     marginBottom: spacing.xs,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.1)',
+    backgroundColor: Colors.surfaceContainerLow,
   },
   tableRowContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
   },
   tdSetNum: {
     fontSize: typography.sm,
     fontWeight: fontWeight.bold,
-    color: Colors.outline,
+    color: Colors.primary,
   },
   tdPrevious: {
     fontSize: typography.xs,
     color: Colors.outline,
+    fontWeight: fontWeight.medium,
   },
   tdLog: {
     fontSize: typography.sm,
@@ -3008,10 +3095,10 @@ const styles = StyleSheet.create({
   },
   routineWorkoutRow: {
     borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.2)',
-    borderRadius: radius.md,
-    padding: spacing.sm,
-    backgroundColor: Colors.surface,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    borderRadius: radius.lg,
+    padding: spacing.base,
+    backgroundColor: Colors.surfaceContainerLowest,
   },
   routineWorkoutHeader: {
     flexDirection: 'row',
@@ -3020,7 +3107,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   routineWorkoutName: {
-    fontSize: typography.sm,
+    fontSize: typography.sm + 1,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,
   },
@@ -3032,24 +3119,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   routineInputLabel: {
-    fontSize: typography.xs,
+    fontSize: typography.xs - 1,
     color: Colors.outline,
     marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    fontWeight: fontWeight.bold,
+    textAlign: 'center',
   },
   routineInput: {
-    minHeight: layout.minTouchTarget,
+    minHeight: 40,
     borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.3)',
+    borderColor: 'rgba(190, 200, 210, 0.3)',
     borderRadius: radius.md,
-    backgroundColor: 'rgba(14, 165, 233, 0.06)',
+    backgroundColor: Colors.surfaceContainerLow,
     paddingHorizontal: spacing.sm,
-    fontSize: typography.sm,
+    fontSize: typography.sm + 1,
     color: Colors.onSurface,
     fontWeight: fontWeight.bold,
     textAlign: 'center',
   },
   routineSetRow: {
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
   },
   routineSetHint: {
     fontSize: 9,
@@ -3066,37 +3157,46 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   routineSetCard: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.md,
+    width: 60,
+    height: 60,
+    borderRadius: radius.lg,
     borderWidth: 1.5,
-    borderColor: 'rgba(14, 165, 233, 0.35)',
-    backgroundColor: 'rgba(14, 165, 233, 0.05)',
+    borderColor: 'rgba(190, 200, 210, 0.4)',
+    backgroundColor: Colors.surfaceContainerLowest,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.01,
+    shadowRadius: 2,
+    elevation: 1,
   },
   routineSetCardDone: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    backgroundColor: '#10b981',
     borderColor: '#10b981',
+    shadowColor: '#10b981',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   routineSetCardNum: {
-    fontSize: typography.lg,
+    fontSize: typography.base + 1,
     fontWeight: fontWeight.bold,
-    color: Colors.primaryContainer,
-    lineHeight: 22,
+    color: Colors.onSurface,
+    lineHeight: 20,
   },
   routineSetCardNumDone: {
-    color: '#10b981',
+    color: '#ffffff',
   },
   routineSetCardMeta: {
     fontSize: 9,
     color: Colors.outline,
     fontWeight: fontWeight.bold,
+    marginTop: 2,
   },
   routineSetCardMetaDone: {
-    color: '#10b981',
-    opacity: 0.8,
+    color: 'rgba(255, 255, 255, 0.85)',
   },
   routineSetCardCheck: {
     position: 'absolute',
