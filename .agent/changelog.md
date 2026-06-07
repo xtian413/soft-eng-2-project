@@ -3,6 +3,15 @@
 **Format**: `[YYYY-MM-DD HH:MM +TZ] TYPE: description`
 
 ---
+### [2026-06-07 15:10 +0800] FIX: Supabase Profiles Schema Mismatch and Registration Sync Trigger
+- **Branch**: `jb-branch`
+- **Files Created**:
+  - `supabase/migrations/20260607090000_009_update_profiles_schema.sql`
+- **Changes**:
+  - ✅ **Database Schema Migration**: Created migration `009_update_profiles_schema.sql` to expand the remote Supabase `public.profiles` table with missing fields (`age`, `activity_level`, `target_weight_kg`, `macro_protein_pct`, `macro_carbs_pct`, `macro_fats_pct`).
+  - ✅ **Goal Constraint Mismatch**: Replaced the restrictive `profiles_goal_check` check constraint (which previously only permitted legacy goal strings) with an updated constraint supporting the newly introduced goal values (`moderate_cut`, `aggressive_cut`, `maintain`, `lean_bulk`).
+  - ✅ **Signup Trigger Optimization**: Refactored the `public.handle_new_user()` trigger function to correctly insert and upsert new profile attributes passed in through metadata on user registration.
+
 ### [2026-06-07 15:00 +0800] FEAT: Sync Hydration and Sleep with SQLite and Training Calendar
 - **Branch**: `jb-branch`
 - **Files Modified**:

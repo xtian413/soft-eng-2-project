@@ -1,6 +1,6 @@
 # context.md — Project-Wide Context & Notes
 ## Gemi
-**Last Updated**: 2026-06-07T15:00:00+08:00
+**Last Updated**: 2026-06-07T15:10:00+08:00
 
 ---
 
@@ -171,7 +171,7 @@ Profile data passed: `navigate('/dashboard', { state: { fullName, email, gender,
 3. **TypeScript ESM pure type imports**: Browsers throwing runtime `SyntaxError` when importing TypeScript interfaces inside standard runtime declarations. Pure interfaces must be imported explicitly with `import type` (ERR-008).
 4. **AI is simulated in web**: The coach chat in `Dashboard.tsx` uses keyword matching with a 1.2s fake delay. Real on-device LFM2.5 inference is Sprint 4.
 5. **No auth guard yet**: `/dashboard` is accessible without login. `ProtectedRoute` component is pending (TASK-006).
-6. **Profile data is transient**: User profile from registration lives in React Router location state. No persistence until Supabase auth is wired (TASK-001).
+6. **User Profile Sync**: The registration flow is wired to save profile data (age, goal, activity level, height, weight, target weight) to Supabase Auth metadata and upsert it into the profiles database table. A remote Postgres trigger on signup handles profiles creation from raw metadata.
 7. **Stitch images**: The profile avatar image in Dashboard uses a Google AIDA public URL. Should be replaced with actual user avatar from Supabase Storage in production.
 8. **Supabase migration duplicates**: There are both named (`001_profiles.sql`) and timestamped (`20260522055821_001_profiles.sql`) migration files. The timestamped ones are the ones Supabase CLI actually uses.
 9. **`normalizeMealId` silently defaults unknown values to `'snack'`**: Both `dietLogsMapper.ts` and `dietLogsRepository.ts` contain a `normalizeMealId()` function that returns `'snack'` for any value not strictly matching one of the four valid MealId values. This means `null`, `undefined`, or any unexpected string silently maps to `'snack'`. Combined with the remote sync cycle (`fetchDietLogs → upsertRemoteDietLogForUser → normalizeMealId(log.meal_id)`), a missing `meal_id` on the remote side overwrites a correct local value with `'snack'`. The backend service (`diet.service.ts:70`) and Supabase migration (`008`) also default to `'snack'`. See ERR-009.

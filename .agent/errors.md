@@ -1,6 +1,6 @@
 # errors.md — Error & Debug History
 ## Gemi
-**Last Updated**: 2026-05-22T22:25:44+08:00
+**Last Updated**: 2026-06-07T15:10:00+08:00
 
 ---
 
@@ -195,6 +195,21 @@
   - `frontend/src/screens/dashboard/Food/LoggedItemDetailsModal.tsx`
   - `backend/src/services/diet.service.ts`
   - `supabase/migrations/20260605090000_008_diet_logs_meal_id.sql`
+- **Status**: ✅ Resolved
+
+---
+
+### [ERR-010] User Registration Supabase Sync Mismatch
+- **Date**: 2026-06-07
+- **Severity**: Critical / Block-breaking
+- **Symptom**: User registration fails to complete successfully, or user profile statistics fail to sync and persist on Supabase, leading to sync errors or incomplete user profile onboarding.
+- **Root Cause**: Mismatch between the frontend and Supabase database schemas:
+  1. The remote `profiles` table lacked several new columns (`age`, `activity_level`, `target_weight_kg`, etc.) present in the local SQLite database.
+  2. The remote `profiles` table had a check constraint restricting the `goal` column to legacy strings (`lose_weight`, `build_muscle`, `maintain`). Frontend registration submitted newer keys (`moderate_cut`, `lean_bulk`, etc.), causing Postgres inserts to fail.
+  3. The trigger function `public.handle_new_user()` did not insert the new registration metadata fields (`age`, `activity_level`, etc.) into the profile table on registration.
+- **Fix**: Created the `009_update_profiles_schema.sql` migration to add missing columns, update the check constraint to support the new goal strings, and revise the `public.handle_new_user()` trigger function to correctly insert/upsert all signup metadata.
+- **Files**:
+  - `supabase/migrations/20260607090000_009_update_profiles_schema.sql`
 - **Status**: ✅ Resolved
 
 ---

@@ -1,6 +1,6 @@
 # tasks.md — Task Tracker
 ## Gemi
-**Last Updated**: 2026-05-22T22:25:44+08:00
+**Last Updated**: 2026-06-07T15:10:00+08:00
 
 ---
 
@@ -174,3 +174,11 @@
   - ✅ **Mutually Exclusive Focus**: Integrated exclusive open-state controls for Serving Size and Meal Group dropdown selections.
   - ✅ **Layout Corrections**: Fixed bento container overflows (`visible`) to prevent absolute drop menus clipping on viewport boundaries, and removed the duplicate red bottom "Delete Food Entry" button in favor of the top toolbar's delete button.
   - **Build**: ✅ `npx tsc --noEmit` — 0 errors
+
+### [TASK-C014] Fix User Registration Sync & Supabase Schema Mismatch
+- **Completed**: 2026-06-07 | **Migration**: `009_update_profiles_schema.sql`
+- **Description**: Resolved issues causing user registration to fail on remote Supabase sync by aligning schemas, updating check constraints, and revising database triggers.
+- **Changes**:
+  - ✅ **Supabase Database Schema**: Added missing columns (`age`, `activity_level`, `target_weight_kg`, etc.) to the `public.profiles` table.
+  - ✅ **Goal Check Constraint**: Updated the goal check constraint on `public.profiles` to support new goals (`moderate_cut`, `aggressive_cut`, `maintain`, `lean_bulk`).
+  - ✅ **Auth Trigger**: Revised `public.handle_new_user()` trigger function to sync registration metadata fields to the profile.
