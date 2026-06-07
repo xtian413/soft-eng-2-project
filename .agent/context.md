@@ -1,6 +1,6 @@
 # context.md — Project-Wide Context & Notes
 ## Gemi
-**Last Updated**: 2026-05-23T10:47:00+08:00
+**Last Updated**: 2026-06-07T09:15:00+08:00
 
 ---
 
@@ -12,7 +12,7 @@
 | Course | CCS 308-CS33S1 |
 | Author | Christian Gamos (`chris.gamos.13@gmail.com`) |
 | Repo | `soft-eng-2-project` |
-| Active Branch | `Frontend-integration` |
+| Active Branch | `feature/food` |
 | Base Branch | `master` |
 | Web App URL (dev) | `http://localhost:5173/` |
 
