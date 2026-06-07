@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Colors } from '@/theme/colors';
-import { spacing, typography, fontWeight, radius } from '@/theme/typography';
+import { spacing, typography, fontWeight, radius, layout } from '@/theme/typography';
 import { X, Zap } from 'lucide-react-native';
 import { exerciseDbService, ExerciseDbExercise } from '@/api/exerciseDbService';
 
@@ -116,7 +116,7 @@ export function ExerciseBrowser({
         <View style={styles.expandedContent}>
           {/* Target Muscles */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>💪 Target Muscles</Text>
+                <Text style={styles.sectionTitle}>Target Muscles</Text>
             <View style={styles.muscleList}>
               {item.target.length > 0 && (
                 <View style={styles.muscleBadge}>
@@ -133,7 +133,7 @@ export function ExerciseBrowser({
 
           {/* Instructions */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📋 Instructions</Text>
+            <Text style={styles.sectionTitle}>Instructions</Text>
             {item.instructions.map((instruction, idx) => (
               <View key={idx} style={styles.instructionItem}>
                 <Text style={styles.instructionNumber}>{idx + 1}.</Text>
@@ -144,7 +144,7 @@ export function ExerciseBrowser({
 
           {item.gifUrl && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>🎥 Demo</Text>
+              <Text style={styles.sectionTitle}>Demo</Text>
               <Image source={{ uri: item.gifUrl }} style={styles.gif} resizeMode="contain" />
             </View>
           )}
@@ -361,8 +361,8 @@ const styles = StyleSheet.create({
     color: Colors.primaryContainer,
   },
   addBtn: {
-    width: 36,
-    height: 36,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     borderRadius: radius.md,
     backgroundColor: Colors.primaryContainer,
     justifyContent: 'center',

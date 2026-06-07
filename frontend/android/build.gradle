@@ -12,8 +12,7 @@ buildscript {
   }
 }
 
-// Override Kotlin version to 2.2.0 so it can read metadata 2.3.0 used by litertlm-android.
-// Expo SDK 56 supports Kotlin 2.2.0 (defined in KSPLookup with ksp 2.2.0-2.0.2).
+// Override Kotlin version to 2.2.0 to align with Expo SDK 56.
 // This must be set BEFORE the expo-root-project plugin applies (which uses setIfNotExist).
 ext {
   kotlinVersion = "2.2.0"

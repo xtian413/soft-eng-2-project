@@ -8,7 +8,7 @@
 
 **Gemi** is a cross-platform health and fitness tracking application with on-device AI-generated insights. It runs as a native mobile app (iOS + Android via Expo React Native) and a companion Progressive Web App (Vite + React) sharing the same backend and database.
 
-The core differentiator is **fully offline, on-device AI inference** using Gemma 4 e2b — no cloud AI APIs are ever called.
+The core differentiator is **fully offline, on-device AI inference** using LiquidAI LFM2.5-1.2B-Instruct (GGUF) via llama.cpp — no cloud AI APIs are ever called.
 
 ---
 
@@ -43,7 +43,7 @@ The core differentiator is **fully offline, on-device AI inference** using Gemma
 | State | Zustand |
 | Forms | React Hook Form + Zod |
 | API Client | Axios (`src/lib/api.ts`) |
-| AI Runtime | MediaPipe LLM Inference (`@mediapipe/tasks-genai`) |
+| AI Runtime | llama.cpp (GGUF, JNI) |
 
 ### Frontend — Web
 | Layer | Technology |
@@ -51,7 +51,7 @@ The core differentiator is **fully offline, on-device AI inference** using Gemma
 | Framework | Vite + React 19 + TypeScript |
 | Routing | React Router DOM v6 |
 | Styling | Vanilla CSS (design tokens from Stitch) |
-| AI (Web sim) | Simulated offline Gemma coach (placeholder until WASM binding) |
+| AI (Web sim) | Simulated offline LFM2.5 coach (placeholder until llama.cpp binding) |
 
 ### Backend
 | Layer | Technology |
@@ -152,7 +152,7 @@ create table ai_insights (
 
 ## 6. Key Non-Functional Requirements
 
-- **AI Privacy**: Zero network calls for AI inference. All inference via local Gemma 4 e2b model.
+- **AI Privacy**: Zero network calls for AI inference. All inference via local LFM2.5 GGUF model.
 - **Type Safety**: All source files in strict TypeScript. No `any` without justification.
 - **Security**: RLS enabled on every Supabase table. Service role key never in frontend.
 - **Performance**: Web app builds under 300ms. Mobile app targets 60fps.
@@ -167,7 +167,7 @@ create table ai_insights (
 | 1 | Week 1 | Setup, architecture, wireframes, schema, Expo init |
 | 2 | Week 2 | Supabase Auth — registration, login, session management |
 | 3 | Week 3 | Workout logging UI + API, diet logging UI + API |
-| 4 | Week 4 | On-device Gemma integration, insight generation pipeline |
+| 4 | Week 4 | On-device LFM2.5 integration, insight generation pipeline |
 | 5 | Week 5 | Analytics screens, charts, body weight trend visualization |
 | 6 | Week 6 | Testing (unit + E2E), bug fixes, final documentation |
 
@@ -175,9 +175,9 @@ create table ai_insights (
 
 ## 8. AI Service Contract
 
-- **Entry point**: `frontend/src/ai/gemmaService.ts` — the ONLY file that touches the model
+- **Entry point**: `frontend/src/ai/lfmService.ts` — the ONLY file that touches the model
 - **Function**: `generateInsight(prompt: string): Promise<string>`
-- **Model**: Gemma 4 e2b (`assets/ai-model/gemma4-e2b.bin`)
+- **Model**: LFM2.5-1.2B-Instruct GGUF (`assets/ai-model/lfm2.5-1.2b.gguf`)
 - **Triggers**: After workout log, on weekly progress screen, on-demand from Insights tab
 - **Fallback UI**: "Insight unavailable — model loading" on error
 

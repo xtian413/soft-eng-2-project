@@ -1,6 +1,9 @@
 import { supabaseAdmin } from '../config/supabase.js';
 
+export type MealId = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
 export interface DietLogCreateInput {
+  meal_id?: MealId;
   meal_name: string;
   calories?: number;
   protein_g?: number;
@@ -10,6 +13,7 @@ export interface DietLogCreateInput {
 }
 
 export interface DietLogUpdateInput {
+  meal_id?: MealId;
   meal_name?: string;
   calories?: number;
   protein_g?: number;
@@ -63,6 +67,7 @@ export async function createDietLog(userId: string, input: DietLogCreateInput) {
     .from('diet_logs')
     .insert({
       user_id: userId,
+      meal_id: input.meal_id ?? 'snack',
       meal_name: input.meal_name,
       calories: input.calories ?? null,
       protein_g: input.protein_g ?? null,
@@ -87,6 +92,7 @@ export async function updateDietLog(
   input: DietLogUpdateInput
 ) {
   const updatePayload: DietLogUpdateInput = {};
+  if (input.meal_id !== undefined) updatePayload.meal_id = input.meal_id;
   if (input.meal_name !== undefined) updatePayload.meal_name = input.meal_name;
   if (input.calories !== undefined) updatePayload.calories = input.calories;
   if (input.protein_g !== undefined) updatePayload.protein_g = input.protein_g;

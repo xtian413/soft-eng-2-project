@@ -18,7 +18,7 @@ import { z } from 'zod';
 import type { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuthStore } from '@/store/authStore';
 import { Colors } from '@/theme/colors';
-import { typography, fontWeight, radius, spacing } from '@/theme/typography';
+import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 
@@ -98,13 +98,16 @@ export default function LoginScreen() {
               render={({ field: { onChange, value } }) => (
                 <TextInput
                   autoCapitalize="none"
+                  autoComplete="email"
                   keyboardType="email-address"
                   onChangeText={onChange}
                   placeholder="Email Address"
                   placeholderTextColor={Colors.outline}
                   style={[styles.input, errors.email && styles.inputError]}
+                  textContentType="emailAddress"
                   value={value}
                   editable={!isSubmitting}
+                  accessibilityLabel="Email address"
                 />
               )}
             />
@@ -120,18 +123,24 @@ export default function LoginScreen() {
               render={({ field: { onChange, value } }) => (
                 <TextInput
                   secureTextEntry={!showPassword}
+                  autoComplete="password"
                   onChangeText={onChange}
                   placeholder="Password"
                   placeholderTextColor={Colors.outline}
                   style={[styles.input, errors.password && styles.inputError]}
+                  textContentType="password"
                   value={value}
                   editable={!isSubmitting}
+                  accessibilityLabel="Password"
                 />
               )}
             />
             <TouchableOpacity
               style={styles.passwordToggle}
               onPress={() => setShowPassword(!showPassword)}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+              hitSlop={8}
             >
               {showPassword ? (
                 <EyeOff size={18} color={Colors.outline} />
@@ -144,7 +153,11 @@ export default function LoginScreen() {
 
           {/* Forgot Password link */}
           <View style={styles.forgotContainer}>
-            <TouchableOpacity onPress={() => Alert.alert('Forgot Password', 'Password recovery link has been simulated.')}>
+            <TouchableOpacity
+              onPress={() => Alert.alert('Forgot Password', 'Password recovery link has been simulated.')}
+              accessibilityRole="button"
+              accessibilityLabel="Forgot password"
+            >
               <Text style={styles.forgotBtn}>Forgot Password?</Text>
             </TouchableOpacity>
           </View>
@@ -155,6 +168,9 @@ export default function LoginScreen() {
             onPress={handleSubmit(onSubmit)}
             disabled={isSubmitting}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Log in"
+            accessibilityState={{ disabled: isSubmitting }}
           >
             <Text style={styles.submitBtnText}>
               {isSubmitting ? 'Logging In...' : 'Log In'}
@@ -175,6 +191,8 @@ export default function LoginScreen() {
             style={styles.socialBtn}
             onPress={() => Alert.alert('Social Login', 'Google authentication initiated.')}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Continue with Google"
           >
             <Svg width={18} height={18} viewBox="0 0 24 24" style={styles.socialIcon}>
               <Path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -189,6 +207,8 @@ export default function LoginScreen() {
             style={styles.socialBtn}
             onPress={() => Alert.alert('Social Login', 'Apple authentication initiated.')}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Continue with Apple"
           >
             <Svg width={18} height={18} viewBox="0 0 24 24" style={styles.socialIcon}>
               <Path d="M17.05 20.28c-.96.95-2.22 1.72-3.72 1.72-1.45 0-2.2-.84-3.55-.84-1.37 0-2.18.84-3.57.84-1.4 0-2.65-.77-3.66-1.77C.6 18.28-.9 14.1.85 10.8c.87-1.63 2.53-2.65 4.34-2.65 1.37 0 2.45.82 3.25.82s1.88-.82 3.25-.82c1.55 0 2.92.76 3.75 1.75-3.04 1.4-2.55 5.5.4 6.78-.6 1.45-1.18 2.62-1.79 3.6zM13.53 5.4c.05-1.28-.46-2.55-1.3-3.48-.84-.92-2.1-1.44-3.3-1.44-.05 1.3.5 2.54 1.34 3.44.82.93 2.12 1.48 3.26 1.48z" fill="#000000" />
@@ -200,7 +220,11 @@ export default function LoginScreen() {
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>New to Aura?</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Register')}
+            accessibilityRole="button"
+            accessibilityLabel="Register now"
+          >
             <Text style={styles.footerLink}>Register Now</Text>
           </TouchableOpacity>
         </View>
@@ -251,6 +275,9 @@ const styles = StyleSheet.create({
     paddingBottom: 60, // Bounded bottom spacing for scroll safety
     justifyContent: 'center',
     alignItems: 'center',
+    width: '100%',
+    maxWidth: layout.screenMaxWidth,
+    alignSelf: 'center',
   },
   logoSection: {
     alignItems: 'center',
@@ -291,7 +318,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     color: '#0b1c30',
     marginBottom: spacing.xs,
-    letterSpacing: -0.5,
+    letterSpacing: 0,
   },
   subtitle: {
     fontSize: typography.base,
@@ -339,8 +366,10 @@ const styles = StyleSheet.create({
     color: Colors.error,
   },
   passwordToggle: {
-    paddingHorizontal: spacing.xs,
+    minWidth: layout.minTouchTarget,
+    minHeight: layout.minTouchTarget,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   errorText: {
     fontSize: typography.xs,

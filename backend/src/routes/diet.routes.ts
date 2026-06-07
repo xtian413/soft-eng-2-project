@@ -11,7 +11,10 @@ import { validateBody } from '../middleware/validate.js';
 
 const router = Router();
 
+const mealIdSchema = z.enum(['breakfast', 'lunch', 'dinner', 'snack']);
+
 const dietLogSchema = z.object({
+  meal_id: mealIdSchema.optional(),
   meal_name: z.string().min(1).max(100),
   calories: z.number().positive().optional(),
   protein_g: z.number().nonnegative().optional(),

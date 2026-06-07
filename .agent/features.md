@@ -110,12 +110,12 @@
 
 ---
 
-### [F-009] Gemma AI Coach Chat Tab (Simulated)
+### [F-009] LFM2.5 AI Coach Chat Tab (Simulated)
 - **Date**: 2026-05-22
 - **Branch**: Frontend-integration
 - **Commit**: `c989869`
-- **Description**: Interactive chat panel simulating offline Gemma 2.2B inference. Smart contextual responses for: protein/nutrition queries, workout/RPE queries, fatigue/recovery queries. Typing indicator animation. Auto-scroll to latest message.
-- **Note**: This is a simulation placeholder. Real on-device Gemma inference via MediaPipe will replace this in Sprint 4.
+- **Description**: Interactive chat panel simulating offline LFM2.5 inference. Smart contextual responses for: protein/nutrition queries, workout/RPE queries, fatigue/recovery queries. Typing indicator animation. Auto-scroll to latest message.
+- **Note**: This is a simulation placeholder. Real on-device LFM2.5 inference via llama.cpp will replace this in Sprint 4.
 - **Files**:
   - `web/src/pages/Dashboard/Dashboard.tsx` (Chat tab section)
 
@@ -161,11 +161,11 @@
 
 ---
 
-### [F-020] Mobile Gemma Native Bridge Scaffolding
+### [F-020] Mobile LFM2.5 Native Bridge Scaffolding
 - **Date**: 2026-05-23
 - **Branch**: master
 - **Commit**: (not committed yet)
-- **Description**: Added the mobile on-device Gemma prompt builder, offline context bridge, and Kotlin native module/package skeletons for LiteRT LLM inference.
+- **Description**: Added the mobile on-device prompt builder, offline context bridge, and Kotlin native module/package skeletons for local inference (to be migrated to llama.cpp + LFM2.5).
 - **Files**:
   - `frontend/src/ai/prompts.ts`
   - `frontend/src/ai/gemmaService.ts`
@@ -181,9 +181,9 @@
 - **Description**: Connect web Login/Register forms to Supabase Auth. Store session in React state/context. Protect `/dashboard` route with auth guard.
 - **Blocker**: None
 
-### [F-013] Real On-Device Gemma Inference (Web)
+### [F-013] Real On-Device LFM2.5 Inference (Web)
 - **Status**: Pending (Sprint 4)
-- **Description**: Replace simulated coach responses with actual Gemma 4 e2b WASM inference via `@mediapipe/tasks-genai` in the web app.
+- **Description**: Replace simulated coach responses with actual LFM2.5 inference via llama.cpp in the web app.
 - **Blocker**: Requires model asset bundling
 
 ---

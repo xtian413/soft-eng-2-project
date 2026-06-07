@@ -3,6 +3,20 @@
 **Format**: `[YYYY-MM-DD HH:MM +TZ] TYPE: description`
 
 ---
+### [2026-05-30 18:10 +0800] DOCS: LFM2.5 migration plan and .agent alignment
+- **Branch**: (not committed yet)
+- **Files Modified**:
+  - `.agent/LFM2.5-1.2B.md`
+  - `.agent/context.md`
+  - `.agent/decisions.md`
+  - `.agent/tasks.md`
+  - `.agent/features.md`
+  - `.agent/PRD.md`
+- **Changes**:
+  - Added a full LFM2.5-1.2B + llama.cpp Android migration plan reference.
+  - Updated project context, decisions, tasks, and PRD to reflect LFM2.5 and llama.cpp.
+
+---
 ### [2026-05-30 12:48 +0800] CHORE: Removed unused Web subproject
 - **Branch**: `mono-repo-integration`
 - **Files Modified**:
@@ -26,7 +40,7 @@
   - **Build**: ✅ Checked type, lint, and build status across all workspaces (Frontend, Backend, Web) successfully with 0 errors.
 
 ---
-### [2026-05-23 14:56 +0800] FEAT: Mobile on-device Gemma native bridge scaffolding
+### [2026-05-23 14:56 +0800] FEAT: Mobile on-device LLM native bridge scaffolding (LFM2.5 target)
 - **Branch**: `master`
 - **Files Modified**:
   - `frontend/src/ai/prompts.ts`
@@ -35,8 +49,8 @@
   - `frontend/android/app/src/main/java/com/frontend/gemma/GemmaPackage.kt`
 - **Changes**:
   - ✅ **Prompt Builder**: Added a structured workout + diet prompt assembler for context stuffing.
-  - ✅ **Gemma Service Bridge**: Created a mobile-only service that loads local context and calls the native Gemma module.
-  - ✅ **Native Module**: Added Kotlin Gemma module/package skeleton for LiteRT LLM inference integration.
+  - ✅ **LLM Service Bridge**: Created a mobile-only service that loads local context and calls the native module.
+  - ✅ **Native Module**: Added Kotlin module/package skeleton for LiteRT LLM inference integration.
 
 ---
 
@@ -199,7 +213,7 @@
     - Quick Log snack button (real-time macro update)
     - AI Recovery Insight ("Whisper") card
     - Weekly Review with 7-day streak visualizer
-    - Gemma AI Coach chat tab (simulated offline inference, 1.2s delay, keyword responses)
+    - LFM2.5 AI Coach chat tab (simulated offline inference, 1.2s delay, keyword responses)
     - Food diary tab
     - Lift routines tab
     - Profile stats tab with sign-out

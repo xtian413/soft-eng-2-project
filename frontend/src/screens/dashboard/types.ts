@@ -19,6 +19,8 @@ export type MealId = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 export interface FoodLogEntry {
   id: string;
+  remoteId?: string | null;
+  syncStatus?: 'pending' | 'synced' | 'failed';
   name: string;
   mealId: MealId;
   calories: number;
@@ -41,11 +43,4 @@ export interface WorkoutSet {
   exercise: string;
   reps: number;
   weightKg: number;
-}
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
 }

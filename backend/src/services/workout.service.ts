@@ -5,7 +5,6 @@ export interface WorkoutSetInput {
   set_number: number;
   reps?: number | null;
   weight_kg?: number | null;
-  duration_seconds?: number | null;
 }
 
 export interface WorkoutCreateInput {
@@ -78,7 +77,6 @@ export async function createWorkoutWithSets(
     set_number: set.set_number,
     reps: set.reps ?? null,
     weight_kg: set.weight_kg ?? null,
-    duration_seconds: set.duration_seconds ?? null,
   }));
 
   const { error: setsError } = await supabaseAdmin

@@ -11,13 +11,13 @@
 ### [DEC-001] On-Device AI Only — No Cloud AI APIs
 - **Date**: 2026-05-22 (Project Inception)
 - **Status**: Active — Non-negotiable
-- **Decision**: All AI inference runs on the user's device using Gemma 4 e2b via MediaPipe LLM Inference API. Zero network calls for AI generation.
+- **Decision**: All AI inference runs on the user's device using LiquidAI LFM2.5-1.2B-Instruct (GGUF) via llama.cpp. Zero network calls for AI generation.
 - **Rationale**:
   1. **Privacy**: User fitness data (weight, diet, workout history) is sensitive. Sending it to cloud APIs is a privacy risk.
   2. **Cost**: Cloud AI APIs incur per-token costs that scale poorly for a student project.
   3. **Offline capability**: Users can get insights without internet connectivity.
   4. **Course requirement**: Explicit project constraint.
-- **Implications**: AI model weights (~1-2GB) must be bundled in the app assets. Cold-load time may be noticeable on first launch.
+- **Implications**: AI model weights must be bundled in the app assets or downloaded once and cached. Cold-load time may be noticeable on first launch.
 - **Alternatives Rejected**: OpenAI GPT-4o, Google Gemini API, Anthropic Claude API, HuggingFace Inference API.
 
 ---
@@ -92,12 +92,12 @@
 
 ---
 
-### [DEC-008] Simulated Gemma Coach for Web (Placeholder)
+### [DEC-008] Simulated LFM2.5 Coach for Web (Placeholder)
 - **Date**: 2026-05-22
 - **Status**: Temporary — replace in Sprint 4
-- **Decision**: Implement a simulated offline Gemma response system in the web dashboard Coach tab, rather than leaving it unimplemented.
+- **Decision**: Implement a simulated offline LFM2.5 response system in the web dashboard Coach tab, rather than leaving it unimplemented.
 - **Rationale**: Provides a fully interactive and demonstrable product while WASM model bundling is being set up. The simulation uses keyword matching on user input to provide contextually relevant fitness responses with a realistic 1.2s inference delay.
-- **Replacement Plan**: In Sprint 4, replace with actual `@mediapipe/tasks-genai` WASM inference using the Gemma 4 e2b `.task` file.
+- **Replacement Plan**: In Sprint 4, replace with actual llama.cpp inference using the LFM2.5 GGUF model.
 
 ---
 
@@ -148,6 +148,18 @@
   2. **Decoupled Architecture**: By moving layouts into distinct tab directories and logic into custom React hooks, the code stays highly readable and focused.
   3. **Lean Container Shell**: The main `Dashboard.tsx` is reduced to 242 lines, focusing solely on structural layouts, route-based tab routing, active logging trigger notifications, and synchronizing global daily macro metrics.
 - **Implications**: Changes to subcomponents are isolated to their folders. Any state shared across tabs (like logged food list) must be lifted up to `Dashboard.tsx` and passed down as reactive props.
+
+---
+
+### [DEC-014] Android Inference Runtime Switch to llama.cpp (GGUF)
+- **Date**: 2026-05-30
+- **Status**: Active
+- **Decision**: Migrate on-device inference from LiteRT/MediaPipe LLM Inference to llama.cpp using LiquidAI LFM2.5-1.2B-Instruct-GGUF.
+- **Rationale**:
+  1. GGUF support in llama.cpp provides a stable local runtime for LFM2.5.
+  2. Native llama.cpp offers predictable CPU-only performance and memory control on Android.
+  3. Keeps all inference offline with full control over model lifecycle and caching.
+- **Implications**: Add native llama.cpp build, JNI bridge, GGUF asset handling, and prompt/template alignment with LFM2.5.
 
 ---
 

@@ -1,7 +1,10 @@
 import { apiClient } from '@/lib/api';
 
+export type DietLogMealId = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
 export interface DietLog {
   id: string;
+  meal_id?: DietLogMealId | null;
   meal_name: string;
   calories: number | null;
   protein_g: number | null;
@@ -12,6 +15,7 @@ export interface DietLog {
 }
 
 export interface DietLogCreateInput {
+  meal_id?: DietLogMealId;
   meal_name: string;
   calories?: number | null;
   protein_g?: number | null;
@@ -19,6 +23,8 @@ export interface DietLogCreateInput {
   fat_g?: number | null;
   logged_at: string;
 }
+
+export type DietLogUpdateInput = DietLogCreateInput;
 
 /** Fetches diet logs from the backend API. Throws on failure.
  *  Pass a date string ('YYYY-MM-DD') to filter to a specific day (e.g. today).
@@ -42,6 +48,12 @@ export async function fetchDietLogs(date?: string): Promise<DietLog[]> {
  */
 export async function createDietLog(input: DietLogCreateInput): Promise<DietLog> {
   const response = await apiClient.post<{ data: DietLog }>('/api/diet', input);
+  return response.data.data;
+}
+
+/** Updates a diet log via the backend API. Throws on failure. */
+export async function updateDietLog(id: string, input: DietLogUpdateInput): Promise<DietLog> {
+  const response = await apiClient.put<{ data: DietLog }>(`/api/diet/${id}`, input);
   return response.data.data;
 }
 

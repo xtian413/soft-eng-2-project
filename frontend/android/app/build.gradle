@@ -131,9 +131,8 @@ android {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
     aaptOptions {
-        // Do not compress the large LiteRT LM model file — the C++ engine
-        // needs to mmap it from the APK at runtime without decompression.
-        noCompress "litertlm"
+        // Do not compress the GGUF model file — llama.cpp needs to mmap it.
+        noCompress "gguf"
     }
 }
 
@@ -160,7 +159,7 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.12.0")
+    implementation project(':llama')
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";

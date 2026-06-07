@@ -1,58 +1,213 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
+  AppState,
+  type AppStateStatus,
   ScrollView,
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
-  TextInput,
-  Modal,
-  FlatList,
-  Dimensions,
-  ActivityIndicator,
-  SafeAreaView,
-  Platform,
 } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
 import { Colors } from '@/theme/colors';
-import { typography, fontWeight, radius, spacing } from '@/theme/typography';
+import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import { searchFoodDatabase, type GemiFoodItem } from '@/api/foodDatabaseApi';
-import { createDietLog, deleteDietLog } from '@/api/dietApi';
-import type { FoodLogEntry, MacroTargets, MealId } from '@/screens/dashboard/types';
 import {
-  Coffee,
-  Sun,
-  Moon,
-  Apple,
-  Droplet,
-  Bed,
-  Plus,
-  Trash2,
-  Lock,
-  ChevronLeft,
-  ChevronRight,
-  Edit2,
-  X,
-  Info,
-} from 'lucide-react-native';
+  createDietLog as createRemoteDietLog,
+  deleteDietLog as deleteRemoteDietLog,
+  updateDietLog as updateRemoteDietLog,
+  type DietLogCreateInput,
+} from '@/api/dietApi';
+import {
+  foodLogEntryToCreateLocalDietLogInput,
+  foodLogEntryToRemoteCreateInput,
+  foodLogEntryToRemoteUpdateInput,
+  localDietLogToFoodLogEntry,
+} from '@/local/dietLogsMapper';
+import {
+  createDietLog as createLocalDietLog,
+  getDietLogByUserAndId,
+  getUnsyncedDeletedDietLogsByUser,
+  getUnsyncedEditedDietLogsByUser,
+  getUnsyncedNewDietLogsByUser,
+  markDietLogDeleteSyncFailed,
+  markDietLogDeleteSynced,
+  markDietLogSyncFailed,
+  markDietLogSynced,
+  softDeleteDietLog,
+  updateDietLog as updateLocalDietLog,
+} from '@/local/repositories/dietLogsRepository';
+import {
+  cacheRemoteFoodItems,
+  markFoodLastUsed,
+  searchLocalFoods,
+} from '@/local/repositories/foodsRepository';
+import type { FoodLogEntry, MacroTargets, MealId } from '@/screens/dashboard/types';
+import { NutritionCarousel } from './NutritionCarousel';
+import { MealDiarySection } from './MealDiarySection';
+import { HydrationTrackerCard } from './HydrationTrackerCard';
+import { SleepRecoveryCard } from './SleepRecoveryCard';
+import { LoggedItemDetailsModal } from './LoggedItemDetailsModal';
+import { FoodSearchModal } from './FoodSearchModal';
+import { QuickParserCard, type QuickParserReviewItem } from './QuickParserCard';
+import { parseFoodDescription, type ParsedFoodItem, type ParsedFoodUnit } from '@/ai/foodParser';
+import { Lock } from 'lucide-react-native';
 
 interface FoodTabProps {
+  userId: string | null;
   foodLogs: FoodLogEntry[];
   setFoodLogs: React.Dispatch<React.SetStateAction<FoodLogEntry[]>>;
+  refreshFoodLogs: () => Promise<void>;
   targets: MacroTargets;
   triggerToast: (msg: string) => void;
 }
 
 type NutrientSlideType = 'energy' | 'macros' | 'micros';
+type SyncCreatedDietLogResult = {
+  didSync: boolean;
+  message?: string;
+  skippedInFlight?: boolean;
+};
+type QuickParserMatchedItem = QuickParserReviewItem & {
+  entry: FoodLogEntry | null;
+  sourceFoodId: string | null;
+};
+
+const REMOTE_FOOD_ID_PREFIX = 'supabase_usda:';
+
+function getErrorMessage(error: unknown) {
+  if (typeof error === 'object' && error !== null) {
+    const responseError = (error as { response?: { data?: { error?: string } } }).response?.data?.error;
+    if (responseError) return responseError;
+
+    const message = (error as { message?: string }).message;
+    if (message) return message;
+  }
+
+  return 'Unknown error';
+}
+
+function getRemoteFoodMergeKey(item: GemiFoodItem, source: 'local' | 'remote') {
+  if (source === 'local') {
+    return item.id.startsWith(REMOTE_FOOD_ID_PREFIX) ? item.id : item.id;
+  }
+
+  return item.id.startsWith(REMOTE_FOOD_ID_PREFIX)
+    ? item.id
+    : `${REMOTE_FOOD_ID_PREFIX}${item.id}`;
+}
+
+function mergeLocalAndRemoteFoodResults(
+  localResults: GemiFoodItem[],
+  remoteResults: GemiFoodItem[]
+) {
+  const seen = new Set(localResults.map((item) => getRemoteFoodMergeKey(item, 'local')));
+  const merged = [...localResults];
+
+  for (const item of remoteResults) {
+    const key = getRemoteFoodMergeKey(item, 'remote');
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    merged.push(item);
+  }
+
+  return merged;
+}
+
+function normalizePortionText(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getPortionGramWeight(food: GemiFoodItem, unit: ParsedFoodUnit) {
+  const defaultUnit = normalizePortionText(food.defaultServingUnit);
+
+  if (
+    unit === 'serving' &&
+    food.defaultServingSize > 0 &&
+    defaultUnit !== '100g' &&
+    defaultUnit !== '1g'
+  ) {
+    return food.defaultServingSize;
+  }
+
+  if (defaultUnit === unit && food.defaultServingSize > 0) {
+    return food.defaultServingSize;
+  }
+
+  const unitMatchers: Record<ParsedFoodUnit, string[]> = {
+    g: [],
+    kg: [],
+    ml: ['ml', 'milliliter', 'milliliters'],
+    piece: ['piece', 'whole', 'unit', 'egg', 'large', 'medium', 'small'],
+    serving: ['serving', 'portion'],
+    tbsp: ['tbsp', 'tablespoon', 'tablespoons'],
+    tsp: ['tsp', 'teaspoon', 'teaspoons'],
+    cup: ['cup', 'cups'],
+    oz: ['oz', 'ounce', 'ounces'],
+  };
+
+  const matchers = unitMatchers[unit];
+  const portion = food.portions.find((candidate) => {
+    if (!candidate.gramWeight || candidate.gramWeight <= 0 || !candidate.amount || candidate.amount <= 0) {
+      return false;
+    }
+
+    const name = normalizePortionText(candidate.name);
+    return matchers.some((matcher) => name.includes(matcher));
+  });
+
+  return portion ? portion.gramWeight / portion.amount : null;
+}
+
+function resolveParsedFoodWeight(food: GemiFoodItem, item: ParsedFoodItem) {
+  if (item.unit === 'g') return item.quantity;
+  if (item.unit === 'kg') return item.quantity * 1000;
+
+  const gramWeight = getPortionGramWeight(food, item.unit);
+  return gramWeight ? item.quantity * gramWeight : null;
+}
+
+function buildQuickParserEntry(
+  item: ParsedFoodItem,
+  food: GemiFoodItem,
+  mealId: MealId,
+  index: number
+): FoodLogEntry | null {
+  const grams = resolveParsedFoodWeight(food, item);
+  if (!grams || grams <= 0) return null;
+
+  const multiplier = grams / 100;
+  return {
+    id: `quick_${Date.now()}_${index}`,
+    name: food.name,
+    mealId,
+    calories: Math.round(food.calories * multiplier),
+    protein: Number((food.protein * multiplier).toFixed(1)),
+    carbs: Number((food.carbs * multiplier).toFixed(1)),
+    fat: Number((food.fat * multiplier).toFixed(1)),
+    fiber: Number((food.fiber * multiplier).toFixed(1)),
+    sodium: Math.round(food.sodium * multiplier),
+    potassium: Math.round(food.potassium * multiplier),
+    calcium: Math.round(food.calcium * multiplier),
+    iron: Number((food.iron * multiplier).toFixed(2)),
+    vitaminC: Number((food.vitaminC * multiplier).toFixed(1)),
+    folate: Math.round(food.folate * multiplier),
+    servingSize: item.quantity,
+    servingUnit: item.unit,
+  };
+}
 
 export function FoodTab({
+  userId,
   foodLogs,
   setFoodLogs,
+  refreshFoodLogs,
   targets,
   triggerToast,
 }: FoodTabProps) {
   // Nutrient carousel slide
   const [nutrientSlide, setNutrientSlide] = useState<NutrientSlideType>('energy');
+  const [visibleMicros, setVisibleMicros] = useState<string[]>(['fiber', 'sodium', 'potassium', 'calcium', 'iron', 'vitaminC']);
 
   // Hydration state
   const [waterGlassStates, setWaterGlassStates] = useState<boolean[]>(Array(8).fill(false));
@@ -113,8 +268,13 @@ export function FoodTab({
     return { sleepQuality, sleepQualityColor };
   }, [sleepHours]);
 
-  // Natural Language Input
-  const [aiInput, setAiInput] = useState('');
+  // Natural-language quick log state
+  const [quickInput, setQuickInput] = useState('');
+  const [quickMealId, setQuickMealId] = useState<MealId>('snack');
+  const [quickItems, setQuickItems] = useState<QuickParserMatchedItem[]>([]);
+  const [quickError, setQuickError] = useState<string | null>(null);
+  const [isQuickParsing, setQuickParsing] = useState(false);
+  const [isQuickSaving, setQuickSaving] = useState(false);
 
   // Modal search state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -130,12 +290,239 @@ export function FoodTab({
   const [configUnit, setConfigUnit] = useState('portion');
   const [configWeight, setConfigWeight] = useState(100);
   const latestSearchRef = useRef(0);
+  const isRetryingDietLogsRef = useRef(false);
+  const isRetryingDietLogUpdatesRef = useRef(false);
+  const isRetryingDietLogDeletesRef = useRef(false);
+  const inFlightDietLogCreateIdsRef = useRef(new Set<string>());
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   // Viewing Logged Item Detail Modal State
   const [viewingLoggedItem, setViewingLoggedItem] = useState<FoodLogEntry | null>(null);
 
   // Tracks when a log/delete API call is in-flight so I can disable the button.
   const [isSavingLog, setIsSavingLog] = useState(false);
+
+  const syncCreatedDietLogToRemote = useCallback(
+    async (
+      localId: string,
+      remoteInput: DietLogCreateInput,
+      options?: { showFailureToast?: boolean; refreshAfterSync?: boolean }
+    ): Promise<SyncCreatedDietLogResult> => {
+      if (!userId) return { didSync: false, message: 'Missing authenticated user.' };
+
+      const showFailureToast = options?.showFailureToast ?? true;
+      const refreshAfterSync = options?.refreshAfterSync ?? true;
+
+      if (inFlightDietLogCreateIdsRef.current.has(localId)) {
+        return {
+          didSync: false,
+          message: 'Diet log create sync already in progress.',
+          skippedInFlight: true,
+        };
+      }
+
+      inFlightDietLogCreateIdsRef.current.add(localId);
+
+      try {
+        const remoteLog = await createRemoteDietLog(remoteInput);
+        await markDietLogSynced(userId, localId, remoteLog.id);
+        if (refreshAfterSync) {
+          await refreshFoodLogs();
+        }
+        return { didSync: true };
+      } catch (error) {
+        const message = getErrorMessage(error);
+        console.error('[Gemi] Failed to sync local diet log to backend:', message);
+        await markDietLogSyncFailed(userId, localId).catch((markError) => {
+          console.error('[Gemi] Failed to mark local diet log sync failed:', markError);
+        });
+        if (showFailureToast) {
+          triggerToast(`Saved locally. Remote sync pending: ${message}`);
+        }
+        return { didSync: false, message };
+      } finally {
+        inFlightDietLogCreateIdsRef.current.delete(localId);
+      }
+    },
+    [refreshFoodLogs, triggerToast, userId]
+  );
+
+  const saveDietLogLocalFirst = useCallback(
+    async (
+      entry: FoodLogEntry,
+      loggedAt: string,
+      sourceFoodId: string | null,
+      successMessage: string
+    ) => {
+      if (!userId) {
+        triggerToast('Please log in before saving food logs.');
+        return null;
+      }
+
+      const localLog = await createLocalDietLog(
+        foodLogEntryToCreateLocalDietLogInput(userId, entry, loggedAt, sourceFoodId)
+      );
+      const localEntry = localDietLogToFoodLogEntry(localLog);
+      const remoteInput = foodLogEntryToRemoteCreateInput(entry, loggedAt);
+
+      setFoodLogs((prev) => [...prev, localEntry]);
+      triggerToast(successMessage);
+      void syncCreatedDietLogToRemote(localLog.id, remoteInput);
+
+      return localEntry;
+    },
+    [setFoodLogs, syncCreatedDietLogToRemote, triggerToast, userId]
+  );
+
+  const retryPendingDietLogCreates = useCallback(
+    async (targetUserId: string) => {
+      if (isRetryingDietLogsRef.current) {
+        console.log('[FoodTab] Diet-log create retry skipped: already running');
+        return;
+      }
+
+      isRetryingDietLogsRef.current = true;
+      let shouldRefreshLogs = false;
+      try {
+        console.log('[FoodTab] Diet-log create retry begin');
+        const unsyncedLogs = await getUnsyncedNewDietLogsByUser(targetUserId);
+        console.log(`[FoodTab] Unsynced new diet logs found: ${unsyncedLogs.length}`);
+
+        for (const localLog of unsyncedLogs) {
+          if (inFlightDietLogCreateIdsRef.current.has(localLog.id)) {
+            console.log(`[FoodTab] Diet-log create retry skipped in-flight row: ${localLog.id}`);
+            continue;
+          }
+
+          console.log(`[FoodTab] Retrying local diet log: ${localLog.id}`);
+          const entry = localDietLogToFoodLogEntry(localLog);
+          const remoteInput = foodLogEntryToRemoteCreateInput(entry, localLog.logged_at);
+          const result = await syncCreatedDietLogToRemote(localLog.id, remoteInput, {
+            showFailureToast: false,
+            refreshAfterSync: false,
+          });
+
+          if (result.didSync) {
+            shouldRefreshLogs = true;
+            console.log(`[FoodTab] Diet-log create retry synced: ${localLog.id}`);
+          } else if (result.skippedInFlight) {
+            console.log(`[FoodTab] Diet-log create retry skipped in-flight row: ${localLog.id}`);
+          } else {
+            console.log(`[FoodTab] Diet-log create retry failed: ${result.message ?? 'Unknown error'}`);
+          }
+        }
+
+        if (shouldRefreshLogs) {
+          await refreshFoodLogs();
+        }
+        console.log('[FoodTab] Diet-log create retry complete');
+      } catch (error) {
+        console.log(`[FoodTab] Diet-log create retry failed: ${getErrorMessage(error)}`);
+      } finally {
+        isRetryingDietLogsRef.current = false;
+      }
+    },
+    [refreshFoodLogs, syncCreatedDietLogToRemote]
+  );
+
+  const retryPendingDietLogUpdates = useCallback(
+    async (targetUserId: string) => {
+      if (!targetUserId) return;
+
+      if (isRetryingDietLogUpdatesRef.current) {
+        console.log('[FoodTab] Diet-log update retry skipped: already running');
+        return;
+      }
+
+      isRetryingDietLogUpdatesRef.current = true;
+      let shouldRefreshLogs = false;
+      try {
+        console.log('[FoodTab] Diet-log update retry begin');
+        const unsyncedLogs = await getUnsyncedEditedDietLogsByUser(targetUserId);
+        console.log(`[FoodTab] Unsynced edited diet logs found: ${unsyncedLogs.length}`);
+
+        for (const localLog of unsyncedLogs) {
+          if (!localLog.remote_id) {
+            console.log(`[FoodTab] Diet-log update retry skipped missing remote id: ${localLog.id}`);
+            continue;
+          }
+
+          console.log(`[FoodTab] Retrying edited local diet log: ${localLog.id}`);
+          const entry = localDietLogToFoodLogEntry(localLog);
+          const remoteInput = foodLogEntryToRemoteUpdateInput(entry, localLog.logged_at);
+
+          try {
+            await updateRemoteDietLog(localLog.remote_id, remoteInput);
+            await markDietLogSynced(targetUserId, localLog.id, localLog.remote_id);
+            shouldRefreshLogs = true;
+            console.log(`[FoodTab] Diet-log update retry synced: ${localLog.id}`);
+          } catch (error) {
+            const message = getErrorMessage(error);
+            console.log(`[FoodTab] Diet-log update retry failed: ${message}`);
+            await markDietLogSyncFailed(targetUserId, localLog.id).catch((markError) => {
+              console.error('[Gemi] Failed to mark edited diet log sync failed:', markError);
+            });
+          }
+        }
+
+        if (shouldRefreshLogs) {
+          await refreshFoodLogs();
+        }
+        console.log('[FoodTab] Diet-log update retry complete');
+      } catch (error) {
+        console.log(`[FoodTab] Diet-log update retry failed: ${getErrorMessage(error)}`);
+      } finally {
+        isRetryingDietLogUpdatesRef.current = false;
+      }
+    },
+    [refreshFoodLogs]
+  );
+
+  const retryPendingDietLogDeletes = useCallback(
+    async (targetUserId: string) => {
+      if (!targetUserId) return;
+
+      if (isRetryingDietLogDeletesRef.current) {
+        console.log('[FoodTab] Diet-log delete retry skipped: already running');
+        return;
+      }
+
+      isRetryingDietLogDeletesRef.current = true;
+      try {
+        console.log('[FoodTab] Diet-log delete retry begin');
+        const unsyncedLogs = await getUnsyncedDeletedDietLogsByUser(targetUserId);
+        console.log(`[FoodTab] Unsynced deleted diet logs found: ${unsyncedLogs.length}`);
+
+        for (const localLog of unsyncedLogs) {
+          if (!localLog.remote_id) {
+            console.log(`[FoodTab] Diet-log delete retry skipped missing remote id: ${localLog.id}`);
+            continue;
+          }
+
+          console.log(`[FoodTab] Retrying deleted local diet log: ${localLog.id}`);
+
+          try {
+            await deleteRemoteDietLog(localLog.remote_id);
+            await markDietLogDeleteSynced(targetUserId, localLog.id);
+            console.log(`[FoodTab] Diet-log delete retry synced: ${localLog.id}`);
+          } catch (error) {
+            const message = getErrorMessage(error);
+            console.log(`[FoodTab] Diet-log delete retry failed: ${message}`);
+            await markDietLogDeleteSyncFailed(targetUserId, localLog.id).catch((markError) => {
+              console.error('[Gemi] Failed to mark deleted diet log sync failed:', markError);
+            });
+          }
+        }
+
+        console.log('[FoodTab] Diet-log delete retry complete');
+      } catch (error) {
+        console.log(`[FoodTab] Diet-log delete retry failed: ${getErrorMessage(error)}`);
+      } finally {
+        isRetryingDietLogDeletesRef.current = false;
+      }
+    },
+    []
+  );
 
   // Custom Food Form
   const [customName, setCustomName] = useState('');
@@ -144,25 +531,47 @@ export function FoodTab({
   const [customCarbs, setCustomCarbs] = useState('');
   const [customFat, setCustomFat] = useState('');
   const [customUnit, setCustomUnit] = useState('serving');
-  const [customWeight, setCustomWeight] = useState('100');
 
-  // Load USDA database results from the backend
+  // Load local food results first, then enrich with backend results if the request is still current.
   const loadFoodResults = useCallback(async (query: string) => {
     const requestId = ++latestSearchRef.current;
     setIsLoadingDb(true);
+    let localResults: GemiFoodItem[] = [];
+
     try {
       const trimmedQuery = query.trim();
+      const limit = trimmedQuery ? 50 : 15;
+      localResults = await searchLocalFoods(trimmedQuery, limit).catch((error) => {
+        const message = getErrorMessage(error);
+        console.warn('[FoodTab] Local food search failed:', message);
+        return [];
+      });
+
+      if (requestId !== latestSearchRef.current) return;
+
+      console.log(`[FoodTab] Local food results: ${localResults.length}`);
+      setDbList(localResults);
+      setIsLoadingDb(false);
+
       const list = await searchFoodDatabase({
         query: trimmedQuery || undefined,
-        limit: trimmedQuery ? 50 : 15,
+        limit,
       });
       if (requestId === latestSearchRef.current) {
-        setDbList(list);
+        setDbList((currentResults) => mergeLocalAndRemoteFoodResults(currentResults, list));
+        if (list.length > 0) {
+          void cacheRemoteFoodItems(list).catch((cacheError) => {
+            console.warn('[FoodTab] Failed to cache backend food results:', getErrorMessage(cacheError));
+          });
+        }
       }
     } catch (err) {
       if (requestId === latestSearchRef.current) {
-        console.error('[Gemi] Food database loading error:', err);
-        setDbList([]);
+        const message = getErrorMessage(err);
+        console.warn('[FoodTab] Backend food enrichment skipped or failed:', message);
+        if (localResults.length === 0) {
+          setDbList([]);
+        }
       }
     } finally {
       if (requestId === latestSearchRef.current) {
@@ -179,6 +588,34 @@ export function FoodTab({
     }, delay);
     return () => clearTimeout(timer);
   }, [isModalOpen, searchQuery, selectedCategory, loadFoodResults]);
+
+  useEffect(() => {
+    if (!userId) return;
+    void retryPendingDietLogCreates(userId);
+    void retryPendingDietLogUpdates(userId);
+    void retryPendingDietLogDeletes(userId);
+  }, [retryPendingDietLogCreates, retryPendingDietLogDeletes, retryPendingDietLogUpdates, userId]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const previousAppState = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      if (
+        userId &&
+        nextAppState === 'active' &&
+        (previousAppState === 'background' || previousAppState === 'inactive')
+      ) {
+        void retryPendingDietLogCreates(userId);
+        void retryPendingDietLogUpdates(userId);
+        void retryPendingDietLogDeletes(userId);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [retryPendingDietLogCreates, retryPendingDietLogDeletes, retryPendingDietLogUpdates, userId]);
 
   // Derived macros totals
   const proteinTotal = Number(foodLogs.reduce((acc, f) => acc + f.protein, 0).toFixed(1));
@@ -198,56 +635,178 @@ export function FoodTab({
   const ironTotal = Number(foodLogs.reduce((acc, f) => acc + (f.iron || 0), 0).toFixed(1));
   const vitaminCTotal = Number(foodLogs.reduce((acc, f) => acc + (f.vitaminC || 0), 0).toFixed(1));
 
-  // Handle Natural Language quick logging
-  const handleAiQuickLog = () => {
-    if (!aiInput.trim()) return;
-    const q = aiInput.toLowerCase();
-    let matchedFood: Partial<FoodLogEntry> | null = null;
-    let qty = 1;
+  const findQuickFoodMatch = useCallback(async (item: ParsedFoodItem) => {
+    const localMatches = await searchLocalFoods(item.foodName, 1).catch((error) => {
+      console.warn('[FoodTab] Quick Log local food search failed:', getErrorMessage(error));
+      return [];
+    });
 
-    // Local mock queries matching web staple keywords
-    if (q.includes('egg')) {
-      matchedFood = { name: 'Boiled Egg', calories: 78, protein: 6.3, carbs: 0.6, fat: 5.3, fiber: 0, sodium: 62 };
-      const m = q.match(/(\d+)\s*egg/);
-      if (m) qty = Number(m[1]);
-    } else if (q.includes('toast') || q.includes('bread')) {
-      matchedFood = { name: 'Whole Wheat Toast (slice)', calories: 80, protein: 4.0, carbs: 15.0, fat: 1.0, fiber: 2.0, sodium: 130 };
-      const m = q.match(/(\d+)\s*(toast|slice|bread)/);
-      if (m) qty = Number(m[1]);
-    } else if (q.includes('hummus')) {
-      matchedFood = { name: 'Hummus commercial', calories: 177, protein: 4.8, carbs: 8.6, fat: 14.3, fiber: 4.0, sodium: 300 };
-    } else if (q.includes('chicken') || q.includes('breast')) {
-      matchedFood = { name: 'Chicken breast grilled', calories: 165, protein: 31.0, carbs: 0.0, fat: 3.6, fiber: 0, sodium: 74 };
-    } else if (q.includes('salmon') || q.includes('fish')) {
-      matchedFood = { name: 'Oven Baked Salmon', calories: 200, protein: 22.0, carbs: 0.0, fat: 12.0, fiber: 0, sodium: 60 };
+    if (localMatches[0]) {
+      return localMatches[0];
     }
 
-    if (matchedFood) {
-      const entry: FoodLogEntry = {
-        id: `ai_${Date.now()}`,
-        name: matchedFood.name || 'Quick Logged Item',
-        mealId: 'snack',
-        calories: Math.round((matchedFood.calories || 0) * qty),
-        protein: Number(((matchedFood.protein || 0) * qty).toFixed(1)),
-        carbs: Number(((matchedFood.carbs || 0) * qty).toFixed(1)),
-        fat: Number(((matchedFood.fat || 0) * qty).toFixed(1)),
-        fiber: Number(((matchedFood.fiber || 0) * qty).toFixed(1)),
-        sodium: Math.round((matchedFood.sodium || 0) * qty),
-        potassium: 100 * qty,
-        calcium: 20 * qty,
-        iron: 0.5 * qty,
-        vitaminC: 0,
-        folate: 0,
-        servingSize: qty,
-        servingUnit: 'portion',
-      };
-      setFoodLogs((prev) => [...prev, entry]);
-      setAiInput('');
-      triggerToast(`AI Parser: Logged ${entry.name} x${qty} (+${entry.calories} kcal)`);
-    } else {
-      triggerToast("AI Parser: Try '2 eggs' or 'chicken breast'");
+    try {
+      const remoteMatches = await searchFoodDatabase({
+        query: item.foodName,
+        limit: 3,
+      });
+
+      if (remoteMatches.length > 0) {
+        void cacheRemoteFoodItems(remoteMatches).catch((cacheError) => {
+          console.warn('[FoodTab] Failed to cache Quick Log food results:', getErrorMessage(cacheError));
+        });
+      }
+
+      return remoteMatches[0] ?? null;
+    } catch (error) {
+      console.warn('[FoodTab] Quick Log backend food search skipped:', getErrorMessage(error));
+      return null;
     }
-  };
+  }, []);
+
+  const handleQuickParse = useCallback(async () => {
+    if (isQuickParsing || isQuickSaving) return;
+
+    setQuickParsing(true);
+    setQuickError(null);
+
+    try {
+      const parsed = await parseFoodDescription(quickInput);
+      const nextItems: QuickParserMatchedItem[] = [];
+
+      for (const [index, item] of parsed.items.entries()) {
+        const matchedFood = await findQuickFoodMatch(item);
+
+        if (!matchedFood) {
+          nextItems.push({
+            id: `quick_unmatched_${Date.now()}_${index}`,
+            parsedName: item.foodName,
+            quantity: item.quantity,
+            unit: item.unit,
+            matchedName: null,
+            calories: null,
+            protein: null,
+            carbs: null,
+            fat: null,
+            status: 'unmatched',
+            message: 'No database match found. Remove it or add it manually from search.',
+            entry: null,
+            sourceFoodId: null,
+          });
+          continue;
+        }
+
+        const entry = buildQuickParserEntry(item, matchedFood, quickMealId, index);
+        if (!entry) {
+          nextItems.push({
+            id: `quick_review_${Date.now()}_${index}`,
+            parsedName: item.foodName,
+            quantity: item.quantity,
+            unit: item.unit,
+            matchedName: matchedFood.name,
+            calories: null,
+            protein: null,
+            carbs: null,
+            fat: null,
+            status: 'needs_review',
+            message: `Matched ${matchedFood.name}, but ${item.unit} needs a known portion. Add it manually from search.`,
+            entry: null,
+            sourceFoodId: matchedFood.id,
+          });
+          continue;
+        }
+
+        nextItems.push({
+          id: entry.id,
+          parsedName: item.foodName,
+          quantity: item.quantity,
+          unit: item.unit,
+          matchedName: matchedFood.name,
+          calories: entry.calories,
+          protein: entry.protein,
+          carbs: entry.carbs,
+          fat: entry.fat,
+          status: 'ready',
+          message: 'Ready to add.',
+          entry,
+          sourceFoodId: matchedFood.id,
+        });
+      }
+
+      setQuickItems(nextItems);
+      if (!nextItems.some((item) => item.status === 'ready')) {
+        setQuickError('No parsed foods are ready to add yet. Remove unresolved items or add them manually from search.');
+      }
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setQuickItems([]);
+      setQuickError(message);
+    } finally {
+      setQuickParsing(false);
+    }
+  }, [findQuickFoodMatch, isQuickParsing, isQuickSaving, quickInput, quickMealId]);
+
+  const handleQuickConfirm = useCallback(async () => {
+    if (isQuickSaving || isSavingLog) return;
+
+    const readyItems = quickItems.filter((item) => item.status === 'ready' && item.entry);
+    if (readyItems.length === 0) {
+      setQuickError('No matched foods are ready to add.');
+      return;
+    }
+
+    setQuickSaving(true);
+    setIsSavingLog(true);
+    setQuickError(null);
+
+    try {
+      const loggedAt = new Date().toISOString();
+      for (const item of readyItems) {
+        if (!item.entry) continue;
+        const entry = {
+          ...item.entry,
+          mealId: quickMealId,
+        };
+
+        await saveDietLogLocalFirst(
+          entry,
+          loggedAt,
+          item.sourceFoodId,
+          `Logged to ${quickMealId}: ${entry.name}`
+        );
+
+        if (item.sourceFoodId) {
+          void markFoodLastUsed(item.sourceFoodId).catch((error) => {
+            console.warn('[FoodTab] Failed to mark Quick Log food used:', getErrorMessage(error));
+          });
+        }
+      }
+
+      setQuickItems((items) => items.filter((item) => item.status !== 'ready'));
+      if (quickItems.length === readyItems.length) {
+        setQuickInput('');
+      }
+      triggerToast(`Added ${readyItems.length} Quick Log item${readyItems.length === 1 ? '' : 's'}.`);
+    } catch (error) {
+      const message = getErrorMessage(error);
+      console.error('[Gemi] Failed to save Quick Log items:', message);
+      setQuickError(`Failed to save: ${message}`);
+      triggerToast(`Failed to save: ${message}`);
+    } finally {
+      setIsSavingLog(false);
+      setQuickSaving(false);
+    }
+  }, [isQuickSaving, isSavingLog, quickItems, quickMealId, saveDietLogLocalFirst, triggerToast]);
+
+  const handleQuickClear = useCallback(() => {
+    setQuickInput('');
+    setQuickItems([]);
+    setQuickError(null);
+  }, []);
+
+  const handleQuickRemoveItem = useCallback((id: string) => {
+    setQuickItems((items) => items.filter((item) => item.id !== id));
+  }, []);
 
   const handleOpenSearchModal = (meal: MealId) => {
     setActiveMealId(meal);
@@ -259,12 +818,16 @@ export function FoodTab({
     setConfigQuantity(1);
     setConfigUnit(item.defaultServingUnit);
     setConfigWeight(item.defaultServingSize);
+    void markFoodLastUsed(item.id).catch((error) => {
+      console.warn('[FoodTab] Failed to mark cached food used:', getErrorMessage(error));
+    });
   };
 
-  // Persists the selected USDA food item to the backend, then updates local state on success.
+  // Saves the selected USDA food locally first, then attempts the existing backend save.
   const logSelectedItem = async () => {
     if (!selectedItem || isSavingLog) return;
     const multiplier = configQuantity * (configWeight / 100);
+    const loggedAt = new Date().toISOString();
     const entry: FoodLogEntry = {
       id: `usda_${Date.now()}`,
       name: selectedItem.name,
@@ -286,33 +849,30 @@ export function FoodTab({
 
     setIsSavingLog(true);
     try {
-      // Save to the backend. The Axios interceptor attaches the Supabase Bearer token automatically.
-      // If the request fails (network error, 401, RLS rejection), this throws and jumps to catch.
-      await createDietLog({
-        meal_name: entry.name,
-        calories: entry.calories,
-        protein_g: entry.protein,
-        carbs_g: entry.carbs,
-        fat_g: entry.fat,
-        logged_at: new Date().toISOString(),
+      await saveDietLogLocalFirst(
+        entry,
+        loggedAt,
+        selectedItem.id,
+        `Logged to ${activeMealId}: ${entry.name}`
+      );
+      void markFoodLastUsed(selectedItem.id).catch((error) => {
+        console.warn('[FoodTab] Failed to mark cached food used:', getErrorMessage(error));
       });
-      // Only update local state after the server confirmed success.
-      setFoodLogs((prev) => [...prev, entry]);
       setSelectedItem(null);
       setIsModalOpen(false);
-      triggerToast(`Logged to ${activeMealId}: ${entry.name}`);
-    } catch (err: any) {
-      const message = err?.response?.data?.error ?? err?.message ?? 'Unknown error';
-      console.error('[Gemi] Failed to save diet log:', message);
+    } catch (err) {
+      const message = getErrorMessage(err);
+      console.error('[Gemi] Failed to save local diet log:', message);
       triggerToast(`Failed to save: ${message}`);
     } finally {
       setIsSavingLog(false);
     }
   };
 
-  // Persists a custom food entry to the backend, then updates local state on success.
+  // Saves a custom food entry locally first, then attempts the existing backend save.
   const handleAddCustomFood = async () => {
     if (!customName.trim() || isSavingLog) return;
+    const loggedAt = new Date().toISOString();
     const entry: FoodLogEntry = {
       id: `custom_${Date.now()}`,
       name: customName,
@@ -334,786 +894,212 @@ export function FoodTab({
 
     setIsSavingLog(true);
     try {
-      await createDietLog({
-        meal_name: entry.name,
-        calories: entry.calories,
-        protein_g: entry.protein,
-        carbs_g: entry.carbs,
-        fat_g: entry.fat,
-        logged_at: new Date().toISOString(),
-      });
-      setFoodLogs((prev) => [...prev, entry]);
+      await saveDietLogLocalFirst(entry, loggedAt, null, `Logged custom food: ${entry.name}`);
       setCustomName('');
       setCustomCals('');
       setCustomProtein('');
       setCustomCarbs('');
       setCustomFat('');
       setIsModalOpen(false);
-      triggerToast(`Logged custom food: ${entry.name}`);
-    } catch (err: any) {
-      const message = err?.response?.data?.error ?? err?.message ?? 'Unknown error';
-      console.error('[Gemi] Failed to save custom food log:', message);
+    } catch (err) {
+      const message = getErrorMessage(err);
+      console.error('[Gemi] Failed to save local custom food log:', message);
       triggerToast(`Failed to save: ${message}`);
     } finally {
       setIsSavingLog(false);
     }
   };
 
-  // Deletes a log entry from the backend, then removes it from local state on success.
+  // Soft-deletes a local log first, then attempts the existing backend delete if a remote row exists.
   const handleDeleteEntry = async (id: string) => {
+    if (!userId) {
+      triggerToast('Please log in before deleting food logs.');
+      return;
+    }
+
     try {
-      // Only call the backend if this is a real persisted entry (not an optimistic local-only id).
-      // In this app all entries are persisted first, so always call the API.
-      await deleteDietLog(id);
+      const localLog = await getDietLogByUserAndId(userId, id);
+      if (!localLog) {
+        throw new Error('Diet log was not found for the current user.');
+      }
+
+      await softDeleteDietLog(userId, id);
       setFoodLogs((prev) => prev.filter((x) => x.id !== id));
+      setViewingLoggedItem((current) => (current?.id === id ? null : current));
       triggerToast('Logged food entry deleted');
-    } catch (err: any) {
-      const message = err?.response?.data?.error ?? err?.message ?? 'Unknown error';
+
+      const remoteId = localLog.remote_id;
+      if (remoteId) {
+        void (async () => {
+          try {
+            await deleteRemoteDietLog(remoteId);
+            await markDietLogDeleteSynced(userId, id);
+          } catch (error) {
+            console.error('[Gemi] Failed to sync diet-log delete to backend:', getErrorMessage(error));
+            await markDietLogDeleteSyncFailed(userId, id).catch((markError) => {
+              console.error('[Gemi] Failed to mark deleted diet log sync failed:', markError);
+            });
+          }
+        })();
+      }
+    } catch (err) {
+      const message = getErrorMessage(err);
       console.error('[Gemi] Failed to delete diet log:', message);
       triggerToast(`Delete failed: ${message}`);
     }
   };
 
-  const renderMealIcon = (mealId: MealId) => {
-    switch (mealId) {
-      case 'breakfast':
-        return <Coffee size={18} color="#fd761a" style={styles.mealIcon} />;
-      case 'lunch':
-        return <Sun size={18} color="#eab308" style={styles.mealIcon} />;
-      case 'dinner':
-        return <Moon size={18} color="#6366f1" style={styles.mealIcon} />;
-      default:
-        return <Apple size={18} color="#22c55e" style={styles.mealIcon} />;
+  const handleUpdateEntry = async (
+    updatedEntry: FoodLogEntry
+  ) => {
+    if (!userId) {
+      triggerToast('Please log in before editing food logs.');
+      return;
+    }
+
+    if (isSavingLog) return;
+
+    setIsSavingLog(true);
+    try {
+      const updatedLocalLog = await updateLocalDietLog(userId, updatedEntry.id, {
+        meal_id: updatedEntry.mealId,
+        meal_name: updatedEntry.name,
+        calories: updatedEntry.calories,
+        protein_g: updatedEntry.protein,
+        carbs_g: updatedEntry.carbs,
+        fat_g: updatedEntry.fat,
+        fiber_g: updatedEntry.fiber,
+        sodium_mg: updatedEntry.sodium,
+        potassium_mg: updatedEntry.potassium,
+        calcium_mg: updatedEntry.calcium,
+        iron_mg: updatedEntry.iron,
+        vitamin_c_mg: updatedEntry.vitaminC,
+        folate_mcg: updatedEntry.folate,
+        serving_size: updatedEntry.servingSize,
+        serving_unit: updatedEntry.servingUnit,
+      });
+      const localEntry = localDietLogToFoodLogEntry(updatedLocalLog);
+
+      setFoodLogs((prev) => prev.map((item) => (item.id === updatedEntry.id ? localEntry : item)));
+      setViewingLoggedItem(null);
+      triggerToast(`Updated ${localEntry.name}`);
+    } catch (err) {
+      const message = getErrorMessage(err);
+      console.error('[Gemi] Failed to update local diet log:', message);
+      triggerToast(`Update failed: ${message}`);
+    } finally {
+      setIsSavingLog(false);
     }
   };
-
-  // Meal defs
-  const mealDefs: { id: MealId; name: string }[] = [
-    { id: 'breakfast', name: 'Breakfast' },
-    { id: 'lunch',     name: 'Lunch' },
-    { id: 'dinner',    name: 'Dinner' },
-    { id: 'snack',     name: 'Snacks & Extras' },
-  ];
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Scrollable Nutrient Targets Panel */}
-        <View style={styles.carouselContainer}>
-          <View style={styles.carouselHeader}>
-            <Text style={styles.carouselHeaderTitle}>
-              {nutrientSlide === 'energy' && 'Daily Energy Balance'}
-              {nutrientSlide === 'macros' && 'Daily Macronutrients'}
-              {nutrientSlide === 'micros' && 'Daily Micronutrient Highlights'}
-            </Text>
+        <NutritionCarousel
+          foodLogs={foodLogs}
+          targets={targets}
+          visibleMicros={visibleMicros}
+          setVisibleMicros={setVisibleMicros}
+          triggerToast={triggerToast}
+        />
 
-            <View style={styles.carouselArrows}>
-              <TouchableOpacity
-                onPress={() =>
-                  setNutrientSlide((p) => (p === 'energy' ? 'micros' : p === 'macros' ? 'energy' : 'macros'))
-                }
-                style={styles.arrowBtn}
-              >
-                <ChevronLeft size={16} color={Colors.primary} />
-              </TouchableOpacity>
-              <View style={styles.carouselDots}>
-                <View style={[styles.dot, nutrientSlide === 'energy' && styles.dotActive]} />
-                <View style={[styles.dot, nutrientSlide === 'macros' && styles.dotActive]} />
-                <View style={[styles.dot, nutrientSlide === 'micros' && styles.dotActive]} />
-              </View>
-              <TouchableOpacity
-                onPress={() =>
-                  setNutrientSlide((p) => (p === 'energy' ? 'macros' : p === 'macros' ? 'micros' : 'energy'))
-                }
-                style={styles.arrowBtn}
-              >
-                <ChevronRight size={16} color={Colors.primary} />
-              </TouchableOpacity>
-            </View>
-          </View>
+        <QuickParserCard
+          value={quickInput}
+          mealId={quickMealId}
+          items={quickItems}
+          isParsing={isQuickParsing}
+          isSaving={isQuickSaving}
+          error={quickError}
+          onChangeText={setQuickInput}
+          onMealChange={setQuickMealId}
+          onParse={handleQuickParse}
+          onConfirm={handleQuickConfirm}
+          onClear={handleQuickClear}
+          onRemoveItem={handleQuickRemoveItem}
+        />
 
-          {/* Slide 1: Energy rings */}
-          {nutrientSlide === 'energy' && (
-            <View style={styles.energyRingsRow}>
-              {/* Target */}
-              <View style={styles.ringCol}>
-                <Svg width="70" height="70" viewBox="0 0 100 100">
-                  <Circle cx="50" cy="50" r="42" stroke="#e5eeff" strokeWidth="8" fill="transparent" />
-                  <Circle
-                    cx="50"
-                    cy="50"
-                    r="42"
-                    stroke={Colors.primary}
-                    strokeWidth="8"
-                    fill="transparent"
-                    strokeDasharray={263.8}
-                    strokeDashoffset={0}
-                  />
-                </Svg>
-                <View style={styles.miniRingLabel}>
-                  <Text style={styles.miniRingNum}>{targets.calories}</Text>
-                  <Text style={styles.miniRingDesc}>Target</Text>
-                </View>
-              </View>
+        <MealDiarySection
+          foodLogs={foodLogs}
+          onOpenSearch={handleOpenSearchModal}
+          onItemPress={setViewingLoggedItem}
+          onDeleteEntry={handleDeleteEntry}
+        />
 
-              {/* Consumed */}
-              <View style={styles.ringCol}>
-                <Svg width="70" height="70" viewBox="0 0 100 100">
-                  <Circle cx="50" cy="50" r="42" stroke="#e5eeff" strokeWidth="8" fill="transparent" />
-                  <Circle
-                    cx="50"
-                    cy="50"
-                    r="42"
-                    stroke={Colors.primaryContainer}
-                    strokeWidth="8"
-                    fill="transparent"
-                    strokeDasharray={263.8}
-                    strokeDashoffset={263.8 - (263.8 * Math.min(100, (caloriesEaten / targets.calories) * 100)) / 100}
-                    transform="rotate(-90 50 50)"
-                  />
-                </Svg>
-                <View style={styles.miniRingLabel}>
-                  <Text style={styles.miniRingNum}>{caloriesEaten}</Text>
-                  <Text style={styles.miniRingDesc}>Eaten</Text>
-                </View>
-              </View>
+        <HydrationTrackerCard
+          hydrationGoal={hydrationGoal}
+          setHydrationGoal={setHydrationGoal}
+          waterGlassStates={waterGlassStates}
+          setWaterGlassStates={setWaterGlassStates}
+          triggerToast={triggerToast}
+        />
 
-              {/* Remaining */}
-              <View style={styles.ringCol}>
-                <Svg width="70" height="70" viewBox="0 0 100 100">
-                  <Circle cx="50" cy="50" r="42" stroke="#e5eeff" strokeWidth="8" fill="transparent" />
-                  <Circle
-                    cx="50"
-                    cy="50"
-                    r="42"
-                    stroke={Colors.secondaryContainer}
-                    strokeWidth="8"
-                    fill="transparent"
-                    strokeDasharray={263.8}
-                    strokeDashoffset={263.8 - (263.8 * Math.min(100, (Math.max(0, targets.calories - caloriesEaten) / targets.calories) * 100)) / 100}
-                    transform="rotate(-90 50 50)"
-                  />
-                </Svg>
-                <View style={styles.miniRingLabel}>
-                  <Text style={styles.miniRingNum}>{Math.max(0, targets.calories - caloriesEaten)}</Text>
-                  <Text style={styles.miniRingDesc}>Left</Text>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* Slide 2: Macronutrients summary */}
-          {nutrientSlide === 'macros' && (
-            <View style={styles.macrosProgressWrap}>
-              <View style={styles.macroProgressRow}>
-                <Text style={styles.macroLabel}>Protein ({Math.round(proteinTotal)}g / {targets.protein}g)</Text>
-                <View style={styles.progressLineBg}>
-                  <View style={[styles.progressLineFill, { width: `${proteinPercent}%`, backgroundColor: Colors.proteinAccent }]} />
-                </View>
-              </View>
-              <View style={styles.macroProgressRow}>
-                <Text style={styles.macroLabel}>Carbs ({Math.round(carbsTotal)}g / {targets.carbs}g)</Text>
-                <View style={styles.progressLineBg}>
-                  <View style={[styles.progressLineFill, { width: `${carbsPercent}%`, backgroundColor: Colors.tertiaryFixedDim }]} />
-                </View>
-              </View>
-              <View style={styles.macroProgressRow}>
-                <Text style={styles.macroLabel}>Fats ({Math.round(fatsTotal)}g / {targets.fats}g)</Text>
-                <View style={styles.progressLineBg}>
-                  <View style={[styles.progressLineFill, { width: `${fatsPercent}%`, backgroundColor: Colors.secondaryContainer }]} />
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* Slide 3: Micronutrients tracking */}
-          {nutrientSlide === 'micros' && (
-            <View style={styles.microsGrid}>
-              <View style={styles.microBox}>
-                <Text style={styles.microVal}>{fiberTotal}g</Text>
-                <Text style={styles.microName}>Fiber</Text>
-              </View>
-              <View style={styles.microBox}>
-                <Text style={styles.microVal}>{sodiumTotal}mg</Text>
-                <Text style={styles.microName}>Sodium</Text>
-              </View>
-              <View style={styles.microBox}>
-                <Text style={styles.microVal}>{potassiumTotal}mg</Text>
-                <Text style={styles.microName}>Potassium</Text>
-              </View>
-              <View style={styles.microBox}>
-                <Text style={styles.microVal}>{calciumTotal}mg</Text>
-                <Text style={styles.microName}>Calcium</Text>
-              </View>
-              <View style={styles.microBox}>
-                <Text style={styles.microVal}>{ironTotal}mg</Text>
-                <Text style={styles.microName}>Iron</Text>
-              </View>
-              <View style={styles.microBox}>
-                <Text style={styles.microVal}>{vitaminCTotal}mg</Text>
-                <Text style={styles.microName}>Vit C</Text>
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* AI Natural Language Log Card */}
-        <View style={styles.aiLogCard}>
-          <View style={styles.aiLogHeader}>
-            <Text style={styles.aiLogSparkle}>✨</Text>
-            <Text style={styles.aiLogTitle}>AI QUICK PARSER</Text>
-          </View>
-          <View style={styles.aiLogInputRow}>
-            <TextInput
-              style={styles.aiLogInput}
-              placeholder="e.g. '2 boiled eggs' or 'chicken breast'"
-              placeholderTextColor={Colors.outline}
-              value={aiInput}
-              onChangeText={setAiInput}
-            />
-            <TouchableOpacity style={styles.aiLogBtn} onPress={handleAiQuickLog} activeOpacity={0.8}>
-              <Text style={styles.aiLogBtnText}>Log</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Meal Diary Sections */}
-        {mealDefs.map((meal) => {
-          const logged = foodLogs.filter((x) => x.mealId === meal.id);
-          const mealCals = Math.round(logged.reduce((s, x) => s + x.calories, 0));
-
-          return (
-            <View key={meal.id} style={styles.mealSectionCard}>
-              <View style={styles.mealSectionHeader}>
-                <View style={styles.mealHeaderTitleGroup}>
-                  {renderMealIcon(meal.id)}
-                  <View>
-                    <Text style={styles.mealSectionName}>{meal.name}</Text>
-                    <Text style={styles.mealSectionSubtext}>
-                      {logged.length} items · {mealCals} kcal logged
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={styles.mealAddCircleBtn}
-                  onPress={() => handleOpenSearchModal(meal.id)}
-                  activeOpacity={0.8}
-                >
-                  <Plus size={14} color={Colors.primaryContainer} strokeWidth={3} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Logged Item Sub-rows */}
-              {logged.length > 0 && (
-                <View style={styles.loggedRowsList}>
-                  {logged.map((entry) => (
-                    <View key={entry.id} style={styles.loggedRow}>
-                      <TouchableOpacity
-                        style={{ flex: 1 }}
-                        onPress={() => setViewingLoggedItem(entry)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.loggedRowName}>{entry.name}</Text>
-                        <Text style={styles.loggedRowMacros}>
-                          {entry.servingSize} {entry.servingUnit} · {entry.calories} kcal · {entry.protein}P · {entry.carbs}C · {entry.fat}F · Tap for details
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.deleteRowBtn}
-                        onPress={() => handleDeleteEntry(entry.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Trash2 size={14} color={Colors.error} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          );
-        })}
-
-        {/* Hydration Tracker */}
-        <View style={styles.hydrationCard}>
-          <View style={styles.hydrationHeader}>
-            <View style={styles.cardTitleRow}>
-              <Droplet size={14} color={Colors.primary} fill={Colors.primary} style={{ marginRight: 4 }} />
-              <Text style={styles.cardTitle}>DAILY HYDRATION</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.hydrationGoalLabel}>Goal: {(hydrationGoal / 1000).toFixed(2)}L</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setIsEditingHydration(true);
-                  setHydrationGoalInput(String(hydrationGoal));
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Edit2 size={12} color={Colors.outline} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Inline goal selector */}
-          {isEditingHydration && (
-            <View style={styles.hydrationGoalEditor}>
-              <Text style={styles.editorLabel}>Set Daily Target Goal (mL):</Text>
-              <View style={styles.chipsRow}>
-                {[1500, 2000, 2500, 3000, 3500, 4000].map((ml) => (
-                  <TouchableOpacity
-                    key={ml}
-                    style={[styles.editorChip, hydrationGoal === ml && styles.editorChipActive]}
-                    onPress={() => updateHydrationGoal(ml)}
-                  >
-                    <Text style={[styles.editorChipText, hydrationGoal === ml && styles.editorChipTextActive]}>
-                      {ml >= 1000 ? `${ml / 1000}L` : `${ml}ml`}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <View style={styles.customGoalRow}>
-                <TextInput
-                  style={styles.customGoalInput}
-                  keyboardType="numeric"
-                  placeholder="Custom mL (e.g. 3500)"
-                  placeholderTextColor={Colors.outline}
-                  value={hydrationGoalInput}
-                  onChangeText={setHydrationGoalInput}
-                />
-                <TouchableOpacity
-                  style={styles.customGoalBtn}
-                  onPress={() => {
-                    const ml = Number(hydrationGoalInput);
-                    if (ml >= 250 && ml <= 6000) {
-                      updateHydrationGoal(ml);
-                    } else {
-                      triggerToast('Enter target between 250 and 6000 mL!');
-                    }
-                  }}
-                >
-                  <Text style={styles.customGoalBtnText}>Set</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.customGoalClose}
-                  onPress={() => setIsEditingHydration(false)}
-                >
-                  <X size={18} color={Colors.outline} />
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          <Text style={styles.hydrationSubtext}>
-            {waterConsumedMl.toLocaleString()} ml logged / {waterGlassCount} glasses
-          </Text>
-
-          {/* Fluid hydration progress indicator line */}
-          <View style={styles.hydrationProgressContainer}>
-            <View
-              style={[
-                styles.hydrationProgressFill,
-                { width: `${Math.min(100, (waterConsumedMl / hydrationGoal) * 100)}%` },
-              ]}
-            />
-          </View>
-
-          <View style={styles.glassRow}>
-            {Array.from({ length: waterGlassCount }).map((_, idx) => {
-              const filled = waterGlassStates[idx] === true;
-              return (
-                <TouchableOpacity
-                  key={idx}
-                  style={[styles.glassBtn, filled && styles.glassBtnFilled]}
-                  onPress={() => {
-                    handleWaterGlassToggle(idx);
-                    if (idx + 1 === waterGlassCount && !filled) {
-                      triggerToast('Perfect daily hydration met! 🎉');
-                    }
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Droplet
-                    size={16}
-                    color={filled ? '#0ea5e9' : 'rgba(110, 120, 129, 0.4)'}
-                    fill={filled ? '#0ea5e9' : 'transparent'}
-                  />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Sleep Tracker Card */}
-        <View style={styles.card}>
-          <View style={styles.sleepHeader}>
-            <View style={styles.cardTitleRow}>
-              <Bed size={14} color="#8b5cf6" style={{ marginRight: 4 }} />
-              <Text style={styles.cardTitle}>SLEEP TRACKER</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={[styles.sleepHoursText, { color: sleepMetrics.sleepQualityColor }]}>
-                {sleepHours} hrs
-              </Text>
-              <Text style={[styles.sleepQualityText, { color: sleepMetrics.sleepQualityColor }]}>
-                {sleepMetrics.sleepQuality}
-              </Text>
-            </View>
-          </View>
-
-          <Text style={styles.sleepSubtext}>Daily recovery target: 8.0 hrs · last night → morning</Text>
-
-          {/* Sleep pickers */}
-          <View style={styles.sleepInputsRow}>
-            <View style={styles.sleepInputCol}>
-              <Text style={styles.sleepInputLabel}>Slept at (last night)</Text>
-              <TextInput
-                style={styles.sleepTextInput}
-                value={bedtime}
-                onChangeText={setBedtime}
-                placeholder="23:00"
-                placeholderTextColor={Colors.outline}
-              />
-            </View>
-            <View style={styles.sleepInputCol}>
-              <Text style={styles.sleepInputLabel}>Woke up (morning)</Text>
-              <TextInput
-                style={styles.sleepTextInput}
-                value={waketime}
-                onChangeText={setWaketime}
-                placeholder="06:30"
-                placeholderTextColor={Colors.outline}
-              />
-            </View>
-          </View>
-
-          {/* Sleep recovery progress bar */}
-          <View style={styles.sleepBarRow}>
-            <View style={styles.sleepProgressBg}>
-              <View
-                style={[
-                  styles.sleepProgressFill,
-                  {
-                    width: `${Math.min(100, (sleepHours / 9) * 100)}%`,
-                    backgroundColor: sleepMetrics.sleepQualityColor,
-                  },
-                ]}
-              />
-            </View>
-            <Text style={styles.sleepGoalLabelText}>Goal: 8h</Text>
-          </View>
-
-          {sleepHours < 6 && (
-            <View style={styles.sleepWarningRow}>
-              <Info size={13} color="#ef4444" style={{ marginRight: 6 }} />
-              <Text style={styles.sleepWarningText}>
-                Less than 6h — recovery may be impaired. Aim for 7–9h.
-              </Text>
-            </View>
-          )}
-        </View>
+        <SleepRecoveryCard
+          bedtime={bedtime}
+          setBedtime={setBedtime}
+          waketime={waketime}
+          setWaketime={setWaketime}
+          triggerToast={triggerToast}
+        />
 
         {/* Privacy Note */}
         <View style={styles.privacyWrap}>
           <View style={styles.privacyRow}>
             <Lock size={12} color={Colors.outline} style={{ marginRight: 6 }} />
-            <Text style={styles.privacyText}>Food search results are fetched from the backend. Logged entries stay on this device.</Text>
+            <Text style={styles.privacyText}>Food logs stay local-first and sync when available.</Text>
           </View>
         </View>
       </ScrollView>
 
-      {/* Database Search & Modal Sheet */}
-      <Modal visible={isModalOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsModalOpen(false)}>
-        <SafeAreaView style={styles.modalContainer}>
-          {selectedItem === null ? (
-            <View style={styles.modalBody}>
-              {/* Modal Title bar */}
-              <View style={styles.modalTitleRow}>
-                <Text style={styles.modalTitle}>Add Food to {activeMealId}</Text>
-                <TouchableOpacity onPress={() => setIsModalOpen(false)}>
-                  <Text style={styles.closeModalText}>Close</Text>
-                </TouchableOpacity>
-              </View>
+      <FoodSearchModal
+        visible={isModalOpen}
+        activeMealId={activeMealId}
+        selectedCategory={selectedCategory}
+        searchQuery={searchQuery}
+        searchResults={dbList}
+        selectedItem={selectedItem}
+        loading={isLoadingDb}
+        isSaving={isSavingLog}
+        configQuantity={configQuantity}
+        configUnit={configUnit}
+        configWeight={configWeight}
+        customName={customName}
+        customCals={customCals}
+        customProtein={customProtein}
+        customCarbs={customCarbs}
+        customFat={customFat}
+        customUnit={customUnit}
+        targets={targets}
+        onClose={() => {
+          setSelectedItem(null);
+          setIsModalOpen(false);
+        }}
+        onBackFromSelected={() => setSelectedItem(null)}
+        onSearchQueryChange={setSearchQuery}
+        onSelectedCategoryChange={setSelectedCategory}
+        onSelectFood={handleSelectSearchItem}
+        onAddSelectedFood={logSelectedItem}
+        onAddCustomFood={handleAddCustomFood}
+        onMealChange={setActiveMealId}
+        setConfigQuantity={setConfigQuantity}
+        setConfigUnit={setConfigUnit}
+        setConfigWeight={setConfigWeight}
+        setCustomName={setCustomName}
+        setCustomCals={setCustomCals}
+        setCustomProtein={setCustomProtein}
+        setCustomCarbs={setCustomCarbs}
+        setCustomFat={setCustomFat}
+        setCustomUnit={setCustomUnit}
+      />
 
-              {/* Tab Selector */}
-              <View style={styles.modalTabsRow}>
-                <TouchableOpacity style={[styles.modalTabPill, selectedCategory === 'All' && styles.modalTabPillActive]} onPress={() => setSelectedCategory('All')}>
-                  <Text style={[styles.modalTabPillText, selectedCategory === 'All' && styles.modalTabPillTextActive]}>USDA Staples</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.modalTabPill, selectedCategory === 'Custom' && styles.modalTabPillActive]} onPress={() => setSelectedCategory('Custom')}>
-                  <Text style={[styles.modalTabPillText, selectedCategory === 'Custom' && styles.modalTabPillTextActive]}>+ Custom Food</Text>
-                </TouchableOpacity>
-              </View>
-
-              {selectedCategory !== 'Custom' ? (
-                <>
-                  {/* Search Field */}
-                  <View style={styles.searchBarContainer}>
-                    <TextInput
-                      style={styles.searchBarInput}
-                      placeholder="Search USDA database..."
-                      value={searchQuery}
-                      onChangeText={setSearchQuery}
-                      placeholderTextColor={Colors.outline}
-                    />
-                  </View>
-
-                  {/* Results List */}
-                  {isLoadingDb ? (
-                    <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
-                  ) : (
-                    <FlatList
-                      data={dbList}
-                      keyExtractor={(item) => item.id}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          style={styles.searchResultRow}
-                          onPress={() => handleSelectSearchItem(item)}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.resultItemName}>{item.name}</Text>
-                            <Text style={styles.resultItemCategory}>{item.category}</Text>
-                            <Text style={styles.resultItemMacros}>
-                              P: {item.protein}g · C: {item.carbs}g · F: {item.fat}g (per 100g)
-                            </Text>
-                          </View>
-                          <View style={styles.resultItemCalsBadge}>
-                            <Text style={styles.resultItemCalsText}>{item.calories}</Text>
-                            <Text style={styles.resultItemCalsLabel}>kcal</Text>
-                          </View>
-                        </TouchableOpacity>
-                      )}
-                    />
-                  )}
-                </>
-              ) : (
-                /* Custom Food Form */
-                <ScrollView style={styles.customFoodScroll}>
-                  <Text style={styles.formSectionTitle}>Create reusable custom food entry:</Text>
-                  <View style={styles.customFormField}>
-                    <Text style={styles.formInputLabel}>Food Name</Text>
-                    <TextInput style={styles.formTextInput} placeholder="e.g. Homemade Protein Cookie" value={customName} onChangeText={setCustomName} />
-                  </View>
-                  <View style={styles.customFormField}>
-                    <Text style={styles.formInputLabel}>Calories (kcal)</Text>
-                    <TextInput style={styles.formTextInput} placeholder="0" value={customCals} onChangeText={setCustomCals} keyboardType="numeric" />
-                  </View>
-                  <View style={styles.customFormField}>
-                    <Text style={styles.formInputLabel}>Protein (g)</Text>
-                    <TextInput style={styles.formTextInput} placeholder="0" value={customProtein} onChangeText={setCustomProtein} keyboardType="numeric" />
-                  </View>
-                  <View style={styles.customFormField}>
-                    <Text style={styles.formInputLabel}>Carbohydrates (g)</Text>
-                    <TextInput style={styles.formTextInput} placeholder="0" value={customCarbs} onChangeText={setCustomCarbs} keyboardType="numeric" />
-                  </View>
-                  <View style={styles.customFormField}>
-                    <Text style={styles.formInputLabel}>Fat (g)</Text>
-                    <TextInput style={styles.formTextInput} placeholder="0" value={customFat} onChangeText={setCustomFat} keyboardType="numeric" />
-                  </View>
-                  <TouchableOpacity style={styles.formSubmitBtn} onPress={handleAddCustomFood}>
-                    <Text style={styles.formSubmitBtnText}>Log Custom Food</Text>
-                  </TouchableOpacity>
-                </ScrollView>
-              )}
-            </View>
-          ) : (
-            /* Selected configurator detail overlay */
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.detailTitleBar}>
-                <TouchableOpacity onPress={() => setSelectedItem(null)}>
-                  <Text style={styles.detailBackText}>‹ Back</Text>
-                </TouchableOpacity>
-                <Text style={styles.detailItemTitle} numberOfLines={1}>{selectedItem.name}</Text>
-              </View>
-
-              {/* Quantity config */}
-              <View style={styles.portionSection}>
-                <Text style={styles.sectionHeading}>Portion Configurator:</Text>
-                <View style={styles.portionRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.formInputLabel}>{configUnit === '1g' ? 'Grams:' : 'Quantity (Servings)'}</Text>
-                    <TextInput
-                      style={styles.formTextInput}
-                      value={String(configQuantity)}
-                      onChangeText={(v) => setConfigQuantity(Number(v) || 1)}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                  <View style={{ flex: 1.5, marginLeft: spacing.md }}>
-                    <Text style={styles.formInputLabel}>Serving Unit</Text>
-                    <View style={styles.servingUnitsRow}>
-                      <TouchableOpacity style={[styles.unitChip, configUnit === selectedItem.defaultServingUnit && styles.unitChipActive]} onPress={() => { setConfigUnit(selectedItem.defaultServingUnit); setConfigWeight(selectedItem.defaultServingSize); }}>
-                        <Text style={[styles.unitChipText, configUnit === selectedItem.defaultServingUnit && styles.unitChipTextActive]}>{selectedItem.defaultServingUnit} ({selectedItem.defaultServingSize}g)</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={[styles.unitChip, configUnit === '100g' && styles.unitChipActive]} onPress={() => { setConfigUnit('100g'); setConfigWeight(100); }}>
-                        <Text style={[styles.unitChipText, configUnit === '100g' && styles.unitChipTextActive]}>100g</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={[styles.unitChip, configUnit === '1g' && styles.unitChipActive]} onPress={() => { setConfigUnit('1g'); setConfigWeight(1); }}>
-                        <Text style={[styles.unitChipText, configUnit === '1g' && styles.unitChipTextActive]}>1g</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              {/* Nutrition Summary Box */}
-              {(() => {
-                const mult = configQuantity * (configWeight / 100);
-                const scaledKcal = Math.round(selectedItem.calories * mult);
-                const scaledProt = (selectedItem.protein * mult).toFixed(1);
-                const scaledCarb = (selectedItem.carbs * mult).toFixed(1);
-                const scaledFat = (selectedItem.fat * mult).toFixed(1);
-
-                return (
-                  <>
-                    <View style={styles.summaryBento}>
-                      <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.primary, borderLeftWidth: 3 }]}>
-                        <Text style={styles.summaryBigVal}>{scaledKcal}</Text>
-                        <Text style={styles.summaryLabel}>Calories</Text>
-                      </View>
-                      <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.proteinAccent, borderLeftWidth: 3 }]}>
-                        <Text style={styles.summaryBigVal}>{scaledProt}g</Text>
-                        <Text style={styles.summaryLabel}>Protein</Text>
-                      </View>
-                      <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.tertiaryFixedDim, borderLeftWidth: 3 }]}>
-                        <Text style={styles.summaryBigVal}>{scaledCarb}g</Text>
-                        <Text style={styles.summaryLabel}>Carbs</Text>
-                      </View>
-                      <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.secondaryContainer, borderLeftWidth: 3 }]}>
-                        <Text style={styles.summaryBigVal}>{scaledFat}g</Text>
-                        <Text style={styles.summaryLabel}>Fats</Text>
-                      </View>
-                    </View>
-
-                    {/* Detailed Micronutrients Breakdown list */}
-                    <View style={styles.microsListCard}>
-                      <Text style={styles.microsCardTitle}>Micronutrient Highlights:</Text>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Fiber</Text>
-                        <Text style={styles.microDetailVal}>{(selectedItem.fiber * mult).toFixed(1)}g</Text>
-                      </View>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Sodium</Text>
-                        <Text style={styles.microDetailVal}>{Math.round(selectedItem.sodium * mult)}mg</Text>
-                      </View>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Potassium</Text>
-                        <Text style={styles.microDetailVal}>{Math.round(selectedItem.potassium * mult)}mg</Text>
-                      </View>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Calcium</Text>
-                        <Text style={styles.microDetailVal}>{Math.round(selectedItem.calcium * mult)}mg</Text>
-                      </View>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Iron</Text>
-                        <Text style={styles.microDetailVal}>{(selectedItem.iron * mult).toFixed(2)}mg</Text>
-                      </View>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Vitamin C</Text>
-                        <Text style={styles.microDetailVal}>{(selectedItem.vitaminC * mult).toFixed(1)}mg</Text>
-                      </View>
-                      <View style={styles.microDetailRow}>
-                        <Text style={styles.microDetailName}>Folate</Text>
-                        <Text style={styles.microDetailVal}>{Math.round(selectedItem.folate * mult)}µg</Text>
-                      </View>
-                    </View>
-                  </>
-                );
-              })()}
-
-              <TouchableOpacity style={[styles.finalLogBtn, { marginTop: spacing.md }]} onPress={logSelectedItem}>
-                <Text style={styles.finalLogBtnText}>Add to {activeMealId}</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          )}
-        </SafeAreaView>
-      </Modal>
-
-      {/* Logged Item Details Sheet Modal */}
-      <Modal visible={viewingLoggedItem !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setViewingLoggedItem(null)}>
-        <SafeAreaView style={styles.modalContainer}>
-          {viewingLoggedItem && (
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.modalTitleRow}>
-                <Text style={[styles.modalTitle, { flex: 1, marginRight: spacing.md }]} numberOfLines={2}>
-                  {viewingLoggedItem.name}
-                </Text>
-                <TouchableOpacity onPress={() => setViewingLoggedItem(null)}>
-                  <Text style={styles.closeModalText}>Close</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.loggedDetailSub}>
-                Logged to {viewingLoggedItem.mealId.toUpperCase()} · {viewingLoggedItem.servingSize} {viewingLoggedItem.servingUnit}
-              </Text>
-
-              {/* Bento Grid */}
-              <View style={styles.summaryBento}>
-                <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.primary, borderLeftWidth: 3 }]}>
-                  <Text style={styles.summaryBigVal}>{viewingLoggedItem.calories}</Text>
-                  <Text style={styles.summaryLabel}>Calories</Text>
-                </View>
-                <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.proteinAccent, borderLeftWidth: 3 }]}>
-                  <Text style={styles.summaryBigVal}>{viewingLoggedItem.protein}g</Text>
-                  <Text style={styles.summaryLabel}>Protein</Text>
-                </View>
-                <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.tertiaryFixedDim, borderLeftWidth: 3 }]}>
-                  <Text style={styles.summaryBigVal}>{viewingLoggedItem.carbs}g</Text>
-                  <Text style={styles.summaryLabel}>Carbs</Text>
-                </View>
-                <View style={[styles.summaryBentoBox, { borderLeftColor: Colors.secondaryContainer, borderLeftWidth: 3 }]}>
-                  <Text style={styles.summaryBigVal}>{viewingLoggedItem.fat}g</Text>
-                  <Text style={styles.summaryLabel}>Fats</Text>
-                </View>
-              </View>
-
-              {/* Micronutrients breakdown */}
-              <View style={styles.microsListCard}>
-                <Text style={styles.microsCardTitle}>Micronutrient Highlights:</Text>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Fiber</Text>
-                  <Text style={styles.microDetailVal}>{(viewingLoggedItem.fiber || 0).toFixed(1)}g</Text>
-                </View>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Sodium</Text>
-                  <Text style={styles.microDetailVal}>{viewingLoggedItem.sodium || 0}mg</Text>
-                </View>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Potassium</Text>
-                  <Text style={styles.microDetailVal}>{viewingLoggedItem.potassium || 0}mg</Text>
-                </View>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Calcium</Text>
-                  <Text style={styles.microDetailVal}>{viewingLoggedItem.calcium || 0}mg</Text>
-                </View>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Iron</Text>
-                  <Text style={styles.microDetailVal}>{(viewingLoggedItem.iron || 0).toFixed(2)}mg</Text>
-                </View>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Vitamin C</Text>
-                  <Text style={styles.microDetailVal}>{(viewingLoggedItem.vitaminC || 0).toFixed(1)}mg</Text>
-                </View>
-                <View style={styles.microDetailRow}>
-                  <Text style={styles.microDetailName}>Folate</Text>
-                  <Text style={styles.microDetailVal}>{viewingLoggedItem.folate || 0}µg</Text>
-                </View>
-              </View>
-
-              {/* Action Buttons */}
-              <TouchableOpacity
-                style={styles.deleteFoodActionBtn}
-                onPress={() => {
-                  handleDeleteEntry(viewingLoggedItem.id);
-                  setViewingLoggedItem(null);
-                }}
-              >
-                <Trash2 size={16} color={Colors.onPrimary} style={{ marginRight: 6 }} />
-                <Text style={styles.deleteFoodActionText}>Delete Food Entry</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          )}
-        </SafeAreaView>
-      </Modal>
+      <LoggedItemDetailsModal
+        isOpen={viewingLoggedItem !== null}
+        onClose={() => setViewingLoggedItem(null)}
+        viewingLoggedItem={viewingLoggedItem}
+        targets={targets}
+        onSaveChanges={handleUpdateEntry}
+        onDeleteEntry={handleDeleteEntry}
+        isSaving={isSavingLog}
+      />
     </View>
   );
 }
@@ -1126,6 +1112,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacing.base,
     paddingBottom: spacing.xxxl * 2,
+    width: '100%',
+    maxWidth: layout.modalMaxWidth,
+    alignSelf: 'center',
   },
   carouselContainer: {
     backgroundColor: Colors.surfaceContainerLowest,
@@ -1146,6 +1135,8 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     color: Colors.outline,
     letterSpacing: 0.8,
+    flex: 1,
+    marginRight: spacing.sm,
   },
   carouselArrows: {
     flexDirection: 'row',
@@ -1153,7 +1144,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   arrowBtn: {
-    paddingHorizontal: 8,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
   },
   carouselDots: {
     flexDirection: 'row',
@@ -1238,55 +1234,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontWeight: fontWeight.medium,
   },
-  aiLogCard: {
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: radius.lg,
-    padding: spacing.base,
-    marginBottom: spacing.base,
-    borderWidth: 1.5,
-    borderColor: 'rgba(14, 165, 233, 0.25)',
-  },
-  aiLogHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  aiLogSparkle: {
-    fontSize: 14,
-  },
-  aiLogTitle: {
-    fontSize: typography.xs,
-    fontWeight: fontWeight.bold,
-    color: Colors.primaryContainer,
-    letterSpacing: 0.8,
-  },
-  aiLogInputRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  aiLogInput: {
-    flex: 1,
-    height: 40,
-    backgroundColor: Colors.background,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.base,
-    fontSize: typography.sm,
-    color: Colors.onSurface,
-    borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.15)',
-  },
-  aiLogBtn: {
-    backgroundColor: Colors.primaryContainer,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.base,
-    justifyContent: 'center',
-  },
-  aiLogBtnText: {
-    color: Colors.onPrimary,
-    fontWeight: fontWeight.bold,
-    fontSize: typography.sm,
-  },
   mealSectionCard: {
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: radius.lg,
@@ -1316,8 +1263,8 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   mealAddCircleBtn: {
-    width: 32,
-    height: 32,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     borderRadius: radius.full,
     backgroundColor: 'rgba(14, 165, 233, 0.08)',
     justifyContent: 'center',
@@ -1348,7 +1295,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   deleteRowBtn: {
-    padding: 6,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   card: {
     backgroundColor: Colors.surfaceContainerLowest,
@@ -1407,8 +1357,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   glassBtn: {
-    width: 32,
-    height: 32,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     borderRadius: radius.full,
     backgroundColor: 'rgba(110, 120, 129, 0.05)',
     justifyContent: 'center',
@@ -1455,7 +1405,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sleepTextInput: {
-    height: 38,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.2)',
     borderRadius: radius.md,
@@ -1529,6 +1479,9 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     padding: spacing.base,
+    width: '100%',
+    maxWidth: layout.modalMaxWidth,
+    alignSelf: 'center',
   },
   modalTitleRow: {
     flexDirection: 'row',
@@ -1556,6 +1509,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
     backgroundColor: 'rgba(110, 120, 129, 0.05)',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalTabPillActive: {
     backgroundColor: Colors.primaryContainer,
@@ -1572,7 +1528,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.base,
   },
   searchBarInput: {
-    height: 42,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.25)',
     borderRadius: radius.md,
@@ -1643,7 +1599,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   formTextInput: {
-    height: 40,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.2)',
     borderRadius: radius.md,
@@ -1658,6 +1614,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
     marginTop: spacing.md,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   formSubmitBtnText: {
     color: Colors.onPrimary,
@@ -1700,11 +1658,13 @@ const styles = StyleSheet.create({
   },
   unitChip: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: spacing.xs,
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.3)',
     backgroundColor: Colors.surfaceContainerLowest,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   unitChipActive: {
     backgroundColor: Colors.primaryContainer,
@@ -1749,6 +1709,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   finalLogBtnText: {
     color: Colors.onPrimary,
@@ -1777,11 +1739,13 @@ const styles = StyleSheet.create({
   },
   editorChip: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 5,
+    paddingVertical: spacing.xs,
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.3)',
     backgroundColor: Colors.surfaceContainerLowest,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   editorChipActive: {
     backgroundColor: Colors.primaryContainer,
@@ -1803,7 +1767,7 @@ const styles = StyleSheet.create({
   },
   customGoalInput: {
     flex: 1,
-    height: 36,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.2)',
     borderRadius: radius.md,
@@ -1815,7 +1779,7 @@ const styles = StyleSheet.create({
   customGoalBtn: {
     backgroundColor: Colors.primaryContainer,
     borderRadius: radius.md,
-    height: 36,
+    minHeight: layout.minTouchTarget,
     paddingHorizontal: spacing.md,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1826,7 +1790,10 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
   },
   customGoalClose: {
-    padding: 6,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   microsListCard: {
     backgroundColor: Colors.surfaceContainerLow,
@@ -1876,6 +1843,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.lg,
     marginBottom: spacing.xl,
+    minHeight: layout.minTouchTarget,
   },
   deleteFoodActionText: {
     color: Colors.onPrimary,

@@ -4,10 +4,10 @@ import {
   StyleSheet, ActivityIndicator,
 } from 'react-native';
 import { Colors } from '@/theme/colors';
-import { typography, fontWeight, radius, spacing } from '@/theme/typography';
+import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import type { CalendarDay } from '../hooks/useProfileStats';
 
-type TabType = 'dashboard' | 'food' | 'chat' | 'lift' | 'profile';
+type TabType = 'dashboard' | 'food' | 'insights' | 'lift' | 'profile';
 
 interface TrainingCalendarProps {
   days: CalendarDay[];
@@ -33,7 +33,12 @@ export function TrainingCalendar({ days, loading, setActiveTab }: TrainingCalend
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Training Calendar</Text>
-        <TouchableOpacity onPress={() => setActiveTab('lift')}>
+        <TouchableOpacity
+          onPress={() => setActiveTab('lift')}
+          accessibilityRole="button"
+          accessibilityLabel="View all training"
+          hitSlop={8}
+        >
           <Text style={styles.viewAll}>View All</Text>
         </TouchableOpacity>
       </View>
@@ -57,6 +62,9 @@ export function TrainingCalendar({ days, loading, setActiveTab }: TrainingCalend
                 style={[styles.dayCard, day.isToday && styles.dayCardToday]}
                 onPress={() => { if (day.isClickable) setActiveTab('lift'); }}
                 activeOpacity={day.isClickable ? 0.7 : 1}
+                accessibilityRole="button"
+                accessibilityLabel={`${day.dayLabel} ${day.dateNum}, ${day.workoutName === '–' ? 'no workout' : day.workoutName}`}
+                accessibilityState={{ disabled: !day.isClickable, selected: day.isToday }}
               >
                 {day.isToday && <View style={styles.todayDot} />}
 
@@ -111,6 +119,7 @@ const styles = StyleSheet.create({
   },
   dayCard: {
     width: 72,
+    minHeight: layout.minTouchTarget * 2,
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: radius.md,
     padding: spacing.sm,

@@ -12,16 +12,53 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  AppState,
+  type AppStateStatus,
 } from 'react-native';
 import { Colors } from '@/theme/colors';
-import { typography, fontWeight, radius, spacing } from '@/theme/typography';
+import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle } from 'lucide-react-native';
 import { getMuscleDataForExercise } from './exerciseMuscles';
 import { BodyMuscleMap } from './BodyMuscleMap';
 import { WGERExerciseBrowser } from './WGERExerciseBrowser';
 import type { ExerciseDbExercise } from '@/api/exerciseDbService';
+import { createWorkout, fetchWorkoutById } from '@/api/workoutApi';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
+import type { CompletedWorkoutInput, LocalRoutineWithExercises, LocalWorkoutWithSets } from '@/local/schema';
+import {
+  completedWorkoutToRemoteCreateInput,
+  matchRemoteWorkoutSets,
+} from '@/local/workoutsMapper';
+import {
+  localRoutinesToViews,
+  matchRemoteRoutineExercises,
+  remoteRoutineToLocalInput,
+  routineDraftsToLocalInput,
+  routineViewToLocalInput,
+  type RemoteRoutineRow,
+  type RemoteRoutineSetRow,
+  type RoutineView,
+  type RoutineViewExercise,
+} from '@/local/routinesMapper';
+import {
+  createWorkoutWithSetsLocal,
+  getRecentWorkoutsByUser,
+  getUnsyncedNewWorkoutsByUser,
+  markWorkoutRemoteCreateIncomplete,
+  markWorkoutSyncFailed,
+  markWorkoutSynced,
+} from '@/local/repositories/workoutsRepository';
+import {
+  createRoutineWithExercisesLocal,
+  getRoutinesByUser,
+  getUnsyncedRoutinesByUser,
+  markRoutineSyncFailed,
+  markRoutineSynced,
+  updateRoutineWithExercisesLocal,
+  updateRoutineRemoteIds,
+  upsertRemoteRoutineForUser,
+} from '@/local/repositories/routinesRepository';
 
 interface LiftTabProps {
   triggerToast: (msg: string) => void;
@@ -29,6 +66,9 @@ interface LiftTabProps {
 
 interface SetLog {
   id: string;
+  exerciseId: string;
+  exerciseName: string;
+  muscleGroup?: string | null;
   setNum: number;
   weight: number;
   reps: number;
@@ -43,24 +83,11 @@ interface Exercise {
   name: string;
   category: 'barbell' | 'dumbbell' | 'cable' | 'bodyweight' | 'machine';
   isCustom: boolean;
+  muscleGroup?: string | null;
 }
 
-interface RoutineExercise {
-  id: string;
-  routine_id: string;
-  exercise_name: string;
-  sets: number;
-  reps: number;
-  weight_kg: number;
-  muscle_group?: string | null;
-}
-
-interface Routine {
-  id: string;
-  name: string;
-  routines_id?: string | null;
-  exercises: RoutineExercise[];
-}
+type RoutineExercise = RoutineViewExercise;
+type Routine = RoutineView;
 
 interface RoutineDraftExercise {
   id: string;
@@ -119,7 +146,8 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
   // UI state
   const [setsList, setSetsList] = useState<SetLog[]>([]);
-  const [showWhisper, setShowWhisper] = useState(true);
+  const [completedWorkouts, setCompletedWorkouts] = useState<LocalWorkoutWithSets[]>([]);
+  const [isFinishingWorkout, setIsFinishingWorkout] = useState(false);
   const [showCustomExerciseModal, setShowCustomExerciseModal] = useState(false);
   const [showExerciseBrowser, setShowExerciseBrowser] = useState(false);
   const [exerciseBrowserTarget, setExerciseBrowserTarget] = useState<'routine' | 'workout'>('workout');
@@ -136,12 +164,18 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const [highlightMode, setHighlightMode] = useState<'none' | 'click' | 'exercise'>('none');
   const [primaryMuscleIds, setPrimaryMuscleIds] = useState<number[]>([]);
   const [secondaryMuscleIds, setSecondaryMuscleIds] = useState<number[]>([]);
+  const currentExerciseSets = setsList.filter((set) => set.exerciseId === currentExerciseId);
 
   // Swipe state
   const swipeAnimRefs = useRef<{ [key: string]: Animated.Value }>({});
   const panResponderRefs = useRef<{ [key: string]: PanResponderInstance }>({});
   const routineModalScrollRef = useRef<ScrollView>(null);
   const uniqueIdRef = useRef(0);
+  const isLoadingRoutinesRef = useRef(false);
+  const isRetryingRoutineSyncsRef = useRef(false);
+  const isRetryingWorkoutCreatesRef = useRef(false);
+  const inFlightWorkoutCreateIdsRef = useRef(new Set<string>());
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
 
   const createUniqueId = (prefix: string) => {
     uniqueIdRef.current += 1;
@@ -188,17 +222,309 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     return [h, m, s].map((v) => String(v).padStart(2, '0')).join(':');
   };
 
-  const handleFinishSession = () => {
+  const getErrorMessage = (error: unknown) => {
+    if (error instanceof Error) return error.message;
+    const candidate = error as { message?: string };
+    return candidate?.message ?? String(error);
+  };
+
+  type SyncWorkoutResult = {
+    didSync: boolean;
+    message?: string;
+    skippedInFlight?: boolean;
+  };
+
+  const logRoutineError = (label: string, error: unknown) => {
+    const candidate = error as {
+      name?: string;
+      message?: string;
+      details?: string;
+      hint?: string;
+      code?: string;
+      stack?: string;
+    };
+
+    console.warn(label, {
+      name: error instanceof Error ? error.name : candidate?.name,
+      message: error instanceof Error ? error.message : candidate?.message ?? String(error),
+      code: candidate?.code,
+      details: candidate?.details,
+      hint: candidate?.hint,
+      stack: error instanceof Error ? error.stack : candidate?.stack,
+    });
+  };
+
+  const convertInputWeightToKg = (weight: number) => (isLbs ? weight * 0.45359237 : weight);
+
+  const estimateOneRepMax = (weightKg: number, reps: number) => {
+    if (!Number.isFinite(weightKg) || !Number.isFinite(reps) || weightKg <= 0 || reps <= 0) return null;
+    return Number((weightKg * (1 + reps / 30)).toFixed(2));
+  };
+
+  const loadCompletedWorkoutHistory = async () => {
+    if (!user?.id) {
+      setCompletedWorkouts([]);
+      return;
+    }
+
+    try {
+      const workouts = await getRecentWorkoutsByUser(user.id, 10);
+      setCompletedWorkouts(workouts);
+    } catch (error) {
+      console.error('[LiftTab] Failed to load local workout history:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadCompletedWorkoutHistory();
+  }, [user?.id]);
+
+  const buildRoutineCompletedWorkoutPayload = (): CompletedWorkoutInput | null => {
+    if (!activeRoutine) return null;
+
+    const sets: CompletedWorkoutInput['sets'] = activeRoutine.exercises.flatMap((exercise) => {
+      const progress = routineProgress[exercise.id];
+      if (!progress) return [];
+
+      const reps = Math.max(1, parseInt(progress.reps, 10) || 1);
+      const weight = parseFloat(progress.weight) || 0;
+      const weightKg = isLbs ? weight * 0.45359237 : weight;
+
+      return progress.doneSets.flatMap((isDone, index) =>
+        isDone
+          ? [
+              {
+                exerciseName: exercise.exercise_name,
+                muscleGroup: exercise.muscle_group ?? null,
+                setNumber: index + 1,
+                reps,
+                weightKg: weightKg > 0 ? weightKg : null,
+                rir: 0,
+                estimated1rm: estimateOneRepMax(weightKg, reps),
+              },
+            ]
+          : []
+      );
+    });
+
+    return {
+      name: activeRoutine.name,
+      performedAt: new Date().toISOString(),
+      notes: 'routine_session',
+      sets,
+    };
+  };
+
+  const buildFreeformCompletedWorkoutPayload = (): CompletedWorkoutInput | null => {
+    const checkedSets = setsList.filter((set) => set.isChecked);
+    if (checkedSets.length === 0) return null;
+
+    const workoutName =
+      exercisesList.length === 1
+        ? exercisesList[0].name
+        : exercisesList.length > 1
+        ? 'Custom Workout'
+        : currentExercise.name || 'Workout';
+
+    return {
+      name: workoutName,
+      performedAt: new Date().toISOString(),
+      sets: checkedSets.map((set) => {
+        const weightKg = convertInputWeightToKg(set.weight);
+        return {
+          exerciseName: set.exerciseName,
+          muscleGroup: set.muscleGroup ?? null,
+          setNumber: set.setNum,
+          reps: set.reps,
+          weightKg,
+          rir: set.rir,
+          estimated1rm: estimateOneRepMax(weightKg, set.reps),
+        };
+      }),
+    };
+  };
+
+  const buildCompletedWorkoutPayload = (): CompletedWorkoutInput | null => {
+    return activeRoutine ? buildRoutineCompletedWorkoutPayload() : buildFreeformCompletedWorkoutPayload();
+  };
+
+  const completedWorkoutPayloadFromLocal = (workout: LocalWorkoutWithSets): CompletedWorkoutInput => ({
+    name: workout.name,
+    performedAt: workout.performed_at,
+    notes: workout.notes,
+    sets: workout.sets.map((set) => ({
+      exerciseName: set.exercise_name,
+      muscleGroup: set.muscle_group,
+      setNumber: set.set_number,
+      reps: set.reps,
+      weightKg: set.weight_kg,
+      durationSeconds: set.duration_seconds,
+      rir: set.rir,
+      estimated1rm: set.est_1rm,
+    })),
+  });
+
+  const syncWorkoutToRemote = async (
+    localWorkout: LocalWorkoutWithSets,
+    payload: CompletedWorkoutInput,
+    options?: {
+      showFailureToast?: boolean;
+      authenticatedUserId?: string;
+      updateVisibleHistory?: boolean;
+    }
+  ): Promise<SyncWorkoutResult> => {
+    const authenticatedUserId = options?.authenticatedUserId ?? user?.id;
+    if (!authenticatedUserId) return { didSync: false, message: 'Missing authenticated user.' };
+    if (localWorkout.user_id !== authenticatedUserId) {
+      const message = 'Skipping workout sync for a different authenticated user.';
+      console.warn('[LiftTab]', message);
+      return { didSync: false, message };
+    }
+    if (inFlightWorkoutCreateIdsRef.current.has(localWorkout.id)) {
+      console.log('[LiftTab] Workout create sync skipped: already in-flight', {
+        localWorkoutId: localWorkout.id,
+      });
+      return { didSync: false, skippedInFlight: true };
+    }
+
+    const showFailureToast = options?.showFailureToast ?? true;
+    const updateVisibleHistory = options?.updateVisibleHistory ?? true;
+    inFlightWorkoutCreateIdsRef.current.add(localWorkout.id);
+    let remoteWorkoutId: string | null = null;
+    try {
+      const remoteWorkout = await createWorkout(completedWorkoutToRemoteCreateInput(payload));
+      remoteWorkoutId = remoteWorkout.id;
+
+      const remoteWithSets = await fetchWorkoutById(remoteWorkout.id);
+      const matchResult = matchRemoteWorkoutSets(localWorkout.sets, remoteWithSets.workout_sets ?? []);
+      if (matchResult.unmatchedLocalSetIds.length > 0) {
+        throw new Error(
+          `Remote workout saved, but ${matchResult.unmatchedLocalSetIds.length} local set(s) could not be matched.`
+        );
+      }
+
+      const synced = await markWorkoutSynced(
+        authenticatedUserId,
+        localWorkout.id,
+        remoteWorkout.id,
+        matchResult.matches
+      );
+      if (updateVisibleHistory) {
+        setCompletedWorkouts((prev) => [synced, ...prev.filter((workout) => workout.id !== synced.id)]);
+      }
+      return { didSync: true };
+    } catch (error) {
+      console.error('[LiftTab] Failed to sync workout to backend:', getErrorMessage(error));
+      if (remoteWorkoutId) {
+        await markWorkoutRemoteCreateIncomplete(authenticatedUserId, localWorkout.id, remoteWorkoutId).catch(
+          (markError) => {
+            console.error('[LiftTab] Failed to mark workout remote create incomplete:', markError);
+          }
+        );
+      } else {
+        await markWorkoutSyncFailed(authenticatedUserId, localWorkout.id).catch((markError) => {
+          console.error('[LiftTab] Failed to mark workout sync failed:', markError);
+        });
+      }
+      if (showFailureToast) {
+        triggerToast(`Workout saved locally. Remote sync pending.`);
+      }
+      return { didSync: false, message: getErrorMessage(error) };
+    } finally {
+      inFlightWorkoutCreateIdsRef.current.delete(localWorkout.id);
+    }
+  };
+
+  const retryPendingWorkoutCreates = async (userId: string) => {
+    if (isRetryingWorkoutCreatesRef.current) {
+      console.log('[LiftTab] Workout create retry skipped: already running');
+      return;
+    }
+
+    isRetryingWorkoutCreatesRef.current = true;
+    try {
+      console.log('[LiftTab] Workout create retry begin');
+      const unsyncedWorkouts = await getUnsyncedNewWorkoutsByUser(userId);
+      console.log('[LiftTab] Unsynced new workouts found:', unsyncedWorkouts.length);
+      let syncedAnyWorkout = false;
+
+      for (const workout of unsyncedWorkouts) {
+        if (inFlightWorkoutCreateIdsRef.current.has(workout.id)) {
+          console.log('[LiftTab] Workout create retry skipped: already in-flight', {
+            localWorkoutId: workout.id,
+          });
+          continue;
+        }
+
+        console.log('[LiftTab] Retrying workout create:', { localWorkoutId: workout.id });
+        const result = await syncWorkoutToRemote(workout, completedWorkoutPayloadFromLocal(workout), {
+          showFailureToast: false,
+          authenticatedUserId: userId,
+          updateVisibleHistory: false,
+        });
+        if (result.didSync) {
+          syncedAnyWorkout = true;
+        }
+        if (!result.didSync && !result.skippedInFlight) {
+          console.log('[LiftTab] Workout create retry left pending:', {
+            localWorkoutId: workout.id,
+            message: result.message,
+          });
+        }
+      }
+
+      if (syncedAnyWorkout) {
+        const recentWorkouts = await getRecentWorkoutsByUser(userId, 10);
+        setCompletedWorkouts(recentWorkouts);
+      }
+      console.log('[LiftTab] Workout create retry complete');
+    } catch (error) {
+      console.error('[LiftTab] Workout create retry pass failed:', getErrorMessage(error));
+    } finally {
+      isRetryingWorkoutCreatesRef.current = false;
+    }
+  };
+
+  const resetFinishedSessionState = () => {
     setIsRunning(false);
     setElapsedSecs(0);
     scaleAnim.setValue(1);
     if (activeRoutineId) {
       setActiveRoutineId(null);
-      setExercisesList([]);
-      setCurrentExerciseId('');
       setRoutineProgress({});
     }
-    triggerToast('✓ Session finished');
+    setExercisesList([]);
+    setCurrentExerciseId('');
+    setSetsList([]);
+  };
+
+  const handleFinishSession = async () => {
+    if (isFinishingWorkout) return;
+
+    if (!user?.id) {
+      triggerToast('Please sign in to save workouts');
+      return;
+    }
+
+    const payload = buildCompletedWorkoutPayload();
+    if (!payload || payload.sets.length === 0) {
+      triggerToast('Log at least one completed set before finishing');
+      return;
+    }
+
+    setIsFinishingWorkout(true);
+    try {
+      const localWorkout = await createWorkoutWithSetsLocal(user.id, payload);
+      setCompletedWorkouts((prev) => [localWorkout, ...prev.filter((workout) => workout.id !== localWorkout.id)]);
+      resetFinishedSessionState();
+      triggerToast('✓ Workout saved');
+      void syncWorkoutToRemote(localWorkout, payload);
+    } catch (error) {
+      console.error('[LiftTab] Failed to save local workout:', error);
+      triggerToast(`Workout save failed: ${getErrorMessage(error)}`);
+    } finally {
+      setIsFinishingWorkout(false);
+    }
   };
 
   const convertWeightValue = (value: number, toLbs: boolean) => {
@@ -222,69 +548,112 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const selectedRoutine = routines.find((routine) => routine.id === selectedRoutineId) || null;
   const activeRoutine = routines.find((routine) => routine.id === activeRoutineId) || null;
 
+  const applyRoutinesToState = (nextRoutines: Routine[]) => {
+    setRoutines(nextRoutines);
+    setSelectedRoutineId((currentId) =>
+      currentId && nextRoutines.some((routine) => routine.id === currentId)
+        ? currentId
+        : nextRoutines[0]?.id ?? null
+    );
+  };
+
+  const fetchRemoteRoutineInputs = async (userId: string) => {
+    const { data: routineRows, error: routineError } = await supabase
+      .from('routines')
+      .select('id,routine_name,routines_id')
+      .eq('user_id', userId);
+
+    if (routineError) throw routineError;
+
+    const routinesWithTemplates = ((routineRows || []) as RemoteRoutineRow[]).filter(
+      (routine) => !!routine.routines_id
+    );
+    const workoutIds = routinesWithTemplates.map((routine) => routine.routines_id as string);
+
+    const { data: setRows, error: setError } = await supabase
+      .from('workout_sets')
+      .select('id,workout_id,exercise_name,muscle_group,set_number,reps,weight_kg')
+      .in('workout_id', workoutIds.length > 0 ? workoutIds : ['00000000-0000-0000-0000-000000000000']);
+
+    if (setError) throw setError;
+
+    return routinesWithTemplates.map((routine) =>
+      remoteRoutineToLocalInput(routine, (setRows || []) as RemoteRoutineSetRow[])
+    );
+  };
+
+  const refreshRemoteRoutines = async (userId: string) => {
+    try {
+      const remoteInputs = await fetchRemoteRoutineInputs(userId);
+
+      for (const remoteInput of remoteInputs) {
+        await upsertRemoteRoutineForUser(userId, remoteInput);
+      }
+
+      const mergedLocalRows = await getRoutinesByUser(userId);
+      applyRoutinesToState(localRoutinesToViews(mergedLocalRows));
+    } catch (error) {
+      logRoutineError('[LiftTab] Remote routine refresh failed:', error);
+      throw error;
+    }
+  };
+
   const loadRoutines = async () => {
-    const authUser = user ?? (await supabase.auth.getUser()).data.user;
-    if (!authUser) return;
+    if (isLoadingRoutinesRef.current) {
+      console.log('[LiftTab] Routine load skipped: already running');
+      return;
+    }
+
+    isLoadingRoutinesRef.current = true;
+    console.log('[LiftTab] Routine load begin');
     setIsRoutineLoading(true);
     try {
-      const { data: routineRows, error: routineError } = await supabase
-        .from('routines')
-        .select('id,routine_name,routines_id')
-        .eq('user_id', authUser.id);
-
-      if (routineError) throw routineError;
-
-      const workoutIds = (routineRows || [])
-        .map((routine: any) => routine.routines_id)
-        .filter((value: string | null) => !!value);
-      const { data: setRows, error: setError } = await supabase
-        .from('workout_sets')
-        .select('workout_id,exercise_name,muscle_group,set_number,reps,weight_kg')
-        .in('workout_id', workoutIds.length > 0 ? workoutIds : ['00000000-0000-0000-0000-000000000000']);
-
-      if (setError) throw setError;
-
-      const grouped: Record<string, RoutineExercise[]> = {};
-      (setRows || []).forEach((row: any) => {
-        if (!grouped[row.workout_id]) grouped[row.workout_id] = [];
-        const key = `${row.workout_id}:${row.exercise_name}`;
-        const existing = grouped[row.workout_id].find((item) => item.id === key);
-        if (existing) {
-          existing.sets += 1;
-        } else {
-          grouped[row.workout_id].push({
-            id: key,
-            routine_id: row.workout_id,
-            exercise_name: row.exercise_name,
-            sets: 1,
-            reps: row.reps ?? 0,
-            weight_kg: row.weight_kg ?? 0,
-            muscle_group: row.muscle_group,
-          });
-        }
-      });
-
-      const mapped = (routineRows || []).map((routine: any) => ({
-        id: routine.id,
-        name: routine.routine_name,
-        routines_id: routine.routines_id,
-        exercises: routine.routines_id ? grouped[routine.routines_id] || [] : [],
-      })) as Routine[];
-
-      setRoutines(mapped);
-      if (mapped.length > 0 && !selectedRoutineId) {
-        setSelectedRoutineId(mapped[0].id);
+      const authUser = user ?? (await supabase.auth.getUser()).data.user;
+      if (!authUser) {
+        applyRoutinesToState([]);
+        return;
       }
+
+      console.log('[LiftTab] Routine load authenticated user:', authUser.id);
+      const localRows = await getRoutinesByUser(authUser.id);
+      console.log('[LiftTab] Local routines loaded:', localRows.length);
+      applyRoutinesToState(localRoutinesToViews(localRows));
+      setIsRoutineLoading(false);
+
+      console.log('[LiftTab] Workout background retry started for authenticated user:', authUser.id);
+      void retryPendingWorkoutCreates(authUser.id);
+      console.log('[LiftTab] Routine background retry started');
+      void retryPendingRoutineSyncs(authUser.id);
     } catch (error) {
-      console.error('[LiftTab] Failed to load routines:', error);
+      logRoutineError('[LiftTab] Failed to load local routines:', error);
       triggerToast('Failed to load routines');
     } finally {
       setIsRoutineLoading(false);
+      isLoadingRoutinesRef.current = false;
     }
   };
 
   useEffect(() => {
     loadRoutines();
+  }, [user?.id]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const previousAppState = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      if (
+        user?.id &&
+        nextAppState === 'active' &&
+        (previousAppState === 'background' || previousAppState === 'inactive')
+      ) {
+        loadRoutines();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, [user?.id]);
 
   const addDraftExercise = () => {
@@ -320,13 +689,8 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
   const startEditRoutine = (routine: Routine) => {
     const workoutId = routine.routines_id;
-    if (!workoutId) {
-      triggerToast('Routine template is missing a workout id');
-      return;
-    }
-
     setEditingRoutineId(routine.id);
-    setEditingWorkoutId(workoutId);
+    setEditingWorkoutId(workoutId ?? null);
     setRoutineNameInput(routine.name);
 
     const draftExercises = routine.exercises.map((exercise) => {
@@ -344,6 +708,232 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
     setRoutineDraftExercises(draftExercises);
     setShowRoutineModal(true);
+  };
+
+  const syncRoutineToRemote = async (
+    localRoutine: LocalRoutineWithExercises,
+    options?: { showFailureToast?: boolean }
+  ) => {
+    const authUser = user ?? (await supabase.auth.getUser()).data.user;
+    if (!authUser) return;
+    if (authUser.id !== localRoutine.user_id) {
+      console.warn('[LiftTab] Skipping routine sync for a different authenticated user.');
+      return;
+    }
+
+    const showFailureToast = options?.showFailureToast ?? true;
+
+    try {
+      let workoutId = localRoutine.remote_template_workout_id;
+      let routineId = localRoutine.remote_id;
+      console.log('[LiftTab] Routine sync begin:', {
+        localRoutineId: localRoutine.id,
+        remoteId: routineId,
+        remoteTemplateWorkoutId: workoutId,
+      });
+
+      if (routineId && !workoutId) {
+        const { data: existingRoutine, error: existingRoutineError } = await supabase
+          .from('routines')
+          .select('routines_id')
+          .eq('id', routineId)
+          .eq('user_id', authUser.id)
+          .maybeSingle();
+
+        if (existingRoutineError) throw existingRoutineError;
+
+        workoutId = existingRoutine?.routines_id || null;
+        if (workoutId) {
+          await updateRoutineRemoteIds(authUser.id, localRoutine.id, {
+            remoteTemplateWorkoutId: workoutId,
+          });
+          console.log('[LiftTab] Remote template workout ready:', {
+            localRoutineId: localRoutine.id,
+            workoutId,
+            source: 'existing routine',
+          });
+        }
+      }
+
+      if (!workoutId) {
+        const { data: workout, error: workoutError } = await supabase
+          .from('workouts')
+          .insert({
+            user_id: authUser.id,
+            name: localRoutine.routine_name,
+            notes: 'routine_template',
+            performed_at: new Date().toISOString(),
+          })
+          .select('id')
+          .single();
+
+        if (workoutError) throw workoutError;
+
+        workoutId = workout?.id || null;
+        if (!workoutId) throw new Error('Workout template creation failed');
+
+        await updateRoutineRemoteIds(authUser.id, localRoutine.id, {
+          remoteTemplateWorkoutId: workoutId,
+        });
+        console.log('[LiftTab] Remote template workout ready:', {
+          localRoutineId: localRoutine.id,
+          workoutId,
+          source: 'created',
+        });
+      } else {
+        console.log('[LiftTab] Remote template workout ready:', {
+          localRoutineId: localRoutine.id,
+          workoutId,
+          source: 'reused',
+        });
+        const { error: workoutUpdateError } = await supabase
+          .from('workouts')
+          .update({ name: localRoutine.routine_name })
+          .eq('id', workoutId)
+          .eq('user_id', authUser.id);
+
+        if (workoutUpdateError) throw workoutUpdateError;
+      }
+
+      if (routineId) {
+        console.log('[LiftTab] Remote routine ready:', {
+          localRoutineId: localRoutine.id,
+          routineId,
+          source: 'reused',
+        });
+        const { error: routineUpdateError } = await supabase
+          .from('routines')
+          .update({ routine_name: localRoutine.routine_name })
+          .eq('id', routineId)
+          .eq('user_id', authUser.id);
+
+        if (routineUpdateError) throw routineUpdateError;
+      } else {
+        const { data: routine, error: routineError } = await supabase
+          .from('routines')
+          .insert({ user_id: authUser.id, routine_name: localRoutine.routine_name, routines_id: workoutId })
+          .select('id,routines_id')
+          .single();
+
+        if (routineError) throw routineError;
+
+        routineId = routine?.id || null;
+        workoutId = routine?.routines_id || workoutId;
+
+        if (routineId) {
+          await updateRoutineRemoteIds(authUser.id, localRoutine.id, {
+            remoteId: routineId,
+            remoteTemplateWorkoutId: workoutId,
+          });
+          console.log('[LiftTab] Remote routine ready:', {
+            localRoutineId: localRoutine.id,
+            routineId,
+            source: 'created',
+          });
+        }
+      }
+
+      if (!routineId || !workoutId) {
+        throw new Error('Remote routine template creation failed');
+      }
+
+      const { error: deleteError } = await supabase
+        .from('workout_sets')
+        .delete()
+        .eq('workout_id', workoutId);
+
+      if (deleteError) throw deleteError;
+
+      const exerciseRows = localRoutine.exercises
+        .slice()
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .flatMap((exercise) => {
+          const sets = Math.max(1, Math.trunc(exercise.sets ?? 1));
+          const reps = Math.max(1, Math.trunc(exercise.reps ?? 1));
+
+          return Array.from({ length: sets }, (_, index) => ({
+            workout_id: workoutId,
+            exercise_name: exercise.exercise_name,
+            muscle_group: exercise.muscle_group || null,
+            set_number: index + 1,
+            reps,
+            weight_kg: exercise.weight_kg ?? 0,
+            rir: 0,
+            est_1rm: null,
+          }));
+        });
+
+      const { data: insertedSets, error: exerciseError } = await supabase
+        .from('workout_sets')
+        .insert(exerciseRows)
+        .select('id,workout_id,exercise_name,muscle_group,set_number,reps,weight_kg');
+
+      if (exerciseError) throw exerciseError;
+      console.log('[LiftTab] Remote workout_sets saved:', {
+        localRoutineId: localRoutine.id,
+        count: insertedSets?.length ?? 0,
+      });
+
+      const synced = await markRoutineSynced(
+        authUser.id,
+        localRoutine.id,
+        routineId,
+        workoutId,
+        matchRemoteRoutineExercises(localRoutine.exercises, (insertedSets || []) as RemoteRoutineSetRow[])
+      );
+
+      setRoutines((prev) =>
+        localRoutinesToViews([synced]).concat(prev.filter((routine) => routine.id !== synced.id))
+      );
+      console.log('[LiftTab] Routine sync complete:', {
+        localRoutineId: localRoutine.id,
+        remoteId: routineId,
+        remoteTemplateWorkoutId: workoutId,
+      });
+    } catch (error) {
+      if (showFailureToast) {
+        logRoutineError('[LiftTab] Failed to sync routine to Supabase:', error);
+      } else {
+        logRoutineError('[LiftTab] Background routine sync retry failed:', error);
+      }
+      await markRoutineSyncFailed(authUser.id, localRoutine.id).catch((markError) => {
+        if (showFailureToast) {
+          logRoutineError('[LiftTab] Failed to mark routine sync failed:', markError);
+        } else {
+          logRoutineError('[LiftTab] Failed to mark routine sync failed:', markError);
+        }
+      });
+      if (showFailureToast) {
+        triggerToast('Routine saved offline. It will sync when you reconnect.');
+      }
+    }
+  };
+
+  const retryPendingRoutineSyncs = async (userId: string) => {
+    if (isRetryingRoutineSyncsRef.current) return;
+
+    isRetryingRoutineSyncsRef.current = true;
+    try {
+      console.log('[LiftTab] Routine retry begin');
+      const unsyncedRoutines = await getUnsyncedRoutinesByUser(userId);
+      console.log('[LiftTab] Unsynced routines found:', unsyncedRoutines.length);
+
+      for (const routine of unsyncedRoutines) {
+        console.log('[LiftTab] Retrying routine:', {
+          localRoutineId: routine.id,
+          remoteId: routine.remote_id,
+          remoteTemplateWorkoutId: routine.remote_template_workout_id,
+        });
+        await syncRoutineToRemote(routine, { showFailureToast: false });
+      }
+
+      await refreshRemoteRoutines(userId);
+      console.log('[LiftTab] Routine retry complete');
+    } catch (error) {
+      logRoutineError('[LiftTab] Routine retry pass failed:', error);
+    } finally {
+      isRetryingRoutineSyncsRef.current = false;
+    }
   };
 
   const handleCreateRoutine = async () => {
@@ -368,89 +958,26 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
     setIsSavingRoutine(true);
     try {
-      let workoutId = editingWorkoutId;
-      let routineId = editingRoutineId;
-
-      if (editingRoutineId && editingWorkoutId) {
-        const { error: routineUpdateError } = await supabase
-          .from('routines')
-          .update({ routine_name: trimmedName })
-          .eq('id', editingRoutineId);
-
-        if (routineUpdateError) throw routineUpdateError;
-
-        const { error: workoutUpdateError } = await supabase
-          .from('workouts')
-          .update({ name: trimmedName })
-          .eq('id', editingWorkoutId);
-
-        if (workoutUpdateError) throw workoutUpdateError;
-      } else {
-        const { data: workout, error: workoutError } = await supabase
-          .from('workouts')
-          .insert({
-            user_id: authUser.id,
-            name: trimmedName,
-            notes: 'routine_template',
-            performed_at: new Date().toISOString(),
-          })
-          .select('id')
-          .single();
-
-        if (workoutError) throw workoutError;
-
-        workoutId = workout?.id || null;
-        if (!workoutId) throw new Error('Workout template creation failed');
-
-        const { data: routine, error: routineError } = await supabase
-          .from('routines')
-          .insert({ user_id: authUser.id, routine_name: trimmedName, routines_id: workoutId })
-          .select('id')
-          .single();
-
-        if (routineError) throw routineError;
-        routineId = routine?.id || null;
-      }
-
-      if (!workoutId) throw new Error('Workout template creation failed');
-
-      if (editingRoutineId && editingWorkoutId) {
-        const { error: deleteError } = await supabase
-          .from('workout_sets')
-          .delete()
-          .eq('workout_id', editingWorkoutId);
-
-        if (deleteError) throw deleteError;
-      }
-
-      const exerciseRows = cleanedExercises.flatMap((exercise) => {
-        const sets = Math.max(1, parseInt(exercise.sets, 10) || 1);
-        const reps = Math.max(1, parseInt(exercise.reps, 10) || 1);
-        const weight = parseFloat(exercise.weight) || 0;
-        const weightKg = exercise.weightUnit === 'lbs' ? weight * 0.45359237 : weight;
-
-        return Array.from({ length: sets }, (_, index) => ({
-          workout_id: workoutId,
-          exercise_name: exercise.name.trim(),
-          muscle_group: exercise.muscleGroup || null,
-          set_number: index + 1,
-          reps,
-          weight_kg: weightKg,
-          rir: 0,
-          est_1rm: null,
-        }));
+      const existingRoutine = editingRoutineId
+        ? routines.find((routine) => routine.id === editingRoutineId) || null
+        : null;
+      const localInput = routineDraftsToLocalInput(trimmedName, cleanedExercises, {
+        remoteId: existingRoutine?.remote_id ?? null,
+        remoteTemplateWorkoutId: existingRoutine?.routines_id ?? editingWorkoutId ?? null,
       });
-
-      const { error: exerciseError } = await supabase.from('workout_sets').insert(exerciseRows);
-      if (exerciseError) throw exerciseError;
+      const localRoutine = editingRoutineId
+        ? await updateRoutineWithExercisesLocal(authUser.id, editingRoutineId, localInput)
+        : await createRoutineWithExercisesLocal(authUser.id, localInput);
+      const nextRoutines = localRoutinesToViews(await getRoutinesByUser(authUser.id));
+      applyRoutinesToState(nextRoutines);
 
       resetRoutineDraft();
       setShowRoutineModal(false);
       triggerToast(editingRoutineId ? '✓ Routine updated' : '✓ Routine saved');
-      await loadRoutines();
+      void syncRoutineToRemote(localRoutine);
     } catch (error) {
-      console.error('[LiftTab] Failed to save routine:', error);
-      triggerToast('Failed to save routine');
+      console.error('[LiftTab] Failed to save local routine:', error);
+      triggerToast(`Routine save failed: ${getErrorMessage(error)}`);
     } finally {
       setIsSavingRoutine(false);
     }
@@ -486,6 +1013,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       name: exercise.exercise_name,
       category: 'barbell',
       isCustom: false,
+      muscleGroup: exercise.muscle_group ?? null,
     }));
 
     setExercisesList(mappedExercises);
@@ -551,9 +1079,9 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     const exercise = activeRoutine.exercises.find((item) => item.id === exerciseId) || null;
     if (!exercise) return;
 
-    const routineWorkoutId = activeRoutine.routines_id;
-    if (!routineWorkoutId) {
-      triggerToast('Routine template is missing a workout id');
+    const authUser = user ?? (await supabase.auth.getUser()).data.user;
+    if (!authUser) {
+      triggerToast('Please sign in to update routines');
       return;
     }
 
@@ -570,39 +1098,25 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     const nextWeightKg = isLbs ? nextWeight * 0.45359237 : nextWeight;
 
     try {
-      const { error: deleteError } = await supabase
-        .from('workout_sets')
-        .delete()
-        .eq('workout_id', routineWorkoutId)
-        .eq('exercise_name', exercise.exercise_name);
-
-      if (deleteError) throw deleteError;
-
-      const rows = Array.from({ length: nextSets }, (_, index) => ({
-        workout_id: routineWorkoutId,
-        exercise_name: exercise.exercise_name,
-        muscle_group: exercise.muscle_group || null,
-        set_number: index + 1,
-        reps: nextReps,
-        weight_kg: nextWeightKg,
-        rir: 0,
-        est_1rm: null,
-      }));
-
-      const { error: insertError } = await supabase.from('workout_sets').insert(rows);
-      if (insertError) throw insertError;
+      const updatedRoutine: Routine = {
+        ...activeRoutine,
+        exercises: activeRoutine.exercises.map((item) =>
+          item.id === exercise.id
+            ? { ...item, sets: nextSets, reps: nextReps, weight_kg: nextWeightKg }
+            : item
+        ),
+      };
+      const localRoutine = await updateRoutineWithExercisesLocal(
+        authUser.id,
+        activeRoutine.id,
+        routineViewToLocalInput(updatedRoutine)
+      );
+      const updatedRoutineView = localRoutinesToViews([localRoutine])[0];
 
       setRoutines((prev) =>
         prev.map((routine) => {
           if (routine.id !== activeRoutine.id) return routine;
-          return {
-            ...routine,
-            exercises: routine.exercises.map((item) =>
-              item.id === exercise.id
-                ? { ...item, sets: nextSets, reps: nextReps, weight_kg: nextWeightKg }
-                : item
-            ),
-          };
+          return updatedRoutineView;
         })
       );
 
@@ -623,9 +1137,10 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       });
 
       triggerToast('✓ Defaults updated');
+      void syncRoutineToRemote(localRoutine);
     } catch (error) {
-      console.error('[LiftTab] Failed to update defaults:', error);
-      triggerToast('Failed to update defaults');
+      console.error('[LiftTab] Failed to update local routine defaults:', error);
+      triggerToast(`Defaults update failed: ${getErrorMessage(error)}`);
     }
   };
 
@@ -670,6 +1185,11 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   };
 
   const handleLogSet = () => {
+    if (!currentExerciseId || !currentExercise.name.trim()) {
+      triggerToast('Add or select an exercise before logging sets');
+      return;
+    }
+
     const w = parseFloat(inputWeight) || 0;
     const r = isUnilateral ? parseInt(inputRepsLeft) || 0 : parseInt(inputReps) || 0;
     const rL = isUnilateral ? parseInt(inputRepsLeft) || 0 : undefined;
@@ -683,7 +1203,10 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
     const newSet: SetLog = {
       id: createUniqueId('set'),
-      setNum: setsList.length + 1,
+      exerciseId: currentExerciseId,
+      exerciseName: currentExercise.name,
+      muscleGroup: currentExercise.muscleGroup ?? null,
+      setNum: currentExerciseSets.length + 1,
       weight: w,
       reps: r,
       repsLeft: rL,
@@ -732,13 +1255,13 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       name: customExerciseName,
       category: customExerciseCategory,
       isCustom: true,
+      muscleGroup: customExerciseCategory,
     };
 
     setExercisesList((prev) => [...prev, newExercise]);
     setCurrentExerciseId(newExercise.id);
     setCustomExerciseName('');
     setShowCustomExerciseModal(false);
-    setSetsList([]); // Reset sets for new exercise
     triggerToast(`✓ Added custom exercise: ${customExerciseName}`);
   };
 
@@ -757,6 +1280,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       name: exercise.name || `Exercise ${exercise.id}`,
       category: 'barbell',
       isCustom: false,
+      muscleGroup: exercise.target || exercise.bodyPart || null,
     };
 
     // Debug: Log the exercise data
@@ -893,6 +1417,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         name: pendingExercise.name || `Exercise ${pendingExercise.id}`,
         category: 'barbell',
         isCustom: false,
+        muscleGroup: pendingExercise.target || pendingExercise.bodyPart || null,
       };
       setPrimaryMuscleIds(pendingExercise.primaryMuscleIds);
       setSecondaryMuscleIds(pendingExercise.secondaryMuscleIds);
@@ -909,7 +1434,6 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       setInputReps(configReps);
       setInputRepsLeft(configReps);
       setInputRepsRight(configReps);
-      setSetsList([]);
       triggerToast(`✓ Added: ${newExercise.name}`);
     }
 
@@ -1085,23 +1609,6 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           )}
         </View>
 
-        {/* AI Whisper Card (Dismissible) */}
-        {showWhisper && (
-          <View style={styles.insightCard}>
-            <View style={styles.insightHeader}>
-              <View style={styles.whisperBadge}>
-                <Text style={styles.whisperBadgeText}>Whisper</Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowWhisper(false)} activeOpacity={0.6}>
-                <X size={16} color="#a855f7" />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.insightQuote}>
-              "Volume target reached for quadriceps. Adjust squat intensity by +5% next session."
-            </Text>
-          </View>
-        )}
-
         {/* Routine Workout Card */}
         <View style={styles.card}>
           {activeRoutine ? (
@@ -1222,7 +1729,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         </View>
 
         {/* Set History Table */}
-        {setsList.length > 0 && (
+        {currentExerciseSets.length > 0 && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>SET HISTORY</Text>
 
@@ -1234,7 +1741,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
             </View>
 
             <View style={styles.tableBody}>
-              {setsList.map((set) => {
+              {currentExerciseSets.map((set) => {
                 const animValue = swipeAnimRefs.current[set.id] || new Animated.Value(0);
                 const panResponder = createSwipeHandler(set.id);
 
@@ -1276,6 +1783,30 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                   </Animated.View>
                 );
               })}
+            </View>
+          </View>
+        )}
+
+        {completedWorkouts.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>RECENT SAVED WORKOUTS</Text>
+            <View style={styles.savedWorkoutList}>
+              {completedWorkouts.map((workout) => (
+                <View key={workout.id} style={styles.savedWorkoutRow}>
+                  <View style={styles.savedWorkoutHeader}>
+                    <Text style={styles.savedWorkoutName}>{workout.name}</Text>
+                    <Text style={styles.savedWorkoutMeta}>
+                      {workout.sets.length} sets · {workout.sync_status}
+                    </Text>
+                  </View>
+                  <Text style={styles.savedWorkoutDate}>{workout.performed_at.split('T')[0]}</Text>
+                  <Text style={styles.savedWorkoutSets}>
+                    {[...new Set(workout.sets.map((set) => set.exercise_name))]
+                      .slice(0, 3)
+                      .join(', ') || 'No sets'}
+                  </Text>
+                </View>
+              ))}
             </View>
           </View>
         )}
@@ -1696,6 +2227,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacing.base,
     paddingBottom: spacing.xxxl * 2,
+    width: '100%',
+    maxWidth: layout.modalMaxWidth,
+    alignSelf: 'center',
   },
   timerCard: {
     backgroundColor: Colors.primary,
@@ -1714,7 +2248,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     fontSize: 9,
     fontWeight: fontWeight.bold,
-    letterSpacing: 1.0,
+    letterSpacing: 0,
   },
   timerActiveDot: {
     width: 6,
@@ -1726,7 +2260,7 @@ const styles = StyleSheet.create({
     color: Colors.onPrimary,
     fontSize: 42,
     fontWeight: fontWeight.extraBold,
-    letterSpacing: 2,
+    letterSpacing: 0,
     marginVertical: spacing.xs,
   },
   timerActions: {
@@ -1739,6 +2273,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingVertical: spacing.sm,
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   btnStart: {
     backgroundColor: Colors.primaryContainer,
@@ -1772,6 +2308,43 @@ const styles = StyleSheet.create({
     color: Colors.outline,
     letterSpacing: 0.8,
     marginBottom: spacing.base,
+  },
+  savedWorkoutList: {
+    gap: spacing.sm,
+  },
+  savedWorkoutRow: {
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.12)',
+  },
+  savedWorkoutHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  savedWorkoutName: {
+    flex: 1,
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  savedWorkoutMeta: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+  },
+  savedWorkoutDate: {
+    fontSize: 10,
+    color: Colors.outline,
+    marginTop: 2,
+  },
+  savedWorkoutSets: {
+    fontSize: typography.xs,
+    color: Colors.onSurfaceVariant,
+    marginTop: spacing.xs,
   },
   exerciseHeader: {
     flexDirection: 'row',
@@ -1809,8 +2382,8 @@ const styles = StyleSheet.create({
     color: Colors.onSurface,
   },
   unilateralToggle: {
-    width: 36,
-    height: 36,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     borderRadius: radius.md,
     borderWidth: 1.5,
     borderColor: Colors.primaryContainer,
@@ -1855,7 +2428,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   columnInput: {
-    height: 42,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.25)',
     borderRadius: radius.md,
@@ -1877,6 +2450,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingVertical: spacing.md,
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   logSetBtnText: {
     color: Colors.onPrimary,
@@ -1895,6 +2470,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.primaryContainer,
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   saveDefaultsBtnText: {
     fontSize: typography.base,
@@ -1902,8 +2479,8 @@ const styles = StyleSheet.create({
     color: Colors.primaryContainer,
   },
   addExerciseBtn: {
-    width: 42,
-    height: 42,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     backgroundColor: 'rgba(14, 165, 233, 0.08)',
     borderRadius: radius.md,
     justifyContent: 'center',
@@ -1914,39 +2491,6 @@ const styles = StyleSheet.create({
   addExerciseBtnContent: {
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  insightCard: {
-    backgroundColor: '#faf5ff',
-    borderRadius: radius.lg,
-    padding: spacing.base,
-    marginBottom: spacing.base,
-    borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.15)',
-  },
-  insightHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  whisperBadge: {
-    backgroundColor: Colors.surfaceContainerLowest,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: 'rgba(168, 85, 247, 0.2)',
-  },
-  whisperBadgeText: {
-    fontSize: 10,
-    fontWeight: fontWeight.bold,
-    color: '#a855f7',
-  },
-  insightQuote: {
-    fontSize: typography.sm,
-    fontStyle: 'italic',
-    color: Colors.onSurfaceVariant,
-    lineHeight: 20,
   },
   tableHeader: {
     flexDirection: 'row',
@@ -1998,6 +2542,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.base,
     borderWidth: 1,
     borderColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
   },
   muscleToggleText: {
     fontSize: 11,
@@ -2050,6 +2595,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
     backgroundColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
   },
   routineAddText: {
     fontSize: typography.xs,
@@ -2071,6 +2617,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.outline,
     marginRight: spacing.xs,
+    minHeight: 36,
+    justifyContent: 'center',
   },
   routinePillActive: {
     backgroundColor: Colors.primaryContainer,
@@ -2127,6 +2675,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   routineEditText: {
     fontSize: typography.sm,
@@ -2167,7 +2717,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   routineInput: {
-    height: 38,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(14, 165, 233, 0.3)',
     borderRadius: radius.md,
@@ -2260,6 +2810,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     alignItems: 'center',
     backgroundColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   routineStartButtonActive: {
     backgroundColor: 'rgba(14, 165, 233, 0.2)',
@@ -2376,7 +2928,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: fontWeight.bold,
     color: Colors.outline,
-    letterSpacing: 0.8,
+    letterSpacing: 0,
   },
   routineDraftEmpty: {
     paddingVertical: spacing.md,
@@ -2401,8 +2953,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   routineDraftIndexBadge: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     borderRadius: radius.full,
     backgroundColor: Colors.primaryContainer,
     alignItems: 'center',
@@ -2415,7 +2967,7 @@ const styles = StyleSheet.create({
   },
   routineDraftNameInput: {
     flex: 1,
-    height: 38,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.2)',
     borderRadius: radius.md,
@@ -2455,7 +3007,10 @@ const styles = StyleSheet.create({
     borderLeftColor: Colors.primaryContainer,
   },
   routineRemoveBtn: {
-    padding: spacing.xs,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   routineDraftMetrics: {
     flexDirection: 'row',
@@ -2472,7 +3027,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   metricInput: {
-    height: 36,
+    minHeight: layout.minTouchTarget,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(14, 165, 233, 0.3)',
@@ -2504,6 +3059,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     alignItems: 'center',
     backgroundColor: Colors.background,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   categoryBtnActive: {
     backgroundColor: Colors.primaryContainer,
@@ -2523,6 +3080,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
     marginBottom: spacing.sm,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   modalConfirmBtnText: {
     color: Colors.onPrimary,
@@ -2535,6 +3094,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingVertical: spacing.md,
     alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
   },
   modalCancelBtnText: {
     color: Colors.onSurfaceVariant,
@@ -2604,6 +3165,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    minWidth: layout.minTouchTarget,
+    minHeight: layout.minTouchTarget,
   },
   configStepperText: {
     fontSize: typography.lg,
@@ -2613,7 +3176,7 @@ const styles = StyleSheet.create({
   },
   configInput: {
     flex: 1,
-    height: 42,
+    minHeight: layout.minTouchTarget,
     fontSize: typography.base,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,

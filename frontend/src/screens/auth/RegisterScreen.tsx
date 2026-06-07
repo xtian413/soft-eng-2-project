@@ -18,7 +18,7 @@ import { z } from 'zod';
 import type { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuthStore } from '@/store/authStore';
 import { Colors } from '@/theme/colors';
-import { typography, fontWeight, radius, spacing } from '@/theme/typography';
+import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import {
   User,
   Mail,
@@ -99,7 +99,7 @@ export default function RegisterScreen() {
       navigation.navigate('Login');
     } else {
       Alert.alert(
-        '📧 Account Created',
+        'Account Created',
         `Welcome to Gemi! Your physical profile (Goal: ${goal.replace('_', ' ')}) has been set up successfully.`,
         [{ text: 'Start Journey', onPress: () => navigation.navigate('Login') }]
       );
@@ -125,6 +125,9 @@ export default function RegisterScreen() {
           style={styles.backBtn}
           onPress={() => navigation.navigate('Login')}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Back to login"
+          hitSlop={8}
         >
           <ChevronLeft size={20} color="#0b1c30" />
         </TouchableOpacity>
@@ -166,6 +169,8 @@ export default function RegisterScreen() {
                   style={styles.input}
                   value={value}
                   editable={!isSubmitting}
+                  accessibilityLabel="Full name"
+                  textContentType="name"
                 />
               )}
             />
@@ -181,6 +186,7 @@ export default function RegisterScreen() {
               render={({ field: { onChange, value } }) => (
                 <TextInput
                   autoCapitalize="none"
+                  autoComplete="email"
                   keyboardType="email-address"
                   onChangeText={onChange}
                   placeholder="Email Address"
@@ -188,6 +194,8 @@ export default function RegisterScreen() {
                   style={styles.input}
                   value={value}
                   editable={!isSubmitting}
+                  accessibilityLabel="Email address"
+                  textContentType="emailAddress"
                 />
               )}
             />
@@ -203,12 +211,15 @@ export default function RegisterScreen() {
               render={({ field: { onChange, value } }) => (
                 <TextInput
                   secureTextEntry
+                  autoComplete="new-password"
                   onChangeText={onChange}
                   placeholder="Create Password"
                   placeholderTextColor={Colors.outline}
                   style={styles.input}
                   value={value}
                   editable={!isSubmitting}
+                  accessibilityLabel="Create password"
+                  textContentType="newPassword"
                 />
               )}
             />
@@ -224,12 +235,15 @@ export default function RegisterScreen() {
               render={({ field: { onChange, value } }) => (
                 <TextInput
                   secureTextEntry
+                  autoComplete="new-password"
                   onChangeText={onChange}
                   placeholder="Confirm Password"
                   placeholderTextColor={Colors.outline}
                   style={styles.input}
                   value={value}
                   editable={!isSubmitting}
+                  accessibilityLabel="Confirm password"
+                  textContentType="newPassword"
                 />
               )}
             />
@@ -247,6 +261,9 @@ export default function RegisterScreen() {
                 <TouchableOpacity
                   style={[styles.genderBtn, gender === 'male' && styles.genderBtnActive]}
                   onPress={() => setGender('male')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select male"
+                  accessibilityState={{ selected: gender === 'male' }}
                 >
                   <Text style={[styles.genderBtnText, gender === 'male' && styles.genderBtnTextActive]}>
                     Male
@@ -255,6 +272,9 @@ export default function RegisterScreen() {
                 <TouchableOpacity
                   style={[styles.genderBtn, gender === 'female' && styles.genderBtnActive]}
                   onPress={() => setGender('female')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select female"
+                  accessibilityState={{ selected: gender === 'female' }}
                 >
                   <Text style={[styles.genderBtnText, gender === 'female' && styles.genderBtnTextActive]}>
                     Female
@@ -268,13 +288,23 @@ export default function RegisterScreen() {
               <View style={styles.statInputHeader}>
                 <Text style={styles.inputLabel}>Height</Text>
                 <View style={styles.unitToggleRow}>
-                  <TouchableOpacity onPress={() => setHeightUnit('cm')}>
+                  <TouchableOpacity
+                    onPress={() => setHeightUnit('cm')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Use centimeters"
+                    accessibilityState={{ selected: heightUnit === 'cm' }}
+                  >
                     <Text style={[styles.unitToggleBtn, heightUnit === 'cm' && styles.unitToggleBtnActive]}>
                       CM
                     </Text>
                   </TouchableOpacity>
                   <Text style={styles.unitDivider}>|</Text>
-                  <TouchableOpacity onPress={() => setHeightUnit('ft')}>
+                  <TouchableOpacity
+                    onPress={() => setHeightUnit('ft')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Use feet"
+                    accessibilityState={{ selected: heightUnit === 'ft' }}
+                  >
                     <Text style={[styles.unitToggleBtn, heightUnit === 'ft' && styles.unitToggleBtnActive]}>
                       FT
                     </Text>
@@ -294,6 +324,7 @@ export default function RegisterScreen() {
                       placeholderTextColor={Colors.outline}
                       style={styles.statTextInput}
                       value={value}
+                      accessibilityLabel={`Height in ${heightUnit === 'cm' ? 'centimeters' : 'feet'}`}
                     />
                   )}
                 />
@@ -306,13 +337,23 @@ export default function RegisterScreen() {
               <View style={styles.statInputHeader}>
                 <Text style={styles.inputLabel}>Weight</Text>
                 <View style={styles.unitToggleRow}>
-                  <TouchableOpacity onPress={() => setWeightUnit('kg')}>
+                  <TouchableOpacity
+                    onPress={() => setWeightUnit('kg')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Use kilograms"
+                    accessibilityState={{ selected: weightUnit === 'kg' }}
+                  >
                     <Text style={[styles.unitToggleBtn, weightUnit === 'kg' && styles.unitToggleBtnActive]}>
                       KG
                     </Text>
                   </TouchableOpacity>
                   <Text style={styles.unitDivider}>|</Text>
-                  <TouchableOpacity onPress={() => setWeightUnit('lbs')}>
+                  <TouchableOpacity
+                    onPress={() => setWeightUnit('lbs')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Use pounds"
+                    accessibilityState={{ selected: weightUnit === 'lbs' }}
+                  >
                     <Text style={[styles.unitToggleBtn, weightUnit === 'lbs' && styles.unitToggleBtnActive]}>
                       LBS
                     </Text>
@@ -332,6 +373,7 @@ export default function RegisterScreen() {
                       placeholderTextColor={Colors.outline}
                       style={styles.statTextInput}
                       value={value}
+                      accessibilityLabel={`Weight in ${weightUnit === 'kg' ? 'kilograms' : 'pounds'}`}
                     />
                   )}
                 />
@@ -346,6 +388,9 @@ export default function RegisterScreen() {
                 <TouchableOpacity
                   style={[styles.goalBtn, goal === 'lose_weight' && styles.goalBtnActive]}
                   onPress={() => setGoal('lose_weight')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select lose weight goal"
+                  accessibilityState={{ selected: goal === 'lose_weight' }}
                 >
                   <TrendingDown size={24} color={goal === 'lose_weight' ? '#0ea5e9' : '#6e7881'} />
                   <Text style={[styles.goalBtnText, goal === 'lose_weight' && styles.goalBtnTextActive]}>Lose Weight</Text>
@@ -354,6 +399,9 @@ export default function RegisterScreen() {
                 <TouchableOpacity
                   style={[styles.goalBtn, goal === 'build_muscle' && styles.goalBtnActive]}
                   onPress={() => setGoal('build_muscle')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select build muscle goal"
+                  accessibilityState={{ selected: goal === 'build_muscle' }}
                 >
                   <Dumbbell size={24} color={goal === 'build_muscle' ? '#0ea5e9' : '#6e7881'} />
                   <Text style={[styles.goalBtnText, goal === 'build_muscle' && styles.goalBtnTextActive]}>Build Muscle</Text>
@@ -362,6 +410,9 @@ export default function RegisterScreen() {
                 <TouchableOpacity
                   style={[styles.goalBtn, goal === 'maintain' && styles.goalBtnActive]}
                   onPress={() => setGoal('maintain')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Select maintain goal"
+                  accessibilityState={{ selected: goal === 'maintain' }}
                 >
                   <Activity size={24} color={goal === 'maintain' ? '#0ea5e9' : '#6e7881'} />
                   <Text style={[styles.goalBtnText, goal === 'maintain' && styles.goalBtnTextActive]}>Maintain</Text>
@@ -375,6 +426,9 @@ export default function RegisterScreen() {
             style={styles.checkboxRow}
             onPress={() => setTermsAccepted(!termsAccepted)}
             activeOpacity={0.8}
+            accessibilityRole="checkbox"
+            accessibilityLabel="Accept terms and privacy policy"
+            accessibilityState={{ checked: termsAccepted }}
           >
             <View style={[styles.checkbox, termsAccepted && styles.checkboxActive]}>
               {termsAccepted && <Check size={12} color="#ffffff" strokeWidth={3} />}
@@ -390,6 +444,9 @@ export default function RegisterScreen() {
             onPress={handleSubmit(onSubmit)}
             disabled={isSubmitting}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Create account"
+            accessibilityState={{ disabled: isSubmitting }}
           >
             <Text style={styles.submitBtnText}>
               {isSubmitting ? 'Creating Account...' : 'Create Account'}
@@ -400,7 +457,11 @@ export default function RegisterScreen() {
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>Already have an account?</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Login')}
+            accessibilityRole="button"
+            accessibilityLabel="Log in"
+          >
             <Text style={styles.footerLink}>Log In</Text>
           </TouchableOpacity>
         </View>
@@ -452,8 +513,8 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   backBtn: {
-    width: 36,
-    height: 36,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
@@ -464,6 +525,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: 140, // Expanded to ensure extra scrolling breathing room on small viewports
     paddingTop: spacing.lg,
+    width: '100%',
+    maxWidth: layout.modalMaxWidth,
+    alignSelf: 'center',
   },
   headerSection: {
     marginBottom: spacing.xl,
@@ -473,7 +537,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     color: '#0b1c30',
     marginBottom: spacing.xs,
-    letterSpacing: -0.5,
+    letterSpacing: 0,
   },
   subtitle: {
     fontSize: typography.sm,
@@ -565,6 +629,7 @@ const styles = StyleSheet.create({
   genderBtn: {
     paddingHorizontal: spacing.md,
     paddingVertical: 5,
+    minHeight: 32,
     borderRadius: radius.full,
   },
   genderBtnActive: {
@@ -656,6 +721,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: spacing.md,
     gap: 6,
+    minHeight: 92,
   },
   goalBtnActive: {
     backgroundColor: '#ffffff',
@@ -690,8 +756,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   checkbox: {
-    width: 20,
-    height: 20,
+    width: 24,
+    height: 24,
     borderRadius: 6,
     borderWidth: 2,
     borderColor: 'rgba(190, 200, 210, 0.6)',

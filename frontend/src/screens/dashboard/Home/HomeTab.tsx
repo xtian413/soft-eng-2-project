@@ -8,21 +8,22 @@ import {
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Colors } from '@/theme/colors';
-import { typography, fontWeight, radius, spacing } from '@/theme/typography';
-import type { MacroTargets, FoodLogEntry } from '@/screens/dashboard/types';
-import { Flame, Sparkles, Plus, Check, Dumbbell } from 'lucide-react-native';
+import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
+import type { MacroTargets } from '@/screens/dashboard/types';
+import { Flame, Sparkles, Plus } from 'lucide-react-native';
+import type { FitnessInsight } from '@/ai/insights/fitnessInsight';
 
 interface HomeTabProps {
   fullName: string;
-  goal: string;
   targets: MacroTargets;
   proteinTotal: number;
   carbsTotal: number;
   fatsTotal: number;
   caloriesEaten: number;
   onQuickLog: () => void;
-  foodLogs: FoodLogEntry[];
-  onNavigateToTab?: (tab: 'dashboard' | 'food' | 'chat' | 'lift' | 'profile') => void;
+  fitnessInsight: FitnessInsight;
+  isInsightLoading: boolean;
+  onNavigateToTab?: (tab: 'dashboard' | 'food' | 'insights' | 'lift' | 'profile') => void;
 }
 
 export function HomeTab({
@@ -33,6 +34,8 @@ export function HomeTab({
   fatsTotal,
   caloriesEaten,
   onQuickLog,
+  fitnessInsight,
+  isInsightLoading,
   onNavigateToTab,
 }: HomeTabProps) {
   // Pure derived calculations
@@ -57,33 +60,9 @@ export function HomeTab({
     return 'Good evening';
   };
 
-  // Dynamic AI Insight Quote
-  let aiInsightQuote = "Macros are looking solid today. Maintain this consistency to see steady progress toward your goals.";
-  if (caloriesEaten === 0) {
-    aiInsightQuote = "You haven't logged any food yet today. Remember to fuel your body for optimal performance!";
-  } else if (proteinTotal < targets.protein * 0.5) {
-    aiInsightQuote = "Your protein intake is quite low today. Try adding a protein-rich snack to hit your anabolic window!";
-  } else if (caloriesRemaining === 0) {
-    aiInsightQuote = "You've hit your daily calorie limit! If you're still hungry, focus on high-volume, low-calorie greens.";
-  } else if (caloriePercent > 80) {
-    aiInsightQuote = "You're getting close to your daily calorie target. Keep your remaining meals light and protein-focused.";
-  }
-
-  // Dynamic Weekly Review
-  const daysHit = caloriesEaten > 0 ? 6 : 5;
-  const streakText = caloriesEaten > 0 
-    ? `Great job this week! You hit your protein goals ${daysHit} out of 7 days, maintaining a solid anabolic state. Your average caloric intake is tracking perfectly.`
-    : `You've been consistent this week, hitting your targets ${daysHit} out of 7 days. Log your meals today to keep the streak going!`;
-
-  const weekDays = [
-    { label: 'Mon', checked: true, type: 'Push' },
-    { label: 'Tue', checked: true, type: 'Legs' },
-    { label: 'Wed', checked: false, type: 'Rest' },
-    { label: 'Thu', checked: true, type: 'Pull' },
-    { label: 'Fri', checked: false, type: 'Push' },
-    { label: 'Sat', checked: false, type: 'Arms' },
-    { label: 'Sun', checked: false, type: 'Rest' },
-  ];
+  const whisperText = isInsightLoading
+    ? 'Reading your latest food and training data once. This insight will stay cached until your data changes.'
+    : fitnessInsight.summary;
 
   return (
     <ScrollView
@@ -107,10 +86,10 @@ export function HomeTab({
       {/* Calories Card (2x2 / Full Width) */}
       <View style={styles.card}>
         <View style={styles.calorieHeader}>
-          <View>
+          <View style={styles.calorieTextGroup}>
             <Text style={styles.cardTitle}>CALORIES REMAINING</Text>
             <View style={styles.calorieMainRow}>
-              <Text style={styles.caloriesBigNum}>
+              <Text style={styles.caloriesBigNum} numberOfLines={1} adjustsFontSizeToFit>
                 {caloriesRemaining.toLocaleString()}
               </Text>
               <Text style={styles.calorieUnit}> kcal left</Text>
@@ -212,6 +191,9 @@ export function HomeTab({
           style={[styles.bentoCard, styles.quickLogCard]}
           onPress={onQuickLog}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Quick log food"
+          accessibilityHint="Opens the food tab so you can add a meal"
         >
           <View style={styles.quickLogContent}>
             <View style={styles.quickLogIconBox}>
@@ -226,59 +208,24 @@ export function HomeTab({
       <View style={styles.insightCard}>
         <View style={styles.insightHeader}>
           <View style={styles.whisperBadge}>
-            <Text style={styles.whisperBadgeText}>Whisper</Text>
+            <Text style={styles.whisperBadgeText}>
+              {isInsightLoading ? 'Reading...' : 'Whisper'}
+            </Text>
           </View>
           <Sparkles size={16} color="#eab308" fill="#eab308" />
         </View>
         <Text style={styles.insightQuote}>
-          "{aiInsightQuote}"
+          "{whisperText}"
         </Text>
         <TouchableOpacity
           style={styles.insightBtn}
           activeOpacity={0.8}
-          onPress={() => onNavigateToTab?.('chat')}
+          onPress={() => onNavigateToTab?.('insights')}
+          accessibilityRole="button"
+          accessibilityLabel="Adjust plan with coach"
         >
-          <Text style={styles.insightBtnText}>Adjust Plan</Text>
+          <Text style={styles.insightBtnText}>Open Insights</Text>
         </TouchableOpacity>
-      </View>
-
-      {/* Weekly Review Card */}
-      <View style={styles.card}>
-        <View style={styles.streakHeader}>
-          <Text style={styles.cardTitle}>WEEKLY REVIEW</Text>
-          <View style={styles.streakBadge}>
-            <View style={styles.streakBadgeRow}>
-              <Flame size={12} color="#fd761a" fill="#fd761a" />
-              <Text style={styles.streakBadgeText}>{daysHit} Day Streak</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.streakDaysRow}>
-          {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, idx) => (
-            <View key={idx} style={styles.streakDayItem}>
-              <Text style={[styles.streakDayLabel, idx === 4 && styles.streakDayLabelActive]}>{day}</Text>
-              <View
-                style={[
-                  styles.streakDot,
-                  idx < 4 ? styles.streakDotChecked : idx === 4 ? styles.streakDotWorkout : styles.streakDotEmpty,
-                ]}
-              >
-                {idx < 4 ? (
-                  <Check size={14} color={Colors.onPrimary} strokeWidth={3} />
-                ) : idx === 4 ? (
-                  <Dumbbell size={12} color={Colors.primary} strokeWidth={2.5} />
-                ) : null}
-              </View>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.streakDescBox}>
-          <Text style={styles.streakDescText}>
-            {streakText}
-          </Text>
-        </View>
       </View>
     </ScrollView>
   );
@@ -292,6 +239,9 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: spacing.base,
     paddingBottom: spacing.xxxl * 2,
+    width: '100%',
+    maxWidth: layout.modalMaxWidth,
+    alignSelf: 'center',
   },
   welcomeSection: {
     marginBottom: spacing.base,
@@ -300,6 +250,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+    minWidth: 0,
   },
   greetingSparkle: {
     marginTop: -2,
@@ -308,7 +259,8 @@ const styles = StyleSheet.create({
     fontSize: typography.xl,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,
-    letterSpacing: -0.5,
+    letterSpacing: 0,
+    flexShrink: 1,
   },
   welcomeSubtitle: {
     fontSize: typography.base,
@@ -332,6 +284,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.base,
+  },
+  calorieTextGroup: {
+    flex: 1,
+    minWidth: 0,
   },
   cardTitle: {
     fontSize: typography.xs,
@@ -348,7 +305,8 @@ const styles = StyleSheet.create({
     fontSize: 38,
     fontWeight: fontWeight.extraBold,
     color: Colors.primary,
-    letterSpacing: -1.0,
+    letterSpacing: 0,
+    flexShrink: 1,
   },
   calorieUnit: {
     fontSize: typography.sm,
@@ -400,6 +358,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.02,
     shadowRadius: 4,
     elevation: 1,
+    minHeight: 104,
   },
   fullWidthBento: {
     minWidth: '100%',
@@ -463,8 +422,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   quickLogIconBox: {
-    width: 32,
-    height: 32,
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
     borderRadius: radius.full,
     backgroundColor: 'rgba(14, 165, 233, 0.1)',
     justifyContent: 'center',
@@ -514,6 +473,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: radius.full,
     paddingVertical: spacing.sm,
+    minHeight: layout.minTouchTarget,
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: 'rgba(14, 165, 233, 0.3)',
@@ -522,78 +482,5 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontSize: typography.xs,
     fontWeight: fontWeight.bold,
-  },
-  streakHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.base,
-  },
-  streakBadge: {
-    backgroundColor: 'rgba(253, 118, 26, 0.1)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-  },
-  streakBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  streakBadgeText: {
-    fontSize: 10,
-    fontWeight: fontWeight.bold,
-    color: '#fd761a',
-  },
-  streakDaysRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  streakDayItem: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  streakDayLabel: {
-    fontSize: 9,
-    fontWeight: fontWeight.bold,
-    color: Colors.outline,
-  },
-  streakDayLabelActive: {
-    color: Colors.primary,
-    fontWeight: fontWeight.bold,
-  },
-  streakDot: {
-    width: 26,
-    height: 26,
-    borderRadius: radius.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  streakDotChecked: {
-    backgroundColor: Colors.primaryContainer,
-  },
-  streakDotWorkout: {
-    backgroundColor: 'rgba(14, 165, 233, 0.1)',
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-  },
-  streakDotEmpty: {
-    borderWidth: 1.5,
-    borderColor: 'rgba(190, 200, 210, 0.4)',
-    backgroundColor: 'transparent',
-  },
-  streakDescBox: {
-    backgroundColor: 'rgba(14, 165, 233, 0.03)',
-    borderRadius: radius.md,
-    padding: spacing.base,
-    marginTop: spacing.base,
-    borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.1)',
-  },
-  streakDescText: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: Colors.onSurfaceVariant,
-    fontStyle: 'italic',
   },
 });
