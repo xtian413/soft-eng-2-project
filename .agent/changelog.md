@@ -3,6 +3,24 @@
 **Format**: `[YYYY-MM-DD HH:MM +TZ] TYPE: description`
 
 ---
+### [2026-06-07 15:00 +0800] FEAT: Sync Hydration and Sleep with SQLite and Training Calendar
+- **Branch**: `jb-branch`
+- **Files Modified**:
+  - `frontend/src/local/repositories/dailyLogsRepository.ts`
+  - `frontend/src/screens/dashboard/Food/SleepRecoveryCard.tsx`
+  - `frontend/src/screens/dashboard/Food/FoodTab.tsx`
+  - `frontend/src/screens/dashboard/Profile/ProfileTab.tsx`
+  - `frontend/src/screens/dashboard/Profile/subcomponents/FoodHistoryView.tsx`
+  - `frontend/src/screens/dashboard/Profile/subcomponents/TrainingCalendar.tsx`
+- **Changes**:
+  - ✅ **SQLite Querying**: Implemented `getDailyLogsByUser(userId)` inside `dailyLogsRepository.ts` to fetch daily records ordered by date descending.
+  - ✅ **Sleep Tracking Refactoring**: Updated `SleepRecoveryCard.tsx` to handle nullable bedtime and waketime states. Unset times show as `--:--` and compute to `0` sleep hours (representing untracked days).
+  - ✅ **FoodTab Auto-Save & Loading**: Added SQLite database loading for today's logs on mounting, and automated synchronization of hydration/sleep metric updates from `FoodTab.tsx` state back to `daily_logs` table.
+  - ✅ **Training Calendar Aggregation**: Extended `ProfileTab.tsx`'s history fetcher to load local daily logs and pass `historyDailyLogs` down to the calendar.
+  - ✅ **Calendar Dot Activity markers**: Refactored `TrainingCalendar.tsx` compact/expanded views so dates with logged water or sleep show activity dots and are clickable.
+  - ✅ **Dynamic Calendar Summary**: Replaced static details placeholder to show actual sleep duration and water intake.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors.
+
 ### [2026-06-07 16:00 +0800] FEAT: Registration page macro goal alignment, error banners, date picker, and UX polish
 - **Branch**: `jb-branch`
 - **Files Modified**:

@@ -103,6 +103,25 @@ export async function getDailyLogsByMonth(
   }
 }
 
+export async function getDailyLogsByUser(
+  userId: string
+): Promise<LocalDailyLog[]> {
+  try {
+    assertUserId(userId);
+    const db = await initializeLocalDatabase();
+    return await db.getAllAsync<LocalDailyLog>(
+      `SELECT ${DAILY_LOG_COLUMNS}
+       FROM ${LOCAL_TABLES.dailyLogs}
+       WHERE user_id = ? AND deleted_at IS NULL
+       ORDER BY date DESC`,
+      userId
+    );
+  } catch (error) {
+    wrapDailyLogError('read by user', error);
+  }
+}
+
+
 export async function upsertDailyLog(
   userId: string,
   date: string,

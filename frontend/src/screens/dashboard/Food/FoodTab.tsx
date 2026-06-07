@@ -41,6 +41,9 @@ import {
   markFoodLastUsed,
   searchLocalFoods,
 } from '@/local/repositories/foodsRepository';
+import { getDailyLogByDate, upsertDailyLog } from '@/local/repositories/dailyLogsRepository';
+import { format } from 'date-fns';
+
 import type { FoodLogEntry, MacroTargets, MealId } from '@/screens/dashboard/types';
 import { NutritionCarousel } from './NutritionCarousel';
 import { MealDiarySection } from './MealDiarySection';
@@ -238,11 +241,12 @@ export function FoodTab({
   };
 
   // Sleep state
-  const [bedtime, setBedtime] = useState('23:00');
-  const [waketime, setWaketime] = useState('06:30');
+  const [bedtime, setBedtime] = useState<string | null>(null);
+  const [waketime, setWaketime] = useState<string | null>(null);
 
   // Compute sleep hours
   const sleepHours = useMemo(() => {
+    if (!bedtime || !waketime) return 0;
     try {
       const [bh, bm] = bedtime.split(':').map(Number);
       const [wh, wm] = waketime.split(':').map(Number);
@@ -250,12 +254,15 @@ export function FoodTab({
       if (diffMins < 0) diffMins += 24 * 60;
       return Number((diffMins / 60).toFixed(1));
     } catch {
-      return 8.0;
+      return 0;
     }
   }, [bedtime, waketime]);
 
   // Sleep quality calculations
   const sleepMetrics = useMemo(() => {
+    if (sleepHours === 0) {
+      return { sleepQuality: 'Not Logged', sleepQualityColor: Colors.outline };
+    }
     let sleepQuality = 'Optimal';
     let sleepQualityColor = '#10b981'; // emerald
     if (sleepHours < 6) {
@@ -267,6 +274,84 @@ export function FoodTab({
     }
     return { sleepQuality, sleepQualityColor };
   }, [sleepHours]);
+
+  const isDailyLogLoadedRef = useRef(false);
+
+  // Load initial daily log for today
+  useEffect(() => {
+    if (!userId) {
+      isDailyLogLoadedRef.current = false;
+      return;
+    }
+    let active = true;
+    async function loadTodayLog() {
+      const todayStr = format(new Date(), 'yyyy-MM-dd');
+      try {
+        const log = await getDailyLogByDate(userId!, todayStr);
+        if (!active) return;
+        if (log) {
+          // 1. Water Glass States
+          const targetGoal = log.water_ml ? Math.max(log.water_ml, 2000) : 2000;
+          setHydrationGoal(targetGoal);
+          setHydrationGoalInput(String(targetGoal));
+
+          const totalGlasses = Math.min(12, Math.ceil(targetGoal / 250));
+          const checkedCount = log.water_ml ? Math.floor(log.water_ml / 250) : 0;
+          const newStates = Array(totalGlasses).fill(false);
+          for (let i = 0; i < Math.min(checkedCount, totalGlasses); i++) {
+            newStates[i] = true;
+          }
+          setWaterGlassStates(newStates);
+
+          // 2. Sleep bedtime & waketime
+          setBedtime(log.bedtime);
+          setWaketime(log.waketime);
+        } else {
+          // No log yet, use defaults: water 0, sleep null
+          setHydrationGoal(2000);
+          setHydrationGoalInput('2000');
+          setWaterGlassStates(Array(8).fill(false));
+          setBedtime(null);
+          setWaketime(null);
+        }
+      } catch (err) {
+        console.warn('[FoodTab] Failed to load today\'s daily log:', err);
+      } finally {
+        if (active) {
+          isDailyLogLoadedRef.current = true;
+        }
+      }
+    }
+    isDailyLogLoadedRef.current = false;
+    loadTodayLog();
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  // Autosave hydration & sleep recovery changes to SQLite
+  useEffect(() => {
+    if (!userId || !isDailyLogLoadedRef.current) return;
+
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const consumed = waterGlassStates.filter(Boolean).length * 250;
+
+    const saveChanges = async () => {
+      try {
+        await upsertDailyLog(userId, todayStr, {
+          water_ml: consumed,
+          bedtime,
+          waketime,
+          sleep_hours: sleepHours > 0 ? sleepHours : null,
+        });
+      } catch (err) {
+        console.warn('[FoodTab] Failed to save daily log:', err);
+      }
+    };
+
+    saveChanges();
+  }, [userId, waterGlassStates, bedtime, waketime, sleepHours]);
+
 
   // Natural-language quick log state
   const [quickInput, setQuickInput] = useState('');

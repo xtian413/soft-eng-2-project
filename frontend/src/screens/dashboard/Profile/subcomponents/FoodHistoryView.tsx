@@ -47,8 +47,8 @@ export function FoodHistoryView({
   const hydrationGoal = dailyLog?.water_ml ? Math.max(dailyLog.water_ml, 2000) : 2000;
 
   // Build sleep data
-  const bedtime = dailyLog?.bedtime ?? '22:00';
-  const waketime = dailyLog?.waketime ?? '07:00';
+  const bedtime = dailyLog?.bedtime ?? null;
+  const waketime = dailyLog?.waketime ?? null;
 
   if (loading) {
     return (

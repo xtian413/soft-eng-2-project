@@ -13,6 +13,9 @@ import { TrainingCalendar } from './subcomponents/TrainingCalendar';
 import { fetchWorkouts, type Workout } from '@/api/workoutApi';
 import { fetchDietLogs, type DietLog } from '@/api/dietApi';
 import { DateDetailSheet } from './subcomponents/DateDetailSheet';
+import { getDailyLogsByUser } from '@/local/repositories/dailyLogsRepository';
+import type { LocalDailyLog } from '@/local/schema';
+
 
 interface ProfileTabProps {
   fullName: string;
@@ -57,7 +60,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
     .toUpperCase()
     .slice(0, 2);
 
-  const { updatePhysicalStats, profile } = useAuthStore();
+  const { updatePhysicalStats, profile, user } = useAuthStore();
   const [isEditModalVisible, setEditModalVisible] = useState(false);
   const [isSignOutModalVisible, setSignOutModalVisible] = useState(false);
   const [editHeight, setEditHeight] = useState(String(heightCm));
@@ -79,6 +82,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
   const [isSaving, setIsSaving] = useState(false);
   const [historyWorkouts, setHistoryWorkouts] = useState<Workout[]>([]);
   const [historyDietLogs, setHistoryDietLogs] = useState<DietLog[]>([]);
+  const [historyDailyLogs, setHistoryDailyLogs] = useState<LocalDailyLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -260,10 +264,16 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
       setHistoryLoading(true);
       setHistoryError(null);
       try {
-        const [workouts, dietLogs] = await Promise.all([fetchWorkouts(), fetchDietLogs()]);
+        const promises: [Promise<Workout[]>, Promise<DietLog[]>, Promise<LocalDailyLog[]>] = [
+          fetchWorkouts(),
+          fetchDietLogs(),
+          user?.id ? getDailyLogsByUser(user.id) : Promise.resolve([]),
+        ];
+        const [workouts, dietLogs, dailyLogs] = await Promise.all(promises);
         if (cancelled) return;
         setHistoryWorkouts(workouts);
         setHistoryDietLogs(dietLogs);
+        setHistoryDailyLogs(dailyLogs);
       } catch (err: unknown) {
         if (!cancelled) {
           setHistoryError(err instanceof Error ? err.message : 'Failed to load history');
@@ -336,6 +346,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
         loading={loading}
         historyWorkouts={historyWorkouts}
         historyDietLogs={historyDietLogs}
+        historyDailyLogs={historyDailyLogs}
         historyLoading={historyLoading}
         historyError={historyError}
         onDateSelect={(dateStr) => {

@@ -10,6 +10,7 @@ import { addMonths, addWeeks, format, getDay, getDaysInMonth, isToday, parseISO,
 import type { CalendarDay } from '../hooks/useProfileStats';
 import type { Workout } from '@/api/workoutApi';
 import type { DietLog } from '@/api/dietApi';
+import type { LocalDailyLog } from '@/local/schema';
 
 interface TrainingCalendarProps {
   days: CalendarDay[];
@@ -18,6 +19,8 @@ interface TrainingCalendarProps {
   historyWorkouts: Workout[];
   /** Full diet-log history for expanded month-view grid */
   historyDietLogs: DietLog[];
+  /** Full daily logs history for water and sleep */
+  historyDailyLogs?: LocalDailyLog[];
   historyLoading: boolean;
   historyError: string | null;
   /** Called when user taps "View Details" to open the date detail sheet. */
@@ -28,7 +31,7 @@ interface TrainingCalendarProps {
  *  grid with day detail panels inside a themed card container. */
 export function TrainingCalendar({
   days, loading,
-  historyWorkouts, historyDietLogs, historyLoading, historyError, onDateSelect,
+  historyWorkouts, historyDietLogs, historyDailyLogs = [], historyLoading, historyError, onDateSelect,
 }: TrainingCalendarProps) {
   // --- expanded state (managed internally) ---
   const [isExpanded, setIsExpanded] = useState(false);
@@ -52,6 +55,11 @@ export function TrainingCalendar({
     const totalDays = getDaysInMonth(historyMonthDate);
     const workoutDates = new Set(historyWorkouts.map((w) => w.performed_at.split('T')[0]));
     const dietDates = new Set(historyDietLogs.map((d) => d.logged_at.split('T')[0]));
+    const dailyLogDates = new Set(
+      historyDailyLogs
+        .filter((l) => (l.water_ml && l.water_ml > 0) || (l.sleep_hours && l.sleep_hours > 0))
+        .map((l) => l.date)
+    );
 
     return Array.from({ length: totalDays }, (_, index) => {
       const day = new Date(monthStart);
@@ -61,16 +69,22 @@ export function TrainingCalendar({
         dateStr,
         dayNumber: index + 1,
         weekday: getDay(day),
-        hasActivity: workoutDates.has(dateStr) || dietDates.has(dateStr),
+        hasActivity: workoutDates.has(dateStr) || dietDates.has(dateStr) || dailyLogDates.has(dateStr),
       };
     });
-  }, [historyMonthDate, historyWorkouts, historyDietLogs]);
+  }, [historyMonthDate, historyWorkouts, historyDietLogs, historyDailyLogs]);
 
   const selectedHistorySummary = useMemo(() => {
     const workouts = historyWorkouts.filter((w) => w.performed_at.startsWith(selectedDate));
     const meals = historyDietLogs.filter((d) => d.logged_at.startsWith(selectedDate));
-    return { workouts, meals, sleep: null as null, water: null as null };
-  }, [historyDietLogs, historyWorkouts, selectedDate]);
+    const dailyLog = historyDailyLogs.find((l) => l.date === selectedDate);
+    return {
+      workouts,
+      meals,
+      sleep: dailyLog?.sleep_hours || null,
+      water: dailyLog?.water_ml || null,
+    };
+  }, [historyDietLogs, historyWorkouts, historyDailyLogs, selectedDate]);
 
   // --- derived values for compact week grid ---
   const compactWeekStart = useMemo(
@@ -82,12 +96,17 @@ export function TrainingCalendar({
     const weekStart = compactWeekStart;
     const workoutDates = new Set(historyWorkouts.map((w) => w.performed_at.split('T')[0]));
     const dietDates = new Set(historyDietLogs.map((d) => d.logged_at.split('T')[0]));
+    const dailyLogDates = new Set(
+      historyDailyLogs
+        .filter((l) => (l.water_ml && l.water_ml > 0) || (l.sleep_hours && l.sleep_hours > 0))
+        .map((l) => l.date)
+    );
 
     return Array.from({ length: 7 }, (_, i) => {
       const day = new Date(weekStart);
       day.setDate(weekStart.getDate() + i);
       const dateStr = format(day, 'yyyy-MM-dd');
-      const hasActivity = workoutDates.has(dateStr) || dietDates.has(dateStr);
+      const hasActivity = workoutDates.has(dateStr) || dietDates.has(dateStr) || dailyLogDates.has(dateStr);
       const workout = historyWorkouts.find((w) => w.performed_at.startsWith(dateStr));
       const workoutType = workout
         ? (workout.name.toLowerCase().includes('push') || workout.name.toLowerCase().includes('chest') || workout.name.toLowerCase().includes('shoulder') || workout.name.toLowerCase().includes('tricep')) ? 'push'
@@ -108,17 +127,25 @@ export function TrainingCalendar({
         hasActivity,
       };
     });
-  }, [compactWeekStart, historyWorkouts, historyDietLogs]);
+  }, [compactWeekStart, historyWorkouts, historyDietLogs, historyDailyLogs]);
 
   // Use compactDays when history data is available, otherwise fall back to prop
-  const displayDays = historyWorkouts.length > 0 || historyDietLogs.length > 0 ? compactDays : days;
+  const displayDays =
+    historyWorkouts.length > 0 ||
+    historyDietLogs.length > 0 ||
+    historyDailyLogs.length > 0
+      ? compactDays
+      : days;
 
   const historyMonthLabel = format(historyMonthDate, 'MMMM yyyy');
   const historyWeekdayOffset = getDay(historyMonthDate);
   const historyHasAnyActivity = historyDays.some((d) => d.hasActivity);
   const historySelectedDateLabel = format(parseISO(selectedDate), 'EEEE, MMM d');
   const historySummaryEmpty =
-    selectedHistorySummary.workouts.length === 0 && selectedHistorySummary.meals.length === 0;
+    selectedHistorySummary.workouts.length === 0 &&
+    selectedHistorySummary.meals.length === 0 &&
+    selectedHistorySummary.sleep === null &&
+    (selectedHistorySummary.water === null || selectedHistorySummary.water === 0);
 
   const handleSelectHistoryDate = (dateStr: string) => setSelectedDate(dateStr);
   const handleSelectHistoryMonth = (direction: 'previous' | 'next') =>
@@ -250,11 +277,25 @@ export function TrainingCalendar({
                     </View>
                     <View style={styles.expandedSection}>
                       <Text style={styles.expandedSectionTitle}>Sleep Data</Text>
-                      <Text style={styles.expandedMissingText}>Not tracked for this date</Text>
+                      {selectedHistorySummary.sleep !== null ? (
+                        <View style={styles.expandedDetailRow}>
+                          <View style={styles.expandedDetailDot} />
+                          <Text style={styles.expandedLineItem}>{selectedHistorySummary.sleep} hrs</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.expandedMissingText}>Not tracked for this date</Text>
+                      )}
                     </View>
                     <View style={styles.expandedSection}>
                       <Text style={styles.expandedSectionTitle}>Water Intake</Text>
-                      <Text style={styles.expandedMissingText}>Not tracked for this date</Text>
+                      {selectedHistorySummary.water !== null && selectedHistorySummary.water > 0 ? (
+                        <View style={styles.expandedDetailRow}>
+                          <View style={styles.expandedDetailDot} />
+                          <Text style={styles.expandedLineItem}>{selectedHistorySummary.water} ml</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.expandedMissingText}>Not tracked for this date</Text>
+                      )}
                     </View>
                   </>
                 )}
