@@ -8,3 +8,4 @@ dist/
 *.task
 *.tflite
 .worktrees/
+.mcp.json

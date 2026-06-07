@@ -1,6 +1,6 @@
 # context.md — Project-Wide Context & Notes
 ## Gemi
-**Last Updated**: 2026-06-07T09:16:00+08:00
+**Last Updated**: 2026-06-07T15:10:00+08:00
 
 ---
 
@@ -12,9 +12,9 @@
 | Course | CCS 308-CS33S1 |
 | Author | Christian Gamos (`chris.gamos.13@gmail.com`) |
 | Repo | `soft-eng-2-project` |
-| Active Branch | `feature/food` |
+| Active Branch | `jb-branch` |
 | Base Branch | `master` |
-| Web App URL (dev) | `http://localhost:5173/` |
+| Web App URL (dev) | N/A — web/ subproject deleted; project is now pure Expo React Native |
 
 ---
 
@@ -34,21 +34,20 @@ soft-eng-2-project/
 │   └── src/
 │       ├── ai/           ← on-device inference (LFM2.5 via llama.cpp; rename gemmaService.ts later)
 │       ├── api/, components/, hooks/, lib/, navigation/, screens/, store/, types/
+│       ├── local/        ← SQLite local-first repositories, migrations, sync
+│       └── theme/        ← Design tokens (colors, typography)
 ├── supabase/             ← Supabase migrations + config
 │   └── migrations/       ← 001–006 SQL files + timestamped duplicates
-└── web/                  ← Vite + React 19 web companion app
-    └── src/
-        ├── pages/
-        │   ├── Auth/     ← Login.tsx, Register.tsx, Auth.css
-        │   └── Dashboard/ ← Dashboard.tsx, Dashboard.css, types.ts
-        │       ├── AIChat/ ← AIChat.tsx, AIChat.css, hooks/useAIChat.ts
-        │       ├── Food/ ← Food.tsx, Food.css, hooks/useFood.ts, subcomponents/FoodModal.tsx
-        │       ├── Home/ ← Home.tsx
-        │       ├── Lift/ ← Lift.tsx, Lift.css
-        │       └── Profile/ ← Profile.tsx, Profile.css
-        ├── App.tsx       ← Route definitions
-        └── main.tsx      ← BrowserRouter entry point
 ```
+> **Note:** The `web/` Vite companion app was deleted (2026-05-30, `mono-repo-integration`). Gemi is now pure Expo React Native.
+
+### Goal System (4 goals, consolidated 2026-06-07)
+| Goal | Calorie Offset | Protein (g/lb) |
+|------|---------------|-----------------|
+| `moderate_cut` | -500 kcal | 0.85 |
+| `aggressive_cut` | -750 kcal | 1.0 |
+| `maintain` | 0 | 0.8 |
+| `lean_bulk` | +300 kcal | 0.8 |
 
 ---
 
@@ -107,6 +106,17 @@ On mobile (< 768px): `grid-template-columns: repeat(2, 1fr)`
 On desktop (≥ 768px): `grid-template-columns: repeat(4, 1fr)`
 - All macro cards: `grid-column: span 1`
 
+### TrainingCalendar Component (2026-06-07, updated 15:00)
+
+The `TrainingCalendar` component in `ProfileTab` manages its own expanded/collapsed state internally:
+
+- **Compact mode (unexpanded)**: Wrapped in a themed `compactCard` container matching the rest of the Profile tab (`surfaceContainerLowest`, `radius.lg`, border+shadow). Header uses a three-column layout: left (`‹ 📅 ›` nav arrows + Calendar icon), center ("Fitness Journey" title), and right ("View All" + chevron). A weekday labels row (`Su Mo Tu We Th Fr Sa`) sits above a 7-column grid of day cells. Day cells use `surfaceContainerLow` background with centered date numbers and blue activity dots. Today's cell is highlighted with a `Colors.primary` border. Week navigation via `weekOffset` state browses past/future weeks computed from `historyWorkouts`/`historyDietLogs`/`historyDailyLogs`.
+- **Expanded mode**: Full month grid inside a themed `historyCard` container. Includes month navigation arrows, 3-letter weekday headers aligned with the grid, activity dots on tracked days (workouts, diet logs, sleep, or water), and a detail panel with section dividers for meals, workouts, sleep, and water.
+- **Grid sizing**: Both compact and expanded cell sizes calculated dynamically via `(containerMaxWidth - cardPadding*2 - gap*6) / 7` using `useWindowDimensions`.
+- **Toggle**: "View All" / "Weekly View" text link; month/week offsets reset on toggle.
+- **Data flow**: `ProfileTab` fetches history data (workouts, diet logs, and local daily logs via `getDailyLogsByUser`) eagerly on mount and passes `historyWorkouts`, `historyDietLogs`, `historyDailyLogs`, `historyLoading`, `historyError` as props. Compact mode falls back to `days` prop when history data is empty.
+- **Title**: Renamed from "Training Calendar" to "Fitness Journey".
+
 ### React Router Navigation Flow
 ```
 /login → (register link) → /register → (submit) → /success → (launch) → /dashboard
@@ -114,6 +124,14 @@ On desktop (≥ 768px): `grid-template-columns: repeat(4, 1fr)`
 * → /login (catch-all redirect)
 ```
 Profile data passed: `navigate('/dashboard', { state: { fullName, email, gender, height, weight, goal } })`
+
+### Auth Screens — Registration & Login (2026-06-07)
+- **Error handling**: Both screens use `AuthErrorBanner` (4 variants: error/warning/success/info) instead of `Alert.alert`. Messages are mapped to user-friendly text (e.g., "already registered" → info banner with "Go to Login" link; invalid credentials → error banner).
+- **Date of Birth**: Uses `DatePickerSelect` — three tappable chips (Month, Day, Year) each opening a modal with scrollable FlatList. Internal value stored as YYYY-MM-DD string for backward compatibility with Zod schema.
+- **Target Weight**: Optional field in Physical Stats card. Falls back to current weight when not provided. Saved to `target_weight_kg` in profiles table and `targetWeightKg` in Zustand profile state.
+- **Signup metadata**: `authStore.signUp()` now passes `age`, `activity_level`, and `weight_kg` to `raw_user_meta_data` for Postgres triggers. Saves `target_weight_kg` to profiles upsert.
+- **Password toggles**: Eye/EyeOff independent toggle per field (Password, Confirm Password).
+- **Beginner labels**: Goal selector uses friendlier names ("Fat Loss", "Stay Fit", etc.). Activity level buttons show frequency descriptions.
 
 ### Goal → Targets Mapping
 | Goal | Calories | Protein | Carbs | Fats |
@@ -123,6 +141,15 @@ Profile data passed: `navigate('/dashboard', { state: { fullName, email, gender,
 | `maintain` | 2400 kcal | 140g | 250g | 70g |
 
 ### Food Logging & State Synchronization Context
+* **MealId Lifecycle & `'snack'` Default Bias (2026-06-07)**:
+  - The `MealId` type is `'breakfast' | 'lunch' | 'dinner' | 'snack'`.
+  - **Critical pattern**: Every layer that touches `meal_id` defaults unknown/null values to `'snack'`:
+    - `normalizeMealId()` in `dietLogsMapper.ts` and `dietLogsRepository.ts` → `'snack'`
+    - Backend `diet.service.ts:70` → `input.meal_id ?? 'snack'`
+    - Supabase migration `008` → `set meal_id = 'snack' where meal_id is null;` + column default `'snack'`
+  - **Consequence**: If `meal_id` is absent/null at any point (e.g., migration not applied, backend drops the field), every returning diet log silently gets `'snack'` — overwriting the correct local value during remote sync.
+  - **Quick Log default**: `quickMealId` state in `FoodTab.tsx` initializes to `'snack'`. The Quick Log meal selector chip defaults to Snack — user must explicitly tap Breakfast/Lunch/Dinner before parsing.
+  - See ERR-009.
 * **Initial Balanced Load**: The Stitch prototype default of `1,450 kcal` eaten, `850 kcal` remaining under a calorie target of `2,300 kcal` is represented by setting `80g Protein`, `120g Carbs`, `45g Fats`, and a `baseSnackCalories` offset of `245 kcal`.
 * **Dynamic Calculations**:
   * $\text{Calories Eaten} = (\text{Protein} \times 4) + (\text{Carbs} \times 4) + (\text{Fats} \times 9) + \text{baseSnackCalories}$
@@ -144,9 +171,11 @@ Profile data passed: `navigate('/dashboard', { state: { fullName, email, gender,
 3. **TypeScript ESM pure type imports**: Browsers throwing runtime `SyntaxError` when importing TypeScript interfaces inside standard runtime declarations. Pure interfaces must be imported explicitly with `import type` (ERR-008).
 4. **AI is simulated in web**: The coach chat in `Dashboard.tsx` uses keyword matching with a 1.2s fake delay. Real on-device LFM2.5 inference is Sprint 4.
 5. **No auth guard yet**: `/dashboard` is accessible without login. `ProtectedRoute` component is pending (TASK-006).
-6. **Profile data is transient**: User profile from registration lives in React Router location state. No persistence until Supabase auth is wired (TASK-001).
+6. **User Profile Sync**: The registration flow is wired to save profile data (age, goal, activity level, height, weight, target weight) to Supabase Auth metadata and upsert it into the profiles database table. A remote Postgres trigger on signup handles profiles creation from raw metadata.
 7. **Stitch images**: The profile avatar image in Dashboard uses a Google AIDA public URL. Should be replaced with actual user avatar from Supabase Storage in production.
 8. **Supabase migration duplicates**: There are both named (`001_profiles.sql`) and timestamped (`20260522055821_001_profiles.sql`) migration files. The timestamped ones are the ones Supabase CLI actually uses.
+9. **`normalizeMealId` silently defaults unknown values to `'snack'`**: Both `dietLogsMapper.ts` and `dietLogsRepository.ts` contain a `normalizeMealId()` function that returns `'snack'` for any value not strictly matching one of the four valid MealId values. This means `null`, `undefined`, or any unexpected string silently maps to `'snack'`. Combined with the remote sync cycle (`fetchDietLogs → upsertRemoteDietLogForUser → normalizeMealId(log.meal_id)`), a missing `meal_id` on the remote side overwrites a correct local value with `'snack'`. The backend service (`diet.service.ts:70`) and Supabase migration (`008`) also default to `'snack'`. See ERR-009.
+10. **Quick Log defaults to `'snack'` meal**: The `quickMealId` state in `FoodTab.tsx` initializes to `'snack'`. The Quick Log card renders meal selector chips (Breakfast, Lunch, Dinner, Snack) with Snack pre-selected. If a user types a food description and hits "Parse" without first tapping the Breakfast chip, the entry is saved under Snacks. See ERR-009.
 
 ---
 

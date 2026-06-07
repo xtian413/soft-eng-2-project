@@ -15,13 +15,20 @@ import {
   upsertRemoteBodyProgressForUser,
 } from '@/local/repositories/bodyProgressRepository';
 import type { LocalProfile } from '@/local/schema';
+import type { GoalKey, ActivityLevel } from '@/screens/dashboard/types';
 
 interface ProfileState {
   fullName: string | null;
   heightCm: number | null;
   weightKg: number | null;
   gender: 'male' | 'female' | null;
-  goal: 'lose_weight' | 'build_muscle' | 'maintain' | null;
+  goal: GoalKey | null;
+  age: number | null;
+  activityLevel: ActivityLevel | null;
+  targetWeightKg: number | null;
+  macroProteinPct: number | null;
+  macroCarbsPct: number | null;
+  macroFatsPct: number | null;
 }
 
 interface AuthState {
@@ -39,12 +46,26 @@ interface AuthState {
       height: number;
       weight: number;
       gender: 'male' | 'female';
-      goal: 'lose_weight' | 'build_muscle' | 'maintain';
+      goal: GoalKey;
+      age?: number;
+      activityLevel?: ActivityLevel;
+      targetWeightKg?: number;
     }
   ) => Promise<AuthError | null>;
   signOut: () => Promise<void>;
   fetchProfile: () => Promise<void>;
-  updatePhysicalStats: (heightCm: number, weightKg: number, goal: 'lose_weight' | 'build_muscle' | 'maintain') => Promise<{ message: string } | null>;
+  updatePhysicalStats: (
+    heightCm: number,
+    weightKg: number,
+    goal: GoalKey,
+    gender?: 'male' | 'female',
+    age?: number | null,
+    activityLevel?: ActivityLevel | null,
+    targetWeightKg?: number | null,
+    macroProteinPct?: number | null,
+    macroCarbsPct?: number | null,
+    macroFatsPct?: number | null
+  ) => Promise<{ message: string } | null>;
 }
 
 type AuthError = {
@@ -64,6 +85,12 @@ function localProfileToState(
     weightKg,
     gender: profile.gender,
     goal: profile.goal,
+    age: profile.age,
+    activityLevel: profile.activity_level,
+    targetWeightKg: profile.target_weight_kg,
+    macroProteinPct: profile.macro_protein_pct,
+    macroCarbsPct: profile.macro_carbs_pct,
+    macroFatsPct: profile.macro_fats_pct,
   };
 }
 
@@ -86,7 +113,7 @@ function normalizeGender(value: unknown): ProfileState['gender'] {
 }
 
 function normalizeGoal(value: unknown): ProfileState['goal'] {
-  return value === 'lose_weight' || value === 'build_muscle' || value === 'maintain'
+  return value === 'moderate_cut' || value === 'aggressive_cut' || value === 'maintain' || value === 'lean_bulk'
     ? value
     : null;
 }
@@ -164,7 +191,10 @@ export const useAuthStore = create<AuthState>()(
           height: number;
           weight: number;
           gender: 'male' | 'female';
-          goal: 'lose_weight' | 'build_muscle' | 'maintain';
+          goal: GoalKey;
+          age?: number;
+          activityLevel?: ActivityLevel;
+          targetWeightKg?: number;
         }
       ) => {
         const hasEnv = !!process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -182,8 +212,11 @@ export const useAuthStore = create<AuthState>()(
               data: {
                 full_name: metadata.fullName,
                 height_cm: metadata.height,
+                weight_kg: metadata.weight,
                 gender: metadata.gender,
                 goal: metadata.goal,
+                age: metadata.age,
+                activity_level: metadata.activityLevel,
               },
             } : undefined,
           });
@@ -205,6 +238,9 @@ export const useAuthStore = create<AuthState>()(
                 height_cm: metadata.height,
                 gender: metadata.gender,
                 goal: metadata.goal,
+                age: metadata.age ?? null,
+                activity_level: metadata.activityLevel ?? null,
+                target_weight_kg: metadata.targetWeightKg ?? metadata.weight,
               });
 
             if (profileError) {
@@ -232,6 +268,12 @@ export const useAuthStore = create<AuthState>()(
                 weightKg: metadata.weight,
                 gender: metadata.gender,
                 goal: metadata.goal,
+                age: metadata.age ?? null,
+                activityLevel: metadata.activityLevel ?? null,
+                targetWeightKg: metadata.targetWeightKg ?? metadata.weight,
+                macroProteinPct: null,
+                macroCarbsPct: null,
+                macroFatsPct: null,
               }
             });
           }
@@ -251,23 +293,40 @@ export const useAuthStore = create<AuthState>()(
         }
         set({ session: null, user: null, profile: null });
       },
-      updatePhysicalStats: async (heightCm, weightKg, goal) => {
+      updatePhysicalStats: async (
+        heightCm,
+        weightKg,
+        goal,
+        gender,
+        age,
+        activityLevel,
+        targetWeightKg,
+        macroProteinPct,
+        macroCarbsPct,
+        macroFatsPct
+      ) => {
         const userId = get().user?.id;
         const currentProfile = get().profile;
-        if (!userId || !currentProfile) return { message: 'Not logged in' };
+        if (!userId) return { message: 'Not logged in' };
 
         try {
           const localProfile = await upsertLocalProfile({
             user_id: userId,
-            full_name: currentProfile.fullName,
+            full_name: currentProfile?.fullName || get().user?.user_metadata?.full_name || null,
             height_cm: heightCm,
             weight_kg: weightKg,
-            gender: currentProfile.gender,
+            gender: gender !== undefined ? gender : (currentProfile?.gender || 'male'),
             goal,
+            age: age !== undefined ? age : (currentProfile?.age || 22),
+            activity_level: activityLevel !== undefined ? activityLevel : (currentProfile?.activityLevel || 'lightly_active'),
+            target_weight_kg: targetWeightKg !== undefined ? targetWeightKg : (currentProfile?.targetWeightKg || weightKg),
+            macro_protein_pct: macroProteinPct !== undefined ? macroProteinPct : (currentProfile?.macroProteinPct || null),
+            macro_carbs_pct: macroCarbsPct !== undefined ? macroCarbsPct : (currentProfile?.macroCarbsPct || null),
+            macro_fats_pct: macroFatsPct !== undefined ? macroFatsPct : (currentProfile?.macroFatsPct || null),
           });
 
           // Keep profile weight as a current-value cache; body_progress remains history.
-          if (currentProfile.weightKg !== weightKg) {
+          if (!currentProfile || currentProfile.weightKg !== weightKg) {
             await createBodyProgressLocal({
               user_id: userId,
               weight_kg: weightKg,
@@ -303,7 +362,7 @@ export const useAuthStore = create<AuthState>()(
 
           const { data, error } = await supabase
             .from('profiles')
-            .select('full_name, height_cm, goal, gender')
+            .select('full_name, height_cm, goal, gender, age, activity_level, target_weight_kg, macro_protein_pct, macro_carbs_pct, macro_fats_pct')
             .eq('id', userId)
             .maybeSingle();
 
@@ -342,6 +401,12 @@ export const useAuthStore = create<AuthState>()(
             weight_kg: remoteWeightKg,
             gender: normalizeGender(data.gender),
             goal: normalizeGoal(data.goal),
+            age: normalizeNumber(data.age),
+            activity_level: typeof data.activity_level === 'string' ? data.activity_level as ActivityLevel : null,
+            target_weight_kg: normalizeNumber(data.target_weight_kg),
+            macro_protein_pct: normalizeNumber(data.macro_protein_pct),
+            macro_carbs_pct: normalizeNumber(data.macro_carbs_pct),
+            macro_fats_pct: normalizeNumber(data.macro_fats_pct),
           });
 
           const finalLocalProfile = await getProfileByUser(userId) ?? safeProfile;

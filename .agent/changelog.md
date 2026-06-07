@@ -3,6 +3,153 @@
 **Format**: `[YYYY-MM-DD HH:MM +TZ] TYPE: description`
 
 ---
+### [2026-06-07 15:10 +0800] FIX: Supabase Profiles Schema Mismatch and Registration Sync Trigger
+- **Branch**: `jb-branch`
+- **Files Created**:
+  - `supabase/migrations/20260607090000_009_update_profiles_schema.sql`
+- **Changes**:
+  - ✅ **Database Schema Migration**: Created migration `009_update_profiles_schema.sql` to expand the remote Supabase `public.profiles` table with missing fields (`age`, `activity_level`, `target_weight_kg`, `macro_protein_pct`, `macro_carbs_pct`, `macro_fats_pct`).
+  - ✅ **Goal Constraint Mismatch**: Replaced the restrictive `profiles_goal_check` check constraint (which previously only permitted legacy goal strings) with an updated constraint supporting the newly introduced goal values (`moderate_cut`, `aggressive_cut`, `maintain`, `lean_bulk`).
+  - ✅ **Signup Trigger Optimization**: Refactored the `public.handle_new_user()` trigger function to correctly insert and upsert new profile attributes passed in through metadata on user registration.
+
+### [2026-06-07 15:00 +0800] FEAT: Sync Hydration and Sleep with SQLite and Training Calendar
+- **Branch**: `jb-branch`
+- **Files Modified**:
+  - `frontend/src/local/repositories/dailyLogsRepository.ts`
+  - `frontend/src/screens/dashboard/Food/SleepRecoveryCard.tsx`
+  - `frontend/src/screens/dashboard/Food/FoodTab.tsx`
+  - `frontend/src/screens/dashboard/Profile/ProfileTab.tsx`
+  - `frontend/src/screens/dashboard/Profile/subcomponents/FoodHistoryView.tsx`
+  - `frontend/src/screens/dashboard/Profile/subcomponents/TrainingCalendar.tsx`
+- **Changes**:
+  - ✅ **SQLite Querying**: Implemented `getDailyLogsByUser(userId)` inside `dailyLogsRepository.ts` to fetch daily records ordered by date descending.
+  - ✅ **Sleep Tracking Refactoring**: Updated `SleepRecoveryCard.tsx` to handle nullable bedtime and waketime states. Unset times show as `--:--` and compute to `0` sleep hours (representing untracked days).
+  - ✅ **FoodTab Auto-Save & Loading**: Added SQLite database loading for today's logs on mounting, and automated synchronization of hydration/sleep metric updates from `FoodTab.tsx` state back to `daily_logs` table.
+  - ✅ **Training Calendar Aggregation**: Extended `ProfileTab.tsx`'s history fetcher to load local daily logs and pass `historyDailyLogs` down to the calendar.
+  - ✅ **Calendar Dot Activity markers**: Refactored `TrainingCalendar.tsx` compact/expanded views so dates with logged water or sleep show activity dots and are clickable.
+  - ✅ **Dynamic Calendar Summary**: Replaced static details placeholder to show actual sleep duration and water intake.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors.
+
+### [2026-06-07 16:00 +0800] FEAT: Registration page macro goal alignment, error banners, date picker, and UX polish
+- **Branch**: `jb-branch`
+- **Files Modified**:
+  - `frontend/src/screens/auth/RegisterScreen.tsx`
+  - `frontend/src/screens/auth/LoginScreen.tsx`
+  - `frontend/src/store/authStore.ts`
+- **Files Created**:
+  - `frontend/src/components/common/AuthErrorBanner.tsx`
+  - `frontend/src/components/common/DatePickerSelect.tsx`
+- **Changes**:
+  - ✅ **Target Weight field**: Added optional target weight input to Registration's Physical Stats card (shares weight unit toggle, defaults to current weight). `target_weight_kg` now saved to Supabase profiles table and Zustand state, enabling Profile tab's "Time to Target" projections.
+  - ✅ **authStore enhanced**: `signUp()` now passes `age` and `activity_level` to `raw_user_meta_data`, saves `target_weight_kg` to profiles, and sets it in Zustand profile state.
+  - ✅ **Inline Error Banners**: Replaced disruptive `Alert.alert()` calls on both Login and Register screens with styled inline `AuthErrorBanner` component (4 variants: error/warning/success/info, dismissible, optional action links). Smart error message mapping for duplicate email, invalid credentials, network errors, email not confirmed.
+  - ✅ **Success flow**: Registration shows green "✓ Account Created!" button state for 2s then auto-navigates to Login screen.
+  - ✅ **Three-segment Date Picker**: Replaced free-text birthdate TextInput with `DatePickerSelect` — tappable Month / Day / Year chips that open a modal with scrollable FlatList. Day options dynamically computed per month, auto-clamp for Feb leap years.
+  - ✅ **Password visibility toggles**: Added Eye/EyeOff buttons to Password and Confirm Password fields (independent state per field).
+  - ✅ **Beginner-friendly labels**: Goal selector uses friendly names ("Fat Loss", "Rapid Fat Loss", "Stay Fit", "Build Muscle"). Activity level buttons now show short descriptions ("Little/no exercise", "1–3 days/week", etc.).
+  - ✅ **Field labels**: Added top-left "Full Name", "Email Address", "Password", "Confirm Password" labels above inputs on Register screen, and "Email Address", "Password" labels on Login screen.
+  - ✅ **Tighter validation**: Height/weight now validated as positive numbers via Zod `refine`.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors in modified files.
+### [2026-06-07 14:38 +0800] FIX: Compile backend and fix local SQLite default meal_id
+- **Branch**: `jb-branch`
+- **Files Modified**:
+  - `frontend/src/local/migrations.ts`
+  - `backend/dist/services/diet.service.js` (Compiled output)
+  - `.agent/errors.md`
+  - `.agent/changelog.md`
+- **Changes**:
+  - ✅ **Backend Compilation**: Ran `npm run build` in the backend directory to compile the updated `diet.service.ts` typescript logic containing the `meal_id` fallback fix. The previous `dist/` build completely omitted `meal_id` from the Supabase insert query, forcing Supabase to incorrectly apply its `'snack'` default.
+  - ✅ **Local SQLite Default**: Replaced `DEFAULT 'snack'` with `DEFAULT 'breakfast'` for the `meal_id` column in the local SQLite schema creation script (`frontend/src/local/migrations.ts`) to completely eradicate the "Snack Default Bias" (ERR-009).
+  - **Build**: ✅ Checked with `npm run build` in backend yielding successful compilation.
+
+### [2026-06-07 14:15 +0800] FIX: Resolve mealId defaults, reorder Daily Targets, and fix Android 403/colors
+- **Branch**: `jb-branch`
+- **Files Modified**:
+  - `frontend/src/screens/dashboard/Profile/ProfileTab.tsx`
+  - `frontend/src/screens/dashboard/Food/FoodTab.tsx`
+  - `frontend/src/screens/dashboard/Food/LoggedItemDetailsModal.tsx`
+  - `frontend/src/local/dietLogsMapper.ts`
+  - `frontend/src/local/repositories/dietLogsRepository.ts`
+  - `frontend/src/lib/api.ts`
+  - `.agent/errors.md`
+  - `.agent/context.md`
+- **Changes**:
+  - ✅ **Profile Layout Update**: Moved the `Daily Targets Card` to be positioned directly above the `Physical Stats Card` in `ProfileTab.tsx` per user request.
+  - ✅ **Meal ID Fallback Fix**: Changed default fallback `meal_id` from `'snack'` to `'breakfast'` across `FoodTab.tsx`, `LoggedItemDetailsModal.tsx`, `dietLogsMapper.ts`, and `dietLogsRepository.ts` to prevent unexpected overwriting of local breakfast entries during remote sync.
+  - ✅ **Meal ID Warnings**: Added console warnings when normalizing invalid or null `meal_id` inputs in repositories and mappers.
+  - ✅ **Android API Host IP Update**: Changed hardcoded host IP from `192.168.100.5` to `192.168.101.73` in `frontend/src/lib/api.ts` to match the development machine's active network IP. This resolved the `403 Forbidden` errors returned from the incorrect local gateway.
+  - ✅ **Profile UI Color Alignment**: Refactored hardcoded colors (`#10b981`, `#f97316`, `#3b82f6`) in `ProfileTab.tsx` to align with the core blue theme palette (`Colors.primaryContainer`, `Colors.primary`, `Colors.proteinAccent`) for maintenance, deficit, and surplus goal visualizers.
+  - ✅ **Macro Targets Grid & Sliders**: Updated Carbs/Fats target item icons and macro adjustment sliders (Protein/Carbs/Fats segments and control colors) to use unified blue tokens from `Colors`.
+  - **Build**: ✅ Typecheck successful — 0 type errors.
+
+### [2026-06-07 22:00 +0800] STYLE: Compact calendar card container + centered "Fitness Journey" header
+- **Branch**: `jb-branch`
+- **Commit**: `6ecdeda`
+- **Files Modified**:
+  - `frontend/src/screens/dashboard/Profile/subcomponents/TrainingCalendar.tsx`
+  - `frontend/src/screens/dashboard/Profile/hooks/useProfileStats.ts`
+- **Changes**:
+  - ✅ **Card Container for Unexpanded View**: Compact week grid now wrapped in `compactCard` matching the app's card theme (`surfaceContainerLowest`, `radius.lg`, border+shadow) — consistent with every other card on the Profile tab.
+  - ✅ **Centered Header Layout**: Three-column header with nav arrows + calendar icon on the left (`‹ 📅 ›`), "Fitness Journey" title centered, "View All" + chevron on the right.
+  - ✅ **Week Navigation**: Added `weekOffset` state with prev/next arrows for browsing past/future weeks in compact mode. Days computed from `historyWorkouts`/`historyDietLogs` with fallback to `days` prop.
+  - ✅ **Weekday Labels Row**: Su–Sa labels above the day grid in muted `Colors.outline`.
+  - ✅ **Redesigned Day Cells**: Light blue-tinted background (`surfaceContainerLow`), centered date number, blue activity dot below, today highlighted with `Colors.primary` border.
+  - ✅ **Removed Workout Name Badges**: Compact view now shows clean date + dot — workout names omitted for visual clarity.
+  - ✅ **Type Safety**: Added optional `hasActivity?` field to `CalendarDay` interface.
+  - ✅ **Dead Code Removal**: Removed unused `getWorkoutStyle()`, `WorkoutStyle` interface, `weekCardWidth` computation, old day card styles.
+  - ✅ **Expanded Mode Unchanged**: Expanded month view retains its existing dedicated header and full functionality.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors
+
+### [2026-06-07 17:45 +0800] STYLE: TrainingCalendar visual overhaul — 2-row week grid, themed history container, weekday labels
+- **Branch**: `jb-branch`
+- **Commit**: `d826d0a`
+- **Files Modified**:
+  - `frontend/src/screens/dashboard/Profile/subcomponents/TrainingCalendar.tsx`
+- **Changes**:
+  - ✅ **2-Row Week Grid**: Replaced horizontal `ScrollView` with `flexWrap` grid — 4 cards top row, 3 cards bottom row. Cards are more compact (minHeight 72, reduced padding/typography, flatter no-shadow design).
+  - ✅ **Dynamic Card Sizing**: Both week cards and expanded grid cells calculated from `useWindowDimensions` for consistent layout across screen sizes.
+  - ✅ **Themed History Container**: Expanded month view now wrapped in a `historyCard` matching the app's card theme (`surfaceContainerLowest`, `radius.lg`, subtle border+shadow).
+  - ✅ **3-Letter Weekday Headers**: Expanded grid weekday row uses `Sun Mon Tue Wed Thu Fri Sat` instead of single letters, with `gap` alignment matching the grid below.
+  - ✅ **Detail Panel Refinements**: Section dividers between Food/Workouts/Sleep/Water, bullet dots replacing dash prefixes on list items, italicized "no data" placeholders.
+  - ✅ **View Details Button**: Solid `Colors.primary` fill, left-aligned, subtle blue shadow for emphasis.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors
+
+### [2026-06-07 16:30 +0800] REFACTOR: History feature — TrainingCalendar now expands in-place instead of appending separate card
+- **Branch**: `jb-branch`
+- **Files Modified**:
+  - `frontend/src/screens/dashboard/Profile/subcomponents/TrainingCalendar.tsx`
+  - `frontend/src/screens/dashboard/Profile/ProfileTab.tsx`
+- **Changes**:
+  - ✅ **In-place expansion**: TrainingCalendar now manages its own expanded/collapsed state internally. "View All" swaps the compact week scroll for a full month grid within the same component — no separate card appended below.
+  - ✅ **Month navigation**: Prev/next arrows, day grid with activity dots, and date detail panel (meals, workouts, sleep, water) moved into TrainingCalendar.
+  - ✅ **Dead code removed**: Deleted ~160 lines of duplicated historyCard JSX + styles from ProfileTab. Removed stale history state (`isHistoryOpen`, `historyMonthOffset`, `selectedHistoryDate`, all derived values and handlers).
+  - ✅ **Props passed down**: `historyWorkouts`, `historyDietLogs`, `historyLoading`, `historyError` passed from ProfileTab to TrainingCalendar.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors
+
+### [2026-06-07 11:30 +0800] REFACTOR: Phase 2 TDEE & Macro Engine code review fixes + goal consolidation
+- **Branch**: `jb-branch`
+- **Files Modified**:
+  - `frontend/src/screens/dashboard/types.ts`
+  - `frontend/src/utils/macroCalculator.ts`
+  - `frontend/src/screens/dashboard/Profile/ProfileTab.tsx`
+  - `frontend/src/screens/auth/RegisterScreen.tsx`
+  - `frontend/src/store/authStore.ts`
+  - `frontend/src/screens/dashboard/DashboardScreen.tsx`
+  - `frontend/src/local/repositories/profilesRepository.ts`
+  - `AGENT.md`
+  - `.agent/changelog.md`
+  - `.agent/context.md`
+- **Changes**:
+  - ✅ **Goal Consolidation**: Removed vague goals (`lose_weight`, `build_muscle`). Now 4 specific goals: `moderate_cut` (-500), `aggressive_cut` (-750), `maintain` (0), `lean_bulk` (+300). Updated all consumers.
+  - ✅ **Gender-Aware Calorie Floor**: Min calories now 1500 (male) / 1200 (female) per NIH guidelines.
+  - ✅ **Minimum Fat Floor**: Custom macros enforce 0.5g/kg dietary fat minimum for hormone function.
+  - ✅ **Goal-Adaptive Protein**: Scales by goal: 1.0g/lb (aggressive cut), 0.85g/lb (moderate cut), 0.8g/lb (otherwise).
+  - ✅ **Shared TDEE**: Extracted `calculateTDEE()` to `macroCalculator.ts`. Removed duplicated BMR/TDEE from `ProfileTab.tsx`.
+  - ✅ **Debug Panel Removed**: Stripped debug logs from production ProfileTab edit modal.
+  - ✅ **Save Confirmation**: Added alert after successful profile stat save.
+  - ✅ **Live Macro Gram Preview**: Custom macro sliders now show computed grams in real-time.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors
+
 ### [2026-05-30 18:10 +0800] DOCS: LFM2.5 migration plan and .agent alignment
 - **Branch**: (not committed yet)
 - **Files Modified**:

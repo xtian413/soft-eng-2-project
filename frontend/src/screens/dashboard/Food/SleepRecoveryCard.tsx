@@ -5,20 +5,22 @@ import { Colors } from '@/theme/colors';
 import { fontWeight, radius, spacing, typography } from '@/theme/typography';
 
 interface SleepRecoveryCardProps {
-  bedtime: string;
-  setBedtime: (val: string) => void;
-  waketime: string;
-  setWaketime: (val: string) => void;
+  bedtime: string | null;
+  setBedtime: (val: string | null) => void;
+  waketime: string | null;
+  setWaketime: (val: string | null) => void;
   triggerToast: (msg: string) => void;
+  readOnly?: boolean;
 }
 
-export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, triggerToast }: SleepRecoveryCardProps) {
+export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, triggerToast, readOnly = false }: SleepRecoveryCardProps) {
   const [activeTimePicker, setActiveTimePicker] = useState<'bed' | 'wake' | null>(null);
   const [pickerHour, setPickerHour] = useState(12);
   const [pickerMinute, setPickerMinute] = useState(0);
   const [pickerPeriod, setPickerPeriod] = useState<'AM' | 'PM'>('PM');
 
   const sleepHours = useMemo(() => {
+    if (!bedtime || !waketime) return 0;
     try {
       const [bh, bm] = bedtime.split(':').map(Number);
       const [wh, wm] = waketime.split(':').map(Number);
@@ -26,11 +28,19 @@ export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, 
       if (diffMins < 0) diffMins += 24 * 60;
       return Number((diffMins / 60).toFixed(1));
     } catch {
-      return 8.0;
+      return 0;
     }
   }, [bedtime, waketime]);
 
   const sleepMetrics = useMemo(() => {
+    if (sleepHours === 0) {
+      return {
+        sleepQuality: 'Not Logged',
+        sleepQualityColor: Colors.outline,
+        cycles: 0,
+        cyclesFeedback: 'Tap bedtime or wakeup to log sleep',
+      };
+    }
     let sleepQuality = 'Optimal';
     let sleepQualityColor: string = Colors.primary;
     if (sleepHours < 6) {
@@ -50,7 +60,8 @@ export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, 
     return { sleepQuality, sleepQualityColor, cycles, cyclesFeedback };
   }, [sleepHours]);
 
-  const formatTo12Hour = (time24: string) => {
+  const formatTo12Hour = (time24: string | null) => {
+    if (!time24) return '--:--';
     try {
       const [hourText, minuteText] = time24.split(':');
       const hour = Number(hourText);
@@ -64,7 +75,8 @@ export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, 
 
   const openTimePicker = (type: 'bed' | 'wake') => {
     const timeVal = type === 'bed' ? bedtime : waketime;
-    const [hour24, minute] = timeVal.split(':').map(Number);
+    const fallbackTime = type === 'bed' ? '22:00' : '07:00';
+    const [hour24, minute] = (timeVal || fallbackTime).split(':').map(Number);
     const period = hour24 >= 12 ? 'PM' : 'AM';
     setPickerHour(hour24 % 12 === 0 ? 12 : hour24 % 12);
     setPickerMinute(minute || 0);
@@ -92,7 +104,8 @@ export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, 
 
   const adjustTime = (type: 'bed' | 'wake', amountMinutes: number) => {
     const timeStr = type === 'bed' ? bedtime : waketime;
-    const [hour, minute] = timeStr.split(':').map(Number);
+    const fallbackTime = type === 'bed' ? '22:00' : '07:00';
+    const [hour, minute] = (timeStr || fallbackTime).split(':').map(Number);
     let totalMins = hour * 60 + minute + amountMinutes;
     if (totalMins < 0) totalMins += 24 * 60;
     totalMins %= 24 * 60;
@@ -120,39 +133,55 @@ export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, 
         {sleepMetrics.cyclesFeedback} · Target: 8.0 hrs
       </Text>
 
-      <View style={styles.sleepSteppersContainer}>
-        <View style={styles.sleepStepperCol}>
-          <Text style={styles.sleepStepperLabel}>Bedtime</Text>
-          <TouchableOpacity style={styles.sleepTimeDisplayRowPressable} onPress={() => openTimePicker('bed')} activeOpacity={0.75}>
-            <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(bedtime)}</Text>
-            <Edit2 size={14} color="#0ea5e9" style={styles.sleepTimeEditIcon} />
-          </TouchableOpacity>
-          <View style={styles.stepperActionRow}>
-            <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('bed', -30)} activeOpacity={0.75}>
-              <Text style={styles.stepperBtnText}>-30m</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('bed', 30)} activeOpacity={0.75}>
-              <Text style={styles.stepperBtnText}>+30m</Text>
-            </TouchableOpacity>
+      {readOnly ? (
+        <View style={styles.sleepSteppersContainer}>
+          <View style={styles.sleepStepperCol}>
+            <Text style={styles.sleepStepperLabel}>Bedtime</Text>
+            <View style={styles.sleepTimeDisplayRowPressable}>
+              <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(bedtime)}</Text>
+            </View>
+          </View>
+          <View style={styles.sleepStepperCol}>
+            <Text style={styles.sleepStepperLabel}>Wakeup</Text>
+            <View style={styles.sleepTimeDisplayRowPressable}>
+              <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(waketime)}</Text>
+            </View>
           </View>
         </View>
-
-        <View style={styles.sleepStepperCol}>
-          <Text style={styles.sleepStepperLabel}>Wakeup</Text>
-          <TouchableOpacity style={styles.sleepTimeDisplayRowPressable} onPress={() => openTimePicker('wake')} activeOpacity={0.75}>
-            <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(waketime)}</Text>
-            <Edit2 size={14} color="#0ea5e9" style={styles.sleepTimeEditIcon} />
-          </TouchableOpacity>
-          <View style={styles.stepperActionRow}>
-            <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('wake', -30)} activeOpacity={0.75}>
-              <Text style={styles.stepperBtnText}>-30m</Text>
+      ) : (
+        <View style={styles.sleepSteppersContainer}>
+          <View style={styles.sleepStepperCol}>
+            <Text style={styles.sleepStepperLabel}>Bedtime</Text>
+            <TouchableOpacity style={styles.sleepTimeDisplayRowPressable} onPress={() => openTimePicker('bed')} activeOpacity={0.75}>
+              <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(bedtime)}</Text>
+              <Edit2 size={14} color="#0ea5e9" style={styles.sleepTimeEditIcon} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('wake', 30)} activeOpacity={0.75}>
-              <Text style={styles.stepperBtnText}>+30m</Text>
+            <View style={styles.stepperActionRow}>
+              <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('bed', -30)} activeOpacity={0.75}>
+                <Text style={styles.stepperBtnText}>-30m</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('bed', 30)} activeOpacity={0.75}>
+                <Text style={styles.stepperBtnText}>+30m</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <View style={styles.sleepStepperCol}>
+            <Text style={styles.sleepStepperLabel}>Wakeup</Text>
+            <TouchableOpacity style={styles.sleepTimeDisplayRowPressable} onPress={() => openTimePicker('wake')} activeOpacity={0.75}>
+              <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(waketime)}</Text>
+              <Edit2 size={14} color="#0ea5e9" style={styles.sleepTimeEditIcon} />
             </TouchableOpacity>
+            <View style={styles.stepperActionRow}>
+              <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('wake', -30)} activeOpacity={0.75}>
+                <Text style={styles.stepperBtnText}>-30m</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('wake', 30)} activeOpacity={0.75}>
+                <Text style={styles.stepperBtnText}>+30m</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
+      )}
 
       <View style={styles.sleepBarRow}>
         <View style={styles.sleepProgressBg}>
@@ -166,7 +195,7 @@ export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, 
         <Text style={styles.sleepGoalLabelText}>{Math.round((sleepHours / 8) * 100)}% of Goal</Text>
       </View>
 
-      {sleepHours < 6 && (
+      {sleepHours > 0 && sleepHours < 6 && (
         <View style={styles.sleepWarningRow}>
           <Info size={14} color={Colors.error} style={styles.warningIcon} />
           <Text style={styles.sleepWarningText}>Sleep is under 6h. Recovery may be impaired today.</Text>

@@ -88,7 +88,7 @@ const MIGRATIONS: Migration[] = [
       `CREATE TABLE IF NOT EXISTS ${LOCAL_TABLES.dietLogs} (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
-        meal_id TEXT NOT NULL DEFAULT 'snack',
+        meal_id TEXT NOT NULL DEFAULT 'breakfast',
         meal_name TEXT NOT NULL,
         calories REAL,
         protein_g REAL,
@@ -286,7 +286,7 @@ const MIGRATIONS: Migration[] = [
 
       if (!hasMealId) {
         await db.execAsync(
-          `ALTER TABLE ${LOCAL_TABLES.dietLogs} ADD COLUMN meal_id TEXT NOT NULL DEFAULT 'snack'`
+          `ALTER TABLE ${LOCAL_TABLES.dietLogs} ADD COLUMN meal_id TEXT NOT NULL DEFAULT 'breakfast'`
         );
       }
     },
@@ -325,6 +325,59 @@ const MIGRATIONS: Migration[] = [
       await db.execAsync(
         `CREATE INDEX IF NOT EXISTS idx_ai_insights_user_snapshot ON ${LOCAL_TABLES.aiInsights}(user_id, data_snapshot_hash)`
       );
+    },
+  },
+  {
+    version: 8,
+    name: 'create_daily_logs_table',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS ${LOCAL_TABLES.dailyLogs} (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        remote_id TEXT,
+        date TEXT NOT NULL,
+        bedtime TEXT,
+        waketime TEXT,
+        sleep_hours REAL,
+        water_ml REAL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        deleted_at TEXT,
+        sync_status TEXT NOT NULL DEFAULT 'pending' CHECK (sync_status IN ('pending', 'synced', 'failed')),
+        last_synced_at TEXT,
+        UNIQUE(user_id, date)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_daily_logs_user_id ON ${LOCAL_TABLES.dailyLogs}(user_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_daily_logs_date ON ${LOCAL_TABLES.dailyLogs}(date)`,
+      `CREATE INDEX IF NOT EXISTS idx_daily_logs_user_date ON ${LOCAL_TABLES.dailyLogs}(user_id, date)`,
+      `CREATE INDEX IF NOT EXISTS idx_daily_logs_sync_status ON ${LOCAL_TABLES.dailyLogs}(sync_status)`,
+      `CREATE INDEX IF NOT EXISTS idx_daily_logs_deleted_at ON ${LOCAL_TABLES.dailyLogs}(deleted_at)`,
+    ],
+  },
+  {
+    version: 9,
+    name: 'expand_profile_goal_system',
+    apply: async (db) => {
+      const columns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${LOCAL_TABLES.profiles})`
+      );
+      const ensureColumn = async (columnName: string, definition: string) => {
+        const hasColumn = columns.some((column) => column.name === columnName);
+        if (!hasColumn) {
+          await db.execAsync(`ALTER TABLE ${LOCAL_TABLES.profiles} ADD COLUMN ${columnName} ${definition}`);
+        }
+      };
+
+      await ensureColumn('age', 'INTEGER');
+      await ensureColumn('activity_level', 'TEXT');
+      await ensureColumn('target_weight_kg', 'REAL');
+      await ensureColumn('macro_protein_pct', 'REAL');
+      await ensureColumn('macro_carbs_pct', 'REAL');
+      await ensureColumn('macro_fats_pct', 'REAL');
+
+      // Migrate legacy goal values to new goal types
+      await db.execAsync(`UPDATE ${LOCAL_TABLES.profiles} SET goal = 'moderate_cut' WHERE goal = 'lose_weight'`);
+      await db.execAsync(`UPDATE ${LOCAL_TABLES.profiles} SET goal = 'lean_bulk' WHERE goal = 'build_muscle'`);
     },
   },
 ];

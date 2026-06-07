@@ -408,3 +408,26 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:3000
 ```
 
 > Use `EXPO_PUBLIC_` prefix for all Expo env vars that need to be accessible in the app bundle.
+
+---
+
+## 11. Profile Page Refactor Plan
+
+Refactor the Profile tab into a full-featured athlete dashboard with interactive date-based history, weight logging, TDEE-driven calorie goals, and macro ratio customization.
+
+### Resolved Decisions
+- **Age:** Add an age input to the profile settings.
+- **Units:** Toggleable kg/lb, cm/in across the profile dashboard (NOT YET IMPLEMENTED).
+- **Protein target:** 0.8g per lb of body weight as the default optimal target, scaled per goal (1.0g/lb for aggressive cut, 0.85g/lb for moderate cut).
+- **Goal consolidation (2026-06-07):** Removed vague goals (`lose_weight`, `build_muscle`) in favor of 4 specific goals: `moderate_cut`, `aggressive_cut`, `maintain`, `lean_bulk`. Calorie offsets: -500, -750, 0, +300 kcal.
+- **Safety floors:** Gender-aware minimum calories (1500 male, 1200 female). Minimum dietary fat floor (0.5g/kg) enforced even in custom macro mode.
+- **Shared TDEE:** `calculateTDEE()` extracted to `macroCalculator.ts` — single source of truth for BMR/TDEE (Mifflin-St Jeor).
+
+### Refactor Phases
+- **Phase 1: Data Foundation & Schema Expansion (COMPLETED)** — SQLite schema changes (`daily_logs` table), expanded profile fields (`age`, `activity_level`, `target_weight_kg`, etc.), goal migration.
+- **Phase 2: TDEE & Macro Engine (COMPLETED)** — Mifflin-St Jeor TDEE formulas via shared `calculateTDEE()`, macro ratio sliders with live gram preview, goal-adaptive protein scaling, gender-aware calorie floor, minimum fat floor, custom macro mode with real-time gram preview, save confirmation feedback.
+- **Phase 3: Weight Logger & Calendar (COMPLETED)** — `WeightTrendCard` with gifted-charts line chart, delta badges. Interactive `HistoryCalendar` with month navigation, day grid with activity dots, date-tap detail panels for workouts, meals, sleep, water.
+- **Phase 4: Calorie & Macro Goal Card (COMPLETED)** — Calorie & Goal Visualizer card with BMR→TDEE→target bar, deficit/surplus badge, weekly weight change estimation, time-to-target projection.
+- **Phase 5: FoodTab Persistence** — Save and load sleep/water logs to/from SQLite `daily_logs` table. NOT YET IMPLEMENTED — sleep/water currently transient React state.
+- **Phase 6: Unit Toggling** — Toggleable kg/lb, cm/in across the profile dashboard. NOT YET IMPLEMENTED.
+

@@ -1,6 +1,14 @@
 /** Shared types for the Dashboard tab screens matching web pages model */
 
-export type GoalKey = 'build_muscle' | 'lose_weight' | 'maintain';
+export type GoalKey = 'moderate_cut' | 'aggressive_cut' | 'maintain' | 'lean_bulk';
+
+export type ActivityLevel = 'sedentary' | 'lightly_active' | 'moderately_active' | 'very_active' | 'extremely_active';
+
+export interface MacroRatios {
+  proteinPct: number;
+  carbsPct: number;
+  fatsPct: number;
+}
 
 export interface MacroTargets {
   calories: number;
@@ -9,11 +17,59 @@ export interface MacroTargets {
   fats: number;
 }
 
-export const GOAL_TARGETS: Record<GoalKey, MacroTargets> = {
-  build_muscle: { calories: 2300, protein: 150, carbs: 200, fats: 65 },
-  lose_weight:  { calories: 2000, protein: 130, carbs: 180, fats: 50 },
-  maintain:     { calories: 2400, protein: 140, carbs: 190, fats: 60 },
+export const GOAL_LABELS: Record<GoalKey, string> = {
+  moderate_cut:   'Moderate Cut',
+  aggressive_cut: 'Aggressive Cut',
+  maintain:       'Maintain',
+  lean_bulk:      'Lean Bulk',
 };
+
+export const GOAL_TARGETS: Record<GoalKey, MacroTargets> = {
+  moderate_cut:   { calories: 2000, protein: 130, carbs: 180, fats: 50 },
+  aggressive_cut: { calories: 1500, protein: 130, carbs: 120, fats: 40 },
+  maintain:       { calories: 2400, protein: 140, carbs: 190, fats: 60 },
+  lean_bulk:      { calories: 2700, protein: 150, carbs: 250, fats: 70 },
+};
+
+export interface MacroPreset {
+  key: string;
+  label: string;
+  description: string;
+  ratios: MacroRatios;
+}
+
+export const MACRO_PRESETS: MacroPreset[] = [
+  {
+    key: 'balanced',
+    label: 'Balanced',
+    description: 'All-purpose default split',
+    ratios: { proteinPct: 30, carbsPct: 40, fatsPct: 30 },
+  },
+  {
+    key: 'high_protein',
+    label: 'High Protein',
+    description: 'Muscle building & satiety',
+    ratios: { proteinPct: 40, carbsPct: 30, fatsPct: 30 },
+  },
+  {
+    key: 'low_carb',
+    label: 'Low Carb',
+    description: 'Fat loss focus',
+    ratios: { proteinPct: 35, carbsPct: 20, fatsPct: 45 },
+  },
+  {
+    key: 'ketogenic',
+    label: 'Ketogenic',
+    description: 'Very low carb, high fat',
+    ratios: { proteinPct: 25, carbsPct: 5, fatsPct: 70 },
+  },
+  {
+    key: 'endurance',
+    label: 'Endurance',
+    description: 'Higher carbs for performance',
+    ratios: { proteinPct: 20, carbsPct: 60, fatsPct: 20 },
+  },
+];
 
 export type MealId = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 

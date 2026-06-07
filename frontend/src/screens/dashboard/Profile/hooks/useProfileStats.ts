@@ -23,6 +23,7 @@ export interface CalendarDay {
   workoutType: string; // 'push'|'pull'|'legs'|'rest'|'other'|'empty'
   isToday: boolean;
   isClickable: boolean;
+  hasActivity?: boolean;
 }
 
 export interface ProfileStats {

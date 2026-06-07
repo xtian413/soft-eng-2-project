@@ -19,13 +19,13 @@ const getBaseUrl = () => {
   if (envUrl) {
     // Replace 'localhost' in the env var with the correct Android host automatically.
     if (Platform.OS === 'android' && envUrl.includes('localhost')) {
-      return envUrl.replace('localhost', '192.168.100.5');
+      return envUrl.replace('localhost', '192.168.101.73');
     }
     return envUrl;
   }
   // No env var set — apply the same platform logic to the hardcoded fallback.
   if (Platform.OS === 'android') {
-    return 'http://192.168.100.5:3000';
+    return 'http://192.168.101.73:3000';
   }
   return 'http://localhost:3000';
 };

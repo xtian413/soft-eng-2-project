@@ -67,7 +67,7 @@ export async function createDietLog(userId: string, input: DietLogCreateInput) {
     .from('diet_logs')
     .insert({
       user_id: userId,
-      meal_id: input.meal_id ?? 'snack',
+      meal_id: input.meal_id ?? 'breakfast',
       meal_name: input.meal_name,
       calories: input.calories ?? null,
       protein_g: input.protein_g ?? null,

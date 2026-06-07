@@ -33,6 +33,12 @@ export async function syncProfileToRemote(userId: string): Promise<boolean> {
         height_cm: localProfile.height_cm,
         goal: localProfile.goal,
         gender: localProfile.gender,
+        age: localProfile.age,
+        activity_level: localProfile.activity_level,
+        target_weight_kg: localProfile.target_weight_kg,
+        macro_protein_pct: localProfile.macro_protein_pct,
+        macro_carbs_pct: localProfile.macro_carbs_pct,
+        macro_fats_pct: localProfile.macro_fats_pct,
       })
       .eq('id', userId);
 

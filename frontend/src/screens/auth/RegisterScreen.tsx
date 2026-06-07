@@ -4,7 +4,6 @@ import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { Controller, useForm } from 'react-hook-form';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -23,13 +22,40 @@ import {
   User,
   Mail,
   Lock,
+  Eye,
+  EyeOff,
   Ruler,
   TrendingDown,
   Dumbbell,
   Activity,
   Check,
   ChevronLeft,
+  Calendar,
 } from 'lucide-react-native';
+import { type ActivityLevel, type GoalKey, GOAL_LABELS } from '@/screens/dashboard/types';
+import { AuthErrorBanner } from '@/components/common/AuthErrorBanner';
+import type { BannerVariant } from '@/components/common/AuthErrorBanner';
+import { DatePickerSelect } from '@/components/common/DatePickerSelect';
+
+/** Friendlier goal labels for the registration screen — keeps the shared GOAL_LABELS clean. */
+const REGISTER_GOAL_LABELS: Record<GoalKey, string> = {
+  moderate_cut: 'Fat Loss',
+  aggressive_cut: 'Rapid Fat Loss',
+  maintain: 'Stay Fit',
+  lean_bulk: 'Build Muscle',
+};
+
+const REGISTER_GOAL_DESCS: Record<GoalKey, string> = {
+  moderate_cut: 'Lose ~0.5 kg/week — moderate deficit',
+  aggressive_cut: 'Lose ~0.75 kg/week — stricter deficit',
+  maintain: 'Keep your current weight',
+  lean_bulk: 'Gain ~0.25 kg/week — light surplus',
+};
+
+const isNumericPositive = (v: string) => {
+  const n = parseFloat(v);
+  return !isNaN(n) && n > 0;
+};
 
 const schema = z
   .object({
@@ -37,8 +63,13 @@ const schema = z
     email: z.string().email('Enter a valid email address'),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     confirmPassword: z.string().min(6, 'Please confirm your password'),
-    height: z.string().min(1, 'Height is required'),
-    weight: z.string().min(1, 'Weight is required'),
+    birthdate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format').refine(date => !isNaN(Date.parse(date)), 'Invalid date'),
+    height: z.string().refine(isNumericPositive, 'Enter a valid height'),
+    weight: z.string().refine(isNumericPositive, 'Enter a valid weight'),
+    targetWeight: z.string().optional().refine(
+      (v) => !v || v.trim() === '' || isNumericPositive(v),
+      'Enter a valid target weight'
+    ),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match',
@@ -57,8 +88,16 @@ export default function RegisterScreen() {
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
-  const [goal, setGoal] = useState<'lose_weight' | 'build_muscle' | 'maintain'>('lose_weight');
+  const [goal, setGoal] = useState<GoalKey>('moderate_cut');
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel>('sedentary');
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Inline error/success banner state
+  const [bannerMessage, setBannerMessage] = useState<string | null>(null);
+  const [bannerType, setBannerType] = useState<BannerVariant>('error');
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const {
     control,
@@ -66,20 +105,34 @@ export default function RegisterScreen() {
     formState: { errors, isSubmitting },
   } = useForm<RegisterForm>({
     resolver: zodResolver(schema),
-    defaultValues: { fullName: '', email: '', password: '', confirmPassword: '', height: '', weight: '' },
+    defaultValues: { fullName: '', email: '', password: '', confirmPassword: '', birthdate: '', height: '', weight: '', targetWeight: '' },
   });
 
   const onSubmit = async (values: RegisterForm) => {
+    // Clear any previous banner
+    setBannerMessage(null);
+
     if (!termsAccepted) {
-      Alert.alert('Terms and Conditions', 'You must accept the Terms & Conditions to proceed.');
+      setBannerType('warning');
+      setBannerMessage('Please accept the Terms & Conditions to proceed.');
       return;
     }
 
     // Convert stats to metric equivalents to match Supabase database schema
     const parsedHeight = parseFloat(values.height);
     const parsedWeight = parseFloat(values.weight);
+    const parsedTargetWeight = values.targetWeight ? parseFloat(values.targetWeight) : parsedWeight;
     const heightCm = heightUnit === 'cm' ? parsedHeight : parsedHeight * 30.48;
     const weightKg = weightUnit === 'kg' ? parsedWeight : parsedWeight * 0.45359237;
+    const targetWeightKg = weightUnit === 'kg' ? parsedTargetWeight : parsedTargetWeight * 0.45359237;
+
+    const birthDateObj = new Date(values.birthdate);
+    const today = new Date();
+    let age = today.getFullYear() - birthDateObj.getFullYear();
+    const m = today.getMonth() - birthDateObj.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDateObj.getDate())) {
+      age--;
+    }
 
     const error = await signUp(values.email, values.password, {
       fullName: values.fullName,
@@ -87,23 +140,40 @@ export default function RegisterScreen() {
       weight: weightKg,
       gender,
       goal,
+      age,
+      activityLevel,
+      targetWeightKg,
     });
 
     if (error) {
-      Alert.alert('Sign up failed', error.message);
+      // Map common Supabase error messages to user-friendly text
+      const msg = error.message.toLowerCase();
+      if (msg.includes('already registered') || msg.includes('duplicate') || msg.includes('already exists')) {
+        setBannerType('info');
+        setBannerMessage('This email is already registered. Try logging in instead.');
+      } else if (msg.includes('network') || msg.includes('fetch') || msg.includes('connect')) {
+        setBannerType('warning');
+        setBannerMessage('No internet connection. Please check your network and try again.');
+      } else if (msg.includes('password')) {
+        setBannerType('error');
+        setBannerMessage(error.message);
+      } else {
+        setBannerType('error');
+        setBannerMessage(error.message || 'Something went wrong. Please try again.');
+      }
       return;
     }
 
-    if (Platform.OS === 'web') {
-      window.alert(`Welcome to Gemi! Your physical profile (Goal: ${goal.replace('_', ' ')}) has been set up successfully.`);
+    // Success — show inline success banner, then auto-navigate
+    setIsSuccess(true);
+    setBannerType('success');
+    setBannerMessage(`Account created! Welcome to Gemi (Goal: ${GOAL_LABELS[goal]}).`);
+
+    setTimeout(() => {
+      setIsSuccess(false);
+      setBannerMessage(null);
       navigation.navigate('Login');
-    } else {
-      Alert.alert(
-        'Account Created',
-        `Welcome to Gemi! Your physical profile (Goal: ${goal.replace('_', ' ')}) has been set up successfully.`,
-        [{ text: 'Start Journey', onPress: () => navigation.navigate('Login') }]
-      );
-    }
+    }, 2000);
   };
 
   const Container = Platform.OS === 'web' ? View : KeyboardAvoidingView;
@@ -155,10 +225,21 @@ export default function RegisterScreen() {
         </View>
 
         <View style={styles.formContainer}>
+          {/* Inline error/success banner (replaces Alert.alert) */}
+          <AuthErrorBanner
+            message={bannerMessage}
+            type={bannerType}
+            onDismiss={() => setBannerMessage(null)}
+            action={bannerType === 'info' && bannerMessage?.includes('already registered')
+              ? { label: 'Go to Login', onPress: () => navigation.navigate('Login') }
+              : undefined}
+          />
           {/* Full Name */}
-          <View style={styles.inputWrapper}>
-            <User size={18} color={Colors.outline} style={styles.inputIcon} />
-            <Controller
+          <View style={styles.fieldWrapper}>
+            <Text style={styles.fieldLabel}>Full Name</Text>
+            <View style={styles.inputWrapper}>
+              <User size={18} color={Colors.outline} style={styles.inputIcon} />
+              <Controller
               control={control}
               name="fullName"
               render={({ field: { onChange, value } }) => (
@@ -176,10 +257,13 @@ export default function RegisterScreen() {
             />
           </View>
           {errors.fullName && <Text style={styles.errorText}>{errors.fullName.message}</Text>}
+          </View>
 
           {/* Email */}
-          <View style={styles.inputWrapper}>
-            <Mail size={18} color={Colors.outline} style={styles.inputIcon} />
+          <View style={styles.fieldWrapper}>
+            <Text style={styles.fieldLabel}>Email Address</Text>
+            <View style={styles.inputWrapper}>
+              <Mail size={18} color={Colors.outline} style={styles.inputIcon} />
             <Controller
               control={control}
               name="email"
@@ -201,16 +285,19 @@ export default function RegisterScreen() {
             />
           </View>
           {errors.email && <Text style={styles.errorText}>{errors.email.message}</Text>}
+          </View>
 
           {/* Password */}
-          <View style={styles.inputWrapper}>
-            <Lock size={18} color={Colors.outline} style={styles.inputIcon} />
+          <View style={styles.fieldWrapper}>
+            <Text style={styles.fieldLabel}>Password</Text>
+            <View style={styles.inputWrapper}>
+              <Lock size={18} color={Colors.outline} style={styles.inputIcon} />
             <Controller
               control={control}
               name="password"
               render={({ field: { onChange, value } }) => (
                 <TextInput
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                   autoComplete="new-password"
                   onChangeText={onChange}
                   placeholder="Create Password"
@@ -223,18 +310,34 @@ export default function RegisterScreen() {
                 />
               )}
             />
+            <TouchableOpacity
+              style={styles.passwordToggle}
+              onPress={() => setShowPassword(!showPassword)}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+              hitSlop={8}
+            >
+              {showPassword ? (
+                <EyeOff size={18} color={Colors.outline} />
+              ) : (
+                <Eye size={18} color={Colors.outline} />
+              )}
+            </TouchableOpacity>
           </View>
           {errors.password && <Text style={styles.errorText}>{errors.password.message}</Text>}
+          </View>
 
           {/* Confirm Password */}
-          <View style={styles.inputWrapper}>
-            <Lock size={18} color={Colors.outline} style={styles.inputIcon} />
+          <View style={styles.fieldWrapper}>
+            <Text style={styles.fieldLabel}>Confirm Password</Text>
+            <View style={styles.inputWrapper}>
+              <Lock size={18} color={Colors.outline} style={styles.inputIcon} />
             <Controller
               control={control}
               name="confirmPassword"
               render={({ field: { onChange, value } }) => (
                 <TextInput
-                  secureTextEntry
+                  secureTextEntry={!showConfirmPassword}
                   autoComplete="new-password"
                   onChangeText={onChange}
                   placeholder="Confirm Password"
@@ -247,10 +350,40 @@ export default function RegisterScreen() {
                 />
               )}
             />
+            <TouchableOpacity
+              style={styles.passwordToggle}
+              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              accessibilityRole="button"
+              accessibilityLabel={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+              hitSlop={8}
+            >
+              {showConfirmPassword ? (
+                <EyeOff size={18} color={Colors.outline} />
+              ) : (
+                <Eye size={18} color={Colors.outline} />
+              )}
+            </TouchableOpacity>
           </View>
           {errors.confirmPassword && (
             <Text style={styles.errorText}>{errors.confirmPassword.message}</Text>
           )}
+          </View>
+          <View style={styles.birthdateRow}>
+            <Calendar size={18} color={Colors.outline} style={styles.birthdateIcon} />
+            <Controller
+              control={control}
+              name="birthdate"
+              render={({ field: { onChange, value } }) => (
+                <DatePickerSelect
+                  value={value}
+                  onChange={onChange}
+                  disabled={isSubmitting}
+                  label="Date of Birth"
+                />
+              )}
+            />
+          </View>
+          {errors.birthdate && <Text style={styles.errorText}>{errors.birthdate.message}</Text>}
 
           {/* Floating Glassmorphism Physical Stats & Goal Card */}
           <View style={styles.card}>
@@ -381,42 +514,90 @@ export default function RegisterScreen() {
               {errors.weight && <Text style={styles.errorText}>{errors.weight.message}</Text>}
             </View>
 
+            {/* Target Weight input row */}
+            <View style={styles.statInputRow}>
+              <View style={styles.statInputHeader}>
+                <Text style={styles.inputLabel}>Target Weight</Text>
+                <Text style={styles.targetWeightHint}>(optional — defaults to current weight)</Text>
+              </View>
+              <View style={styles.statInputWrapper}>
+                <Activity size={18} color={Colors.outline} style={styles.statIcon} />
+                <Controller
+                  control={control}
+                  name="targetWeight"
+                  render={({ field: { onChange, value } }) => (
+                    <TextInput
+                      keyboardType="numeric"
+                      onChangeText={onChange}
+                      placeholder={weightUnit === 'kg' ? '75.0' : '165.3'}
+                      placeholderTextColor={Colors.outline}
+                      style={styles.statTextInput}
+                      value={value}
+                      accessibilityLabel={`Target weight in ${weightUnit === 'kg' ? 'kilograms' : 'pounds'}`}
+                    />
+                  )}
+                />
+              </View>
+              {errors.targetWeight && <Text style={styles.errorText}>{errors.targetWeight.message}</Text>}
+            </View>
+
             {/* Goal Selector row */}
             <View style={styles.statInputRow}>
               <Text style={styles.inputLabel}>Fitness Goal</Text>
               <View style={styles.goalSelectorGrid}>
-                <TouchableOpacity
-                  style={[styles.goalBtn, goal === 'lose_weight' && styles.goalBtnActive]}
-                  onPress={() => setGoal('lose_weight')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Select lose weight goal"
-                  accessibilityState={{ selected: goal === 'lose_weight' }}
-                >
-                  <TrendingDown size={24} color={goal === 'lose_weight' ? '#0ea5e9' : '#6e7881'} />
-                  <Text style={[styles.goalBtnText, goal === 'lose_weight' && styles.goalBtnTextActive]}>Lose Weight</Text>
-                </TouchableOpacity>
+                {([
+                  { key: 'moderate_cut' as GoalKey, icon: 'cut', label: REGISTER_GOAL_LABELS.moderate_cut, desc: REGISTER_GOAL_DESCS.moderate_cut },
+                  { key: 'aggressive_cut' as GoalKey, icon: 'cut', label: REGISTER_GOAL_LABELS.aggressive_cut, desc: REGISTER_GOAL_DESCS.aggressive_cut },
+                  { key: 'maintain' as GoalKey, icon: 'maintain', label: REGISTER_GOAL_LABELS.maintain, desc: REGISTER_GOAL_DESCS.maintain },
+                  { key: 'lean_bulk' as GoalKey, icon: 'bulk', label: REGISTER_GOAL_LABELS.lean_bulk, desc: REGISTER_GOAL_DESCS.lean_bulk },
+                ]).map(({ key, icon, label, desc }) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.goalBtn, goal === key && styles.goalBtnActive]}
+                    onPress={() => setGoal(key)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select ${label} goal`}
+                    accessibilityState={{ selected: goal === key }}
+                  >
+                    {icon === 'cut' ? (
+                      <TrendingDown size={24} color={goal === key ? '#0ea5e9' : '#6e7881'} />
+                    ) : icon === 'bulk' ? (
+                      <Dumbbell size={24} color={goal === key ? '#0ea5e9' : '#6e7881'} />
+                    ) : (
+                      <Activity size={24} color={goal === key ? '#0ea5e9' : '#6e7881'} />
+                    )}
+                    <Text style={[styles.goalBtnText, goal === key && styles.goalBtnTextActive]}>{label}</Text>
+                    <Text style={styles.goalBtnDesc}>{desc}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
-                <TouchableOpacity
-                  style={[styles.goalBtn, goal === 'build_muscle' && styles.goalBtnActive]}
-                  onPress={() => setGoal('build_muscle')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Select build muscle goal"
-                  accessibilityState={{ selected: goal === 'build_muscle' }}
-                >
-                  <Dumbbell size={24} color={goal === 'build_muscle' ? '#0ea5e9' : '#6e7881'} />
-                  <Text style={[styles.goalBtnText, goal === 'build_muscle' && styles.goalBtnTextActive]}>Build Muscle</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.goalBtn, goal === 'maintain' && styles.goalBtnActive]}
-                  onPress={() => setGoal('maintain')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Select maintain goal"
-                  accessibilityState={{ selected: goal === 'maintain' }}
-                >
-                  <Activity size={24} color={goal === 'maintain' ? '#0ea5e9' : '#6e7881'} />
-                  <Text style={[styles.goalBtnText, goal === 'maintain' && styles.goalBtnTextActive]}>Maintain</Text>
-                </TouchableOpacity>
+            {/* Activity Level Selector row */}
+            <View style={styles.statInputRow}>
+              <Text style={styles.inputLabel}>Activity Level</Text>
+              <View style={styles.activityLevelGrid}>
+                {[
+                  { id: 'sedentary', label: 'Sedentary', desc: 'Little / no exercise' },
+                  { id: 'lightly_active', label: 'Lightly Active', desc: '1–3 days / week' },
+                  { id: 'moderately_active', label: 'Moderately Active', desc: '3–5 days / week' },
+                  { id: 'very_active', label: 'Very Active', desc: '6–7 days / week' },
+                  { id: 'extremely_active', label: 'Extremely Active', desc: 'Intense daily training' },
+                ].map((level) => (
+                  <TouchableOpacity
+                    key={level.id}
+                    style={[styles.activityBtn, activityLevel === level.id && styles.activityBtnActive]}
+                    onPress={() => setActivityLevel(level.id as ActivityLevel)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${level.label} — ${level.desc}`}
+                    accessibilityState={{ selected: activityLevel === level.id }}
+                  >
+                    <Text style={[styles.activityBtnText, activityLevel === level.id && styles.activityBtnTextActive]}>
+                      {level.label}
+                    </Text>
+                    <Text style={styles.activityBtnDesc}>{level.desc}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
           </View>
@@ -440,16 +621,16 @@ export default function RegisterScreen() {
 
           {/* Submit */}
           <TouchableOpacity
-            style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled]}
+            style={[styles.submitBtn, isSubmitting && styles.submitBtnDisabled, isSuccess && styles.submitBtnSuccess]}
             onPress={handleSubmit(onSubmit)}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isSuccess}
             activeOpacity={0.85}
             accessibilityRole="button"
             accessibilityLabel="Create account"
-            accessibilityState={{ disabled: isSubmitting }}
+            accessibilityState={{ disabled: isSubmitting || isSuccess }}
           >
             <Text style={styles.submitBtnText}>
-              {isSubmitting ? 'Creating Account...' : 'Create Account'}
+              {isSuccess ? '✓ Account Created!' : isSubmitting ? 'Creating Account...' : 'Create Account'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -580,6 +761,12 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.medium,
     height: '100%',
     padding: 0,
+  },
+  passwordToggle: {
+    minWidth: layout.minTouchTarget,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   errorText: {
     fontSize: typography.xs,
@@ -745,8 +932,63 @@ const styles = StyleSheet.create({
     color: '#6e7881',
     textAlign: 'center',
   },
+  goalBtnDesc: {
+    fontSize: 9,
+    color: Colors.outline,
+    marginTop: 2,
+    textAlign: 'center',
+  },
   goalBtnTextActive: {
     color: '#0ea5e9',
+  },
+  activityLevelGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  activityBtn: {
+    flex: 1,
+    minWidth: '30%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.3)',
+    borderRadius: 16,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    minHeight: 48,
+  },
+  activityBtnActive: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0ea5e9',
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 4px 8px rgba(14, 165, 233, 0.1)',
+      },
+      default: {
+        shadowColor: '#0ea5e9',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 2,
+      },
+    }),
+  },
+  activityBtnText: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+    color: '#6e7881',
+    textAlign: 'center',
+  },
+  activityBtnTextActive: {
+    color: '#0ea5e9',
+  },
+  activityBtnDesc: {
+    fontSize: 9,
+    color: Colors.outline,
+    marginTop: 2,
+    textAlign: 'center',
   },
   checkboxRow: {
     flexDirection: 'row',
@@ -807,6 +1049,21 @@ const styles = StyleSheet.create({
   submitBtnDisabled: {
     opacity: 0.6,
   },
+  submitBtnSuccess: {
+    backgroundColor: '#16a34a',
+    shadowColor: '#16a34a',
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 8px 16px rgba(22, 163, 74, 0.25)',
+      },
+      default: {
+        shadowColor: '#16a34a',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.25,
+        shadowRadius: 16,
+      },
+    }),
+  },
   submitBtnText: {
     color: Colors.onPrimary,
     fontSize: typography.base,
@@ -828,5 +1085,27 @@ const styles = StyleSheet.create({
     fontSize: typography.base,
     color: '#0ea5e9',
     fontWeight: fontWeight.bold,
+  },
+  targetWeightHint: {
+    fontSize: 10,
+    color: Colors.outline,
+    fontWeight: fontWeight.medium,
+  },
+  birthdateRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+  },
+  birthdateIcon: {
+    marginTop: spacing.sm + 2,
+  },
+  fieldWrapper: {
+    width: '100%',
+    gap: spacing.xs,
+  },
+  fieldLabel: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#0b1c30',
   },
 });

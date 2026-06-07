@@ -1,6 +1,6 @@
 # errors.md — Error & Debug History
 ## Gemi
-**Last Updated**: 2026-05-22T22:25:44+08:00
+**Last Updated**: 2026-06-07T15:10:00+08:00
 
 ---
 
@@ -134,6 +134,82 @@
   import type { GemiFoodItem } from '../../data/foodAdapter';
   ```
 - **File**: `web/src/pages/Dashboard/Dashboard.tsx`
+- **Status**: ✅ Resolved
+
+---
+
+### [ERR-009] Food Logged on Breakfast Appears Under Snacks
+- **Date**: 2026-06-07
+- **Severity**: Data integrity — user-facing misattribution
+- **Symptom**: When a user logs food on breakfast (either via the meal diary "+" button or the Quick Log parser), the entry appears under the "Snacks & Extras" section instead of "Breakfast." The calorie totals still compute, but meal grouping is wrong.
+- **Root Cause**: Three interacting factors:
+
+  1. **Quick Log defaults to `'snack'`** (`frontend/src/screens/dashboard/Food/FoodTab.tsx:273`):
+     ```typescript
+     const [quickMealId, setQuickMealId] = useState<MealId>('snack');
+     ```
+     The Quick Log meal selector chip defaults to Snack. If a user types a food description and hits Parse without first tapping the Breakfast chip, the entry is saved with `mealId='snack'`.
+
+  2. **`normalizeMealId` silently defaults unknown values to `'snack'`** — duplicated in both:
+     - `frontend/src/local/dietLogsMapper.ts:5-9`
+     - `frontend/src/local/repositories/dietLogsRepository.ts:84-88`
+     ```typescript
+     function normalizeMealId(value: string | null | undefined): MealId {
+       return value === 'breakfast' || value === 'lunch' || value === 'dinner' || value === 'snack'
+         ? value
+         : 'snack';  // anything else → 'snack'
+     }
+     ```
+     If `meal_id` comes back as `null`/`undefined` from any source (e.g., Supabase migration not applied, backend column missing), the entry is silently reassigned to `'snack'`. This propagates through the remote sync cycle:
+     ```
+     saveDietLogLocalFirst → syncCreatedDietLogToRemote → refreshFoodLogs →
+       fetchDietLogs → upsertRemoteDietLogForUser(…normalizeMealId(log.meal_id)) →
+       if log.meal_id is null → overwrites local 'breakfast' with 'snack'
+     ```
+
+  3. **Backend and Supabase migration also default to `'snack'`**:
+     - `backend/src/services/diet.service.ts:70`: `meal_id: input.meal_id ?? 'snack'`
+     - `supabase/migrations/20260605090000_008_diet_logs_meal_id.sql:5`: `set meal_id = 'snack' where meal_id is null;`
+     - Column default is `'snack'`, so any insert omitting `meal_id` gets `'snack'`.
+
+  4. **Minor race condition**: `LoggedItemDetailsModal` initializes `editMealId` to `'snack'` before the `useEffect` syncs it from the actual entry's `mealId` (`frontend/src/screens/dashboard/Food/LoggedItemDetailsModal.tsx:50`).
+
+  5. **Backend Not Recompiled**: After modifying `diet.service.ts` to fallback to `'breakfast'`, the backend was not recompiled using `npm run build`. The Express server continued running the old `dist/` Javascript, which completely omitted `meal_id` from the Supabase insert query, forcing Supabase to use its column default (`'snack'`).
+
+  6. **Local SQLite Default**: The local SQLite schema creation script (`frontend/src/local/migrations.ts`) also had `DEFAULT 'snack'` for `meal_id`. While local offline creation properly supplied the value, any programmatic insert omitting it locally would trigger this default.
+
+- **Fix**:
+  - **P0**: Change Quick Log default to `'breakfast'` (`FoodTab.tsx:273`): `useState<MealId>('breakfast')`
+  - **P1**: Add warning logs in `normalizeMealId()` when receiving unexpected values instead of silently defaulting to `'snack'`
+  - **P2**: Verify Supabase migration `008` has been applied to the remote instance
+  - **P2**: Initialize `editMealId` from `viewingLoggedItem.mealId` directly instead of defaulting to `'snack'` in `LoggedItemDetailsModal`
+  - **P0**: Change fallback `input.meal_id ?? 'snack'` to `input.meal_id ?? 'breakfast'` in `backend/src/services/diet.service.ts`
+  - **P0**: Change fallback `DEFAULT 'snack'` to `DEFAULT 'breakfast'` in `supabase/migrations/20260605090000_008_diet_logs_meal_id.sql`
+  - **P0**: Change fallback `DEFAULT 'snack'` to `DEFAULT 'breakfast'` in `frontend/src/local/migrations.ts`
+  - **P0**: Run `npm run build` in the backend directory to compile the updated typescript logic.
+- **Files**:
+  - `frontend/src/screens/dashboard/Food/FoodTab.tsx`
+  - `frontend/src/local/dietLogsMapper.ts`
+  - `frontend/src/local/repositories/dietLogsRepository.ts`
+  - `frontend/src/local/migrations.ts`
+  - `frontend/src/screens/dashboard/Food/LoggedItemDetailsModal.tsx`
+  - `backend/src/services/diet.service.ts`
+  - `supabase/migrations/20260605090000_008_diet_logs_meal_id.sql`
+- **Status**: ✅ Resolved
+
+---
+
+### [ERR-010] User Registration Supabase Sync Mismatch
+- **Date**: 2026-06-07
+- **Severity**: Critical / Block-breaking
+- **Symptom**: User registration fails to complete successfully, or user profile statistics fail to sync and persist on Supabase, leading to sync errors or incomplete user profile onboarding.
+- **Root Cause**: Mismatch between the frontend and Supabase database schemas:
+  1. The remote `profiles` table lacked several new columns (`age`, `activity_level`, `target_weight_kg`, etc.) present in the local SQLite database.
+  2. The remote `profiles` table had a check constraint restricting the `goal` column to legacy strings (`lose_weight`, `build_muscle`, `maintain`). Frontend registration submitted newer keys (`moderate_cut`, `lean_bulk`, etc.), causing Postgres inserts to fail.
+  3. The trigger function `public.handle_new_user()` did not insert the new registration metadata fields (`age`, `activity_level`, etc.) into the profile table on registration.
+- **Fix**: Created the `009_update_profiles_schema.sql` migration to add missing columns, update the check constraint to support the new goal strings, and revise the `public.handle_new_user()` trigger function to correctly insert/upsert all signup metadata.
+- **Files**:
+  - `supabase/migrations/20260607090000_009_update_profiles_schema.sql`
 - **Status**: ✅ Resolved
 
 ---

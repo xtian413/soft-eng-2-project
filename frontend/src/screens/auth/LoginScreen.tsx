@@ -21,6 +21,8 @@ import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
+import { AuthErrorBanner } from '@/components/common/AuthErrorBanner';
+import type { BannerVariant } from '@/components/common/AuthErrorBanner';
 
 const schema = z.object({
   email: z.string().email('Enter a valid email address'),
@@ -36,6 +38,10 @@ export default function LoginScreen() {
   const signIn = useAuthStore((state) => state.signIn);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Inline error banner state
+  const [bannerMessage, setBannerMessage] = useState<string | null>(null);
+  const [bannerType, setBannerType] = useState<BannerVariant>('error');
+
   const {
     control,
     handleSubmit,
@@ -46,9 +52,25 @@ export default function LoginScreen() {
   });
 
   const onSubmit = async (values: LoginForm) => {
+    // Clear any previous banner
+    setBannerMessage(null);
+
     const error = await signIn(values.email, values.password);
     if (error) {
-      Alert.alert('Login failed', error.message);
+      const msg = error.message.toLowerCase();
+      if (msg.includes('invalid login') || msg.includes('invalid credentials')) {
+        setBannerType('error');
+        setBannerMessage('Invalid email or password. Please try again.');
+      } else if (msg.includes('email not confirmed') || msg.includes('email_not_confirmed')) {
+        setBannerType('warning');
+        setBannerMessage('Please verify your email first. Check your inbox.');
+      } else if (msg.includes('network') || msg.includes('fetch') || msg.includes('connect')) {
+        setBannerType('warning');
+        setBannerMessage('Unable to connect. Check your internet connection.');
+      } else {
+        setBannerType('error');
+        setBannerMessage(error.message || 'Something went wrong. Please try again.');
+      }
     }
   };
 
@@ -87,11 +109,20 @@ export default function LoginScreen() {
           <Text style={styles.subtitle}>Ready to hit today's targets?</Text>
         </View>
 
+        {/* Inline error banner (replaces Alert.alert) */}
+        <AuthErrorBanner
+          message={bannerMessage}
+          type={bannerType}
+          onDismiss={() => setBannerMessage(null)}
+        />
+
         {/* Form Container */}
         <View style={styles.formContainer}>
           {/* Email Input */}
-          <View style={styles.inputWrapper}>
-            <Mail size={18} color={Colors.outline} style={styles.inputIcon} />
+          <View style={styles.fieldWrapper}>
+            <Text style={styles.fieldLabel}>Email Address</Text>
+            <View style={styles.inputWrapper}>
+              <Mail size={18} color={Colors.outline} style={styles.inputIcon} />
             <Controller
               control={control}
               name="email"
@@ -113,9 +144,12 @@ export default function LoginScreen() {
             />
           </View>
           {errors.email && <Text style={styles.errorText}>{errors.email.message}</Text>}
+          </View>
 
           {/* Password Input */}
-          <View style={styles.inputWrapper}>
+          <View style={styles.fieldWrapper}>
+            <Text style={styles.fieldLabel}>Password</Text>
+            <View style={styles.inputWrapper}>
             <Lock size={18} color={Colors.outline} style={styles.inputIcon} />
             <Controller
               control={control}
@@ -150,6 +184,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
           {errors.password && <Text style={styles.errorText}>{errors.password.message}</Text>}
+          </View>
 
           {/* Forgot Password link */}
           <View style={styles.forgotContainer}>
@@ -328,6 +363,15 @@ const styles = StyleSheet.create({
   formContainer: {
     width: '100%',
     gap: spacing.md,
+  },
+  fieldWrapper: {
+    width: '100%',
+    gap: spacing.xs,
+  },
+  fieldLabel: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#0b1c30',
   },
   inputWrapper: {
     flexDirection: 'row',
