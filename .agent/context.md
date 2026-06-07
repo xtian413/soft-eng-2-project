@@ -1,6 +1,6 @@
 # context.md — Project-Wide Context & Notes
 ## Gemi
-**Last Updated**: 2026-06-07T14:00:00+08:00
+**Last Updated**: 2026-06-07T16:00:00+08:00
 
 ---
 
@@ -124,6 +124,14 @@ The `TrainingCalendar` component in `ProfileTab` manages its own expanded/collap
 * → /login (catch-all redirect)
 ```
 Profile data passed: `navigate('/dashboard', { state: { fullName, email, gender, height, weight, goal } })`
+
+### Auth Screens — Registration & Login (2026-06-07)
+- **Error handling**: Both screens use `AuthErrorBanner` (4 variants: error/warning/success/info) instead of `Alert.alert`. Messages are mapped to user-friendly text (e.g., "already registered" → info banner with "Go to Login" link; invalid credentials → error banner).
+- **Date of Birth**: Uses `DatePickerSelect` — three tappable chips (Month, Day, Year) each opening a modal with scrollable FlatList. Internal value stored as YYYY-MM-DD string for backward compatibility with Zod schema.
+- **Target Weight**: Optional field in Physical Stats card. Falls back to current weight when not provided. Saved to `target_weight_kg` in profiles table and `targetWeightKg` in Zustand profile state.
+- **Signup metadata**: `authStore.signUp()` now passes `age`, `activity_level`, and `weight_kg` to `raw_user_meta_data` for Postgres triggers. Saves `target_weight_kg` to profiles upsert.
+- **Password toggles**: Eye/EyeOff independent toggle per field (Password, Confirm Password).
+- **Beginner labels**: Goal selector uses friendlier names ("Fat Loss", "Stay Fit", etc.). Activity level buttons show frequency descriptions.
 
 ### Goal → Targets Mapping
 | Goal | Calories | Protein | Carbs | Fats |

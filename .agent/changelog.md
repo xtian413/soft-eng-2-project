@@ -3,7 +3,26 @@
 **Format**: `[YYYY-MM-DD HH:MM +TZ] TYPE: description`
 
 ---
----
+### [2026-06-07 16:00 +0800] FEAT: Registration page macro goal alignment, error banners, date picker, and UX polish
+- **Branch**: `jb-branch`
+- **Files Modified**:
+  - `frontend/src/screens/auth/RegisterScreen.tsx`
+  - `frontend/src/screens/auth/LoginScreen.tsx`
+  - `frontend/src/store/authStore.ts`
+- **Files Created**:
+  - `frontend/src/components/common/AuthErrorBanner.tsx`
+  - `frontend/src/components/common/DatePickerSelect.tsx`
+- **Changes**:
+  - ✅ **Target Weight field**: Added optional target weight input to Registration's Physical Stats card (shares weight unit toggle, defaults to current weight). `target_weight_kg` now saved to Supabase profiles table and Zustand state, enabling Profile tab's "Time to Target" projections.
+  - ✅ **authStore enhanced**: `signUp()` now passes `age` and `activity_level` to `raw_user_meta_data`, saves `target_weight_kg` to profiles, and sets it in Zustand profile state.
+  - ✅ **Inline Error Banners**: Replaced disruptive `Alert.alert()` calls on both Login and Register screens with styled inline `AuthErrorBanner` component (4 variants: error/warning/success/info, dismissible, optional action links). Smart error message mapping for duplicate email, invalid credentials, network errors, email not confirmed.
+  - ✅ **Success flow**: Registration shows green "✓ Account Created!" button state for 2s then auto-navigates to Login screen.
+  - ✅ **Three-segment Date Picker**: Replaced free-text birthdate TextInput with `DatePickerSelect` — tappable Month / Day / Year chips that open a modal with scrollable FlatList. Day options dynamically computed per month, auto-clamp for Feb leap years.
+  - ✅ **Password visibility toggles**: Added Eye/EyeOff buttons to Password and Confirm Password fields (independent state per field).
+  - ✅ **Beginner-friendly labels**: Goal selector uses friendly names ("Fat Loss", "Rapid Fat Loss", "Stay Fit", "Build Muscle"). Activity level buttons now show short descriptions ("Little/no exercise", "1–3 days/week", etc.).
+  - ✅ **Field labels**: Added top-left "Full Name", "Email Address", "Password", "Confirm Password" labels above inputs on Register screen, and "Email Address", "Password" labels on Login screen.
+  - ✅ **Tighter validation**: Height/weight now validated as positive numbers via Zod `refine`.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors in modified files.
 ### [2026-06-07 14:38 +0800] FIX: Compile backend and fix local SQLite default meal_id
 - **Branch**: `jb-branch`
 - **Files Modified**:

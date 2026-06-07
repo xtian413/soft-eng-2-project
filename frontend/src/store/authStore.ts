@@ -49,6 +49,7 @@ interface AuthState {
       goal: GoalKey;
       age?: number;
       activityLevel?: ActivityLevel;
+      targetWeightKg?: number;
     }
   ) => Promise<AuthError | null>;
   signOut: () => Promise<void>;
@@ -193,6 +194,7 @@ export const useAuthStore = create<AuthState>()(
           goal: GoalKey;
           age?: number;
           activityLevel?: ActivityLevel;
+          targetWeightKg?: number;
         }
       ) => {
         const hasEnv = !!process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -210,8 +212,11 @@ export const useAuthStore = create<AuthState>()(
               data: {
                 full_name: metadata.fullName,
                 height_cm: metadata.height,
+                weight_kg: metadata.weight,
                 gender: metadata.gender,
                 goal: metadata.goal,
+                age: metadata.age,
+                activity_level: metadata.activityLevel,
               },
             } : undefined,
           });
@@ -235,6 +240,7 @@ export const useAuthStore = create<AuthState>()(
                 goal: metadata.goal,
                 age: metadata.age ?? null,
                 activity_level: metadata.activityLevel ?? null,
+                target_weight_kg: metadata.targetWeightKg ?? metadata.weight,
               });
 
             if (profileError) {
@@ -264,7 +270,7 @@ export const useAuthStore = create<AuthState>()(
                 goal: metadata.goal,
                 age: metadata.age ?? null,
                 activityLevel: metadata.activityLevel ?? null,
-                targetWeightKg: null,
+                targetWeightKg: metadata.targetWeightKg ?? metadata.weight,
                 macroProteinPct: null,
                 macroCarbsPct: null,
                 macroFatsPct: null,
