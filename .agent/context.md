@@ -1,6 +1,6 @@
 # context.md — Project-Wide Context & Notes
 ## Gemi
-**Last Updated**: 2026-06-07T09:16:00+08:00
+**Last Updated**: 2026-06-07T17:45:00+08:00
 
 ---
 
@@ -106,12 +106,14 @@ On mobile (< 768px): `grid-template-columns: repeat(2, 1fr)`
 On desktop (≥ 768px): `grid-template-columns: repeat(4, 1fr)`
 - All macro cards: `grid-column: span 1`
 
-### TrainingCalendar Expansion Behavior (2026-06-07)
-The `TrainingCalendar` component in `ProfileTab` now manages its own expanded/collapsed state internally:
-- **Compact mode**: Horizontal week scroll (Sun–Sat) with day cards showing workout type badges
-- **Expanded mode**: Full month grid with prev/next month navigation, activity dots on tracked days, and a detail panel showing meals, workouts, sleep, and water for the selected date
-- **Toggle**: "View All" switches to expanded, "Weekly View" collapses back; month offset resets on reopen
-- **Data flow**: `ProfileTab` fetches history data eagerly on mount and passes `historyWorkouts`, `historyDietLogs`, `historyLoading`, `historyError` as props to TrainingCalendar
+### TrainingCalendar Component (2026-06-07)
+The `TrainingCalendar` component in `ProfileTab` manages its own expanded/collapsed state internally:
+
+- **Compact mode (unexpanded)**: 2-row `flexWrap` grid — 4 cards on the top row, 3 on the bottom. Cards are compact (minHeight 72, smaller typography, flat design, no heavy shadows). Card widths computed dynamically from `useWindowDimensions` for consistent 4-column layout.
+- **Expanded mode**: Full month grid inside a themed `historyCard` container (`surfaceContainerLowest`, `radius.lg`, subtle border+shadow matching app card styles). Includes month navigation arrows, 3-letter weekday headers (`Sun Mon Tue ...`) aligned with the grid, activity dots on tracked days, and a detail panel with section dividers for meals, workouts, sleep, and water.
+- **Grid sizing**: Expanded grid cell sizes calculated dynamically via `(containerMaxWidth - cardPadding*2 - gap*6) / 7` to fit within the card on any screen width.
+- **Toggle**: "View All" / "Weekly View" text link; month offset resets to current month on reopen.
+- **Data flow**: `ProfileTab` fetches history data eagerly on mount and passes `historyWorkouts`, `historyDietLogs`, `historyLoading`, `historyError` as props to TrainingCalendar.
 
 ### React Router Navigation Flow
 ```

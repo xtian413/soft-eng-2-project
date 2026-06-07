@@ -5,8 +5,8 @@ import {
 } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
-import { ChevronRight, ChevronLeft } from 'lucide-react-native';
-import { addMonths, format, getDay, getDaysInMonth, parseISO, startOfMonth } from 'date-fns';
+import { ChevronRight, ChevronLeft, Calendar } from 'lucide-react-native';
+import { addMonths, addWeeks, format, getDay, getDaysInMonth, isToday, parseISO, startOfMonth, startOfWeek } from 'date-fns';
 import type { CalendarDay } from '../hooks/useProfileStats';
 import type { Workout } from '@/api/workoutApi';
 import type { DietLog } from '@/api/dietApi';
@@ -24,19 +24,7 @@ interface TrainingCalendarProps {
   onDateSelect?: (dateStr: string) => void;
 }
 
-interface WorkoutStyle { bg: string; color: string; }
-
-function getWorkoutStyle(type: string): WorkoutStyle {
-  switch (type) {
-    case 'push':  return { bg: 'rgba(255,219,202,0.6)', color: Colors.secondary };
-    case 'pull':  return { bg: 'rgba(255,223,154,0.6)', color: Colors.tertiary };
-    case 'legs':  return { bg: 'rgba(201,230,255,0.6)', color: Colors.primary };
-    case 'rest':  return { bg: 'rgba(190,200,210,0.25)', color: Colors.outline };
-    default:      return { bg: 'rgba(201,230,255,0.6)', color: Colors.primary };
-  }
-}
-
-/** 2-row week calendar grid (4+3), expandable in-place to a full month
+/** Week calendar grid, expandable in-place to a full month
  *  grid with day detail panels inside a themed card container. */
 export function TrainingCalendar({
   days, loading,
@@ -45,6 +33,7 @@ export function TrainingCalendar({
   // --- expanded state (managed internally) ---
   const [isExpanded, setIsExpanded] = useState(false);
   const [monthOffset, setMonthOffset] = useState(0);
+  const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   useEffect(() => {
@@ -83,6 +72,47 @@ export function TrainingCalendar({
     return { workouts, meals, sleep: null as null, water: null as null };
   }, [historyDietLogs, historyWorkouts, selectedDate]);
 
+  // --- derived values for compact week grid ---
+  const compactWeekStart = useMemo(
+    () => startOfWeek(addWeeks(new Date(), weekOffset), { weekStartsOn: 0 }),
+    [weekOffset],
+  );
+
+  const compactDays = useMemo(() => {
+    const weekStart = compactWeekStart;
+    const workoutDates = new Set(historyWorkouts.map((w) => w.performed_at.split('T')[0]));
+    const dietDates = new Set(historyDietLogs.map((d) => d.logged_at.split('T')[0]));
+
+    return Array.from({ length: 7 }, (_, i) => {
+      const day = new Date(weekStart);
+      day.setDate(weekStart.getDate() + i);
+      const dateStr = format(day, 'yyyy-MM-dd');
+      const hasActivity = workoutDates.has(dateStr) || dietDates.has(dateStr);
+      const workout = historyWorkouts.find((w) => w.performed_at.startsWith(dateStr));
+      const workoutType = workout
+        ? (workout.name.toLowerCase().includes('push') || workout.name.toLowerCase().includes('chest') || workout.name.toLowerCase().includes('shoulder') || workout.name.toLowerCase().includes('tricep')) ? 'push'
+        : (workout.name.toLowerCase().includes('pull') || workout.name.toLowerCase().includes('back') || workout.name.toLowerCase().includes('row') || workout.name.toLowerCase().includes('bicep')) ? 'pull'
+        : (workout.name.toLowerCase().includes('leg') || workout.name.toLowerCase().includes('squat') || workout.name.toLowerCase().includes('deadlift') || workout.name.toLowerCase().includes('glute')) ? 'legs'
+        : (workout.name.toLowerCase().includes('rest') || workout.name.toLowerCase().includes('recovery')) ? 'rest'
+        : 'other'
+        : 'empty';
+
+      return {
+        dayLabel: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i],
+        dateNum: day.getDate(),
+        dateStr,
+        workoutName: workout ? workout.name.split(' ')[0] : '–',
+        workoutType,
+        isToday: isToday(day),
+        isClickable: hasActivity,
+        hasActivity,
+      };
+    });
+  }, [compactWeekStart, historyWorkouts, historyDietLogs]);
+
+  // Use compactDays when history data is available, otherwise fall back to prop
+  const displayDays = historyWorkouts.length > 0 || historyDietLogs.length > 0 ? compactDays : days;
+
   const historyMonthLabel = format(historyMonthDate, 'MMMM yyyy');
   const historyWeekdayOffset = getDay(historyMonthDate);
   const historyHasAnyActivity = historyDays.some((d) => d.hasActivity);
@@ -96,33 +126,32 @@ export function TrainingCalendar({
 
   const { width: screenWidth } = useWindowDimensions();
   const containerMaxWidth = Math.min(screenWidth - spacing.base * 2, layout.modalMaxWidth);
-  const weekCardWidth = Math.floor((containerMaxWidth - spacing.sm * 3) / 4);
   // expanded grid cell width — accounts for card padding + 6 gaps between 7 columns
   const historyCellWidth = Math.floor((containerMaxWidth - spacing.base * 2 - spacing.xs * 6) / 7);
+  // compact day cell width — accounts for card padding + 6 gaps between 7 columns
+  const compactCellWidth = Math.floor((containerMaxWidth - spacing.base * 2 - spacing.xs * 6) / 7);
 
   return (
     <View style={styles.container}>
-      {/* --- header row --- */}
-      <View style={styles.header}>
-        <Text style={styles.title}>
-          {isExpanded ? 'Full Activity History' : 'Training Calendar'}
-        </Text>
-        <TouchableOpacity
-          onPress={() => {
-            setIsExpanded((e) => !e);
-            if (!isExpanded && monthOffset !== 0) setMonthOffset(0);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={isExpanded ? 'Show weekly view' : 'View all training'}
-          hitSlop={8}
-        >
-          <Text style={styles.viewAll}>{isExpanded ? 'Weekly View' : 'View All'}</Text>
-        </TouchableOpacity>
-      </View>
-
+      {/* --- expanded mode: full month grid --- */}
       {isExpanded ? (
-        /* ----- expanded mode: full month grid ----- */
-        <View style={styles.historyCard}>
+        <>
+          <View style={styles.header}>
+            <Text style={styles.title}>Full Activity History</Text>
+            <TouchableOpacity
+              onPress={() => {
+                setIsExpanded(false);
+                if (monthOffset !== 0) setMonthOffset(0);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Show weekly view"
+              hitSlop={8}
+            >
+              <Text style={styles.viewAll}>Weekly View</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.historyCard}>
           {/* month navigation */}
           <View style={styles.expandedNavRow}>
             <TouchableOpacity
@@ -250,24 +279,71 @@ export function TrainingCalendar({
             </>
           )}
         </View>
+      </>
       ) : (
-        /* ----- compact mode: 2-row week grid ----- */
+        /* ----- compact mode: card with week grid ----- */
         loading ? (
           <ActivityIndicator
             color={Colors.primary}
             style={{ marginVertical: spacing.base }}
           />
         ) : (
-          <View style={styles.weekGrid}>
-            {days.map((day) => {
-              const ws = getWorkoutStyle(day.workoutType);
-              return (
+          <View style={styles.compactCard}>
+            {/* Header: nav arrows + centered title + "View All" */}
+            <View style={styles.header}>
+              <View style={styles.headerSide}>
+                <TouchableOpacity
+                  onPress={() => setWeekOffset((c) => c - 1)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Previous week"
+                >
+                  <ChevronLeft size={16} color={Colors.primary} />
+                </TouchableOpacity>
+                <Calendar size={18} color={Colors.primary} />
+                <TouchableOpacity
+                  onPress={() => setWeekOffset((c) => c + 1)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Next week"
+                >
+                  <ChevronRight size={16} color={Colors.primary} />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.headerTitle}>Fitness Journey</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setIsExpanded(true);
+                  if (monthOffset !== 0) setMonthOffset(0);
+                }}
+                style={styles.headerSideRight}
+                accessibilityRole="button"
+                accessibilityLabel="View all training"
+                hitSlop={8}
+              >
+                <Text style={styles.viewAll}>View All</Text>
+                <ChevronRight size={14} color={Colors.primary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Weekday labels: Su Mo Tu We Th Fr Sa */}
+            <View style={styles.compactWeekdayRow}>
+              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((label) => (
+                <View key={`cwd-${label}`} style={[styles.compactWeekdayCell, { width: compactCellWidth }]}>
+                  <Text style={styles.compactWeekdayLabel}>{label}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Day cells grid: 7 across */}
+            <View style={styles.compactGrid}>
+              {displayDays.map((day) => (
                 <TouchableOpacity
                   key={day.dateStr}
                   style={[
-                    styles.dayCard,
-                    { width: weekCardWidth },
-                    day.isToday && styles.dayCardToday,
+                    styles.compactDayCell,
+                    { width: compactCellWidth, height: compactCellWidth },
+                    day.isToday && styles.compactDayCellToday,
                   ]}
                   onPress={() => {
                     if (day.isClickable && onDateSelect) {
@@ -276,30 +352,19 @@ export function TrainingCalendar({
                   }}
                   activeOpacity={day.isClickable ? 0.7 : 1}
                   accessibilityRole="button"
-                  accessibilityLabel={`${day.dayLabel} ${day.dateNum}, ${day.workoutName === '–' ? 'no workout' : day.workoutName}`}
+                  accessibilityLabel={`${day.dayLabel} ${day.dateNum}${day.hasActivity ? ', has activity' : ''}`}
                   accessibilityState={{ disabled: !day.isClickable, selected: day.isToday }}
                 >
-                  {day.isToday && <View style={styles.todayDot} />}
-
-                  <Text style={[styles.dayLabel, day.isToday && styles.dayLabelToday]}>
-                    {day.dayLabel}
-                  </Text>
-                  <Text style={[styles.dateNum, day.isToday && styles.dateNumToday]}>
+                  <Text style={[
+                    styles.compactDayNumber,
+                    day.isToday && styles.compactDayNumberToday,
+                  ]}>
                     {day.dateNum}
                   </Text>
-
-                  {day.workoutName !== '–' ? (
-                    <View style={[styles.badge, { backgroundColor: ws.bg }]}>
-                      <Text style={[styles.badgeText, { color: ws.color }]}>
-                        {day.workoutName}
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.dash}>–</Text>
-                  )}
+                  {day.hasActivity && <View style={styles.compactActivityDot} />}
                 </TouchableOpacity>
-              );
-            })}
+              ))}
+            </View>
           </View>
         )
       )}
@@ -393,6 +458,86 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.outlineVariant,
     fontWeight: fontWeight.medium,
+  },
+
+  // --- new compact mode styles ---
+  compactCard: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: radius.lg,
+    padding: spacing.base,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  headerSide: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  headerTitle: {
+    fontSize: typography.lg,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    textAlign: 'center',
+  },
+  headerSideRight: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  compactWeekdayRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  compactWeekdayCell: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 24,
+  },
+  compactWeekdayLabel: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    letterSpacing: 0.3,
+  },
+  compactGrid: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  compactDayCell: {
+    borderRadius: radius.md,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactDayCellToday: {
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    borderColor: Colors.primary,
+    borderWidth: 2,
+  },
+  compactDayNumber: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  compactDayNumberToday: {
+    color: Colors.primary,
+  },
+  compactActivityDot: {
+    width: 5,
+    height: 5,
+    borderRadius: radius.full,
+    backgroundColor: Colors.primary,
+    marginTop: 3,
   },
 
   // --- expanded mode styles ---

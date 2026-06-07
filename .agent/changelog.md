@@ -4,6 +4,20 @@
 
 ---
 ---
+### [2026-06-07 17:45 +0800] STYLE: TrainingCalendar visual overhaul — 2-row week grid, themed history container, weekday labels
+- **Branch**: `jb-branch`
+- **Commit**: `d826d0a`
+- **Files Modified**:
+  - `frontend/src/screens/dashboard/Profile/subcomponents/TrainingCalendar.tsx`
+- **Changes**:
+  - ✅ **2-Row Week Grid**: Replaced horizontal `ScrollView` with `flexWrap` grid — 4 cards top row, 3 cards bottom row. Cards are more compact (minHeight 72, reduced padding/typography, flatter no-shadow design).
+  - ✅ **Dynamic Card Sizing**: Both week cards and expanded grid cells calculated from `useWindowDimensions` for consistent layout across screen sizes.
+  - ✅ **Themed History Container**: Expanded month view now wrapped in a `historyCard` matching the app's card theme (`surfaceContainerLowest`, `radius.lg`, subtle border+shadow).
+  - ✅ **3-Letter Weekday Headers**: Expanded grid weekday row uses `Sun Mon Tue Wed Thu Fri Sat` instead of single letters, with `gap` alignment matching the grid below.
+  - ✅ **Detail Panel Refinements**: Section dividers between Food/Workouts/Sleep/Water, bullet dots replacing dash prefixes on list items, italicized "no data" placeholders.
+  - ✅ **View Details Button**: Solid `Colors.primary` fill, left-aligned, subtle blue shadow for emphasis.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors
+
 ### [2026-06-07 16:30 +0800] REFACTOR: History feature — TrainingCalendar now expands in-place instead of appending separate card
 - **Branch**: `jb-branch`
 - **Files Modified**:

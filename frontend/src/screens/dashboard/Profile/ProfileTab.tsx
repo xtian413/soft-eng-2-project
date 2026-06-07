@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import { type GoalKey, type MacroTargets, type ActivityLevel, GOAL_LABELS, MACRO_PRESETS, type MacroRatios } from '@/screens/dashboard/types';
 import { calculateMacros, calculateTDEE } from '@/utils/macroCalculator';
-import { Dumbbell, TrendingDown, Activity, ShieldCheck, LogOut, Lock } from 'lucide-react-native';
+import { Dumbbell, TrendingDown, Activity, LogOut } from 'lucide-react-native';
 import { useProfileStats } from './hooks/useProfileStats';
 import { StatsRow } from './subcomponents/StatsRow';
 import { WeightTrendCard } from './subcomponents/WeightTrendCard';
@@ -474,33 +474,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
         </View>
       </View>
 
-      {/* App Info Card */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>About Gemi</Text>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>AI Model</Text>
-          <Text style={styles.infoValue}>On-device (local)</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Privacy</Text>
-          <View style={styles.infoValueRow}>
-            <Lock size={12} color={Colors.outline} style={{ marginRight: 4 }} />
-            <Text style={styles.infoValue}>Data stays on device</Text>
-          </View>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Version</Text>
-          <Text style={styles.infoValue}>1.0.0</Text>
-        </View>
-      </View>
 
-      {/* Privacy & AI Notice */}
-      <View style={styles.aiNotice}>
-        <ShieldCheck size={20} color={Colors.primary} style={styles.aiNoticeIcon} />
-        <Text style={styles.aiNoticeText}>
-          Gemi uses an on-device AI model. Your workout data, diet logs, and generated insights stay on your phone.
-        </Text>
-      </View>
 
       {/* Sign Out */}
       <TouchableOpacity
@@ -996,46 +970,7 @@ const styles = StyleSheet.create({
     color: Colors.outline,
     marginTop: spacing.xs,
   },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(190, 200, 210, 0.08)',
-  },
-  infoLabel: {
-    fontSize: typography.sm,
-    color: Colors.outline,
-  },
-  infoValue: {
-    fontSize: typography.sm,
-    color: Colors.onSurface,
-    fontWeight: fontWeight.medium,
-  },
-  infoValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  aiNotice: {
-    flexDirection: 'row',
-    backgroundColor: '#eff4ff',
-    borderRadius: radius.lg,
-    padding: spacing.base,
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.12)',
-  },
-  aiNoticeIcon: {
-    marginTop: 2,
-  },
-  aiNoticeText: {
-    flex: 1,
-    fontSize: typography.sm,
-    color: Colors.primary,
-    lineHeight: 20,
-  },
+
   signOutBtn: {
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: radius.lg,
