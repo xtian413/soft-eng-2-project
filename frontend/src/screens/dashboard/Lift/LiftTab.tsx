@@ -1,19 +1,23 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import {
+  ActivityIndicator,
+  Animated,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  PanResponder,
+  type PanResponderInstance,
+  Platform,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  View,
-  TouchableOpacity,
   TextInput,
-  Animated,
-  PanResponder,
-  PanResponderInstance,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
+  TouchableOpacity,
+  View,
   AppState,
   type AppStateStatus,
+  Alert,
 } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
@@ -1451,6 +1455,30 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setPendingExercise(null);
   };
 
+  const completedSetsCount = useMemo(() => {
+    return Object.values(routineProgress).reduce((acc, progress) => {
+      return acc + progress.doneSets.filter((done) => done).length;
+    }, 0);
+  }, [routineProgress]);
+
+  const totalSetsCount = useMemo(() => {
+    return Object.values(routineProgress).reduce((acc, progress) => {
+      return acc + progress.doneSets.length;
+    }, 0);
+  }, [routineProgress]);
+
+  const handleDiscardSession = () => {
+    Alert.alert(
+      'Discard Workout',
+      'Are you sure you want to discard this training session? Progress will not be saved.',
+      [
+        { text: 'Keep Training', style: 'cancel' },
+        { text: 'Discard', style: 'destructive', onPress: () => resetFinishedSessionState() },
+      ],
+      { cancelable: true }
+    );
+  };
+
   return (
     <>
       <ScrollView
@@ -1472,53 +1500,112 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         </View>
 
         {/* Session Timer Card */}
-        <View style={styles.timerCard}>
-          <View style={styles.timerHeaderRow}>
-            <Text style={styles.timerLabel}>ACTIVE TRAINING SESSION</Text>
-            <View style={styles.timerActiveDot} />
-          </View>
-          <Animated.Text style={[styles.timerDisplay, { transform: [{ scale: scaleAnim }] }]}>
-            {formatTime(elapsedSecs)}
-          </Animated.Text>
-          <View style={styles.timerActions}>
-            {isRunning ? (
-              <TouchableOpacity
-                style={[styles.timerBtn, styles.btnPause]}
-                onPress={() => setIsRunning(false)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.timerBtnContent}>
-                  <Pause size={14} color={Colors.onPrimary} style={{ marginRight: 6 }} />
-                  <Text style={styles.timerBtnText}>Pause Workout</Text>
+        <View style={[styles.timerCard, (activeRoutineId || elapsedSecs > 0) && styles.timerCardActive]}>
+          {activeRoutineId || elapsedSecs > 0 ? (
+            // Active Session State
+            <View style={styles.activeSessionContainer}>
+              <View style={styles.timerHeaderRow}>
+                <View style={[styles.statusBadge, isRunning ? styles.statusBadgeActive : styles.statusBadgePaused]}>
+                  <View style={[styles.statusDot, isRunning ? styles.statusDotActive : styles.statusDotPaused]} />
+                  <Text style={[styles.statusText, isRunning ? styles.statusTextActive : styles.statusTextPaused]}>
+                    {isRunning ? 'TRAINING ACTIVE' : 'SESSION PAUSED'}
+                  </Text>
                 </View>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.timerActionStack}>
-                <TouchableOpacity
-                  style={[styles.timerBtn, styles.btnStart]}
-                  onPress={() => setIsRunning(true)}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.timerBtnContent}>
-                    <Play size={14} color={Colors.onPrimary} fill={Colors.onPrimary} style={{ marginRight: 6 }} />
-                    <Text style={styles.timerBtnText}>
-                      {elapsedSecs > 0 ? 'Resume Session' : 'Start Session'}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
 
-                {elapsedSecs > 0 && (
+                <TouchableOpacity
+                  style={styles.discardTextButton}
+                  onPress={handleDiscardSession}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.discardText}>Discard</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.activeSessionMain}>
+                <View style={styles.activeSessionDetails}>
+                  <Text style={styles.activeRoutineName} numberOfLines={1}>
+                    {activeRoutine ? activeRoutine.name : 'Freestyle Workout'}
+                  </Text>
+                  <Text style={styles.activeProgressText}>
+                    {totalSetsCount > 0
+                      ? `✓ ${completedSetsCount} of ${totalSetsCount} sets completed`
+                      : 'No sets logged yet'
+                    }
+                  </Text>
+                </View>
+                <Animated.Text style={[styles.timerDisplay, { transform: [{ scale: scaleAnim }] }]}>
+                  {formatTime(elapsedSecs)}
+                </Animated.Text>
+              </View>
+
+              {totalSetsCount > 0 && (
+                <View style={styles.activeProgressBarContainer}>
+                  <View
+                    style={[
+                      styles.activeProgressBarFill,
+                      { width: `${(completedSetsCount / totalSetsCount) * 100}%` }
+                    ]}
+                  />
+                </View>
+              )}
+
+              <View style={styles.activeActionsRow}>
+                {isRunning ? (
                   <TouchableOpacity
-                    style={[styles.timerBtn, styles.btnFinish]}
-                    onPress={handleFinishSession}
+                    style={[styles.timerBtn, styles.btnPause]}
+                    onPress={() => setIsRunning(false)}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.timerBtnText}>Finish Session</Text>
+                    <Pause size={14} color={Colors.primary} style={{ marginRight: 6 }} />
+                    <Text style={styles.btnPauseText}>Pause</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.timerBtn, styles.btnResume]}
+                    onPress={() => setIsRunning(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Play size={14} color={Colors.onPrimary} fill={Colors.onPrimary} style={{ marginRight: 6 }} />
+                    <Text style={styles.btnResumeText}>Resume</Text>
                   </TouchableOpacity>
                 )}
+
+                <TouchableOpacity
+                  style={[styles.timerBtn, styles.btnFinishActive]}
+                  onPress={handleFinishSession}
+                  activeOpacity={0.8}
+                >
+                  <Check size={14} color={Colors.onPrimary} strokeWidth={2.5} style={{ marginRight: 6 }} />
+                  <Text style={styles.btnFinishText}>Finish Session</Text>
+                </TouchableOpacity>
               </View>
-            )}
-          </View>
+            </View>
+          ) : (
+            // Idle / No Active Session State
+            <View style={styles.idleSessionContainer}>
+              <View style={styles.idleSessionHeader}>
+                <Dumbbell size={20} color={Colors.primary} />
+                <Text style={styles.idleSessionTitle}>START A NEW WORKOUT</Text>
+              </View>
+              <Text style={styles.idleSessionSubtitle}>
+                Select a routine template below to begin tracking, or start a freestyle session to log sets manually.
+              </Text>
+              <TouchableOpacity
+                style={styles.btnFreestyle}
+                onPress={() => {
+                  setSetsList([]);
+                  setExercisesList([]);
+                  setCurrentExerciseId('');
+                  setRoutineProgress({});
+                  setIsRunning(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Play size={14} color={Colors.onPrimary} fill={Colors.onPrimary} style={{ marginRight: 6 }} />
+                <Text style={styles.btnFreestyleText}>Start Freestyle Session</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Routine Section */}
@@ -2259,67 +2346,204 @@ const styles = StyleSheet.create({
     maxWidth: layout.modalMaxWidth,
     alignSelf: 'center',
   },
+
   timerCard: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: radius.lg,
     padding: spacing.base,
-    alignItems: 'center',
     marginBottom: spacing.base,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  timerCardActive: {
+    borderColor: 'rgba(0, 101, 145, 0.25)',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  activeSessionContainer: {
+    width: '100%',
   },
   timerHeaderRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.md,
   },
-  timerLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 9,
-    fontWeight: fontWeight.bold,
-    letterSpacing: 0,
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.full,
   },
-  timerActiveDot: {
+  statusBadgeActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  statusBadgePaused: {
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+  },
+  statusDot: {
     width: 6,
     height: 6,
-    borderRadius: radius.full,
+    borderRadius: 3,
+  },
+  statusDotActive: {
     backgroundColor: '#10b981',
   },
+  statusDotPaused: {
+    backgroundColor: '#f59e0b',
+  },
+  statusText: {
+    fontSize: 9,
+    fontWeight: fontWeight.bold,
+    letterSpacing: 0.5,
+  },
+  statusTextActive: {
+    color: '#10b981',
+  },
+  statusTextPaused: {
+    color: '#f59e0b',
+  },
+  discardTextButton: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  discardText: {
+    fontSize: typography.xs,
+    color: Colors.error,
+    fontWeight: fontWeight.bold,
+  },
+  activeSessionMain: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  activeSessionDetails: {
+    flex: 1,
+    marginRight: spacing.base,
+  },
+  activeRoutineName: {
+    fontSize: typography.base + 1,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  activeProgressText: {
+    fontSize: typography.xs,
+    color: Colors.onSurfaceVariant,
+    marginTop: 4,
+    fontWeight: fontWeight.medium,
+  },
   timerDisplay: {
-    color: Colors.onPrimary,
-    fontSize: 42,
+    color: Colors.primary,
+    fontSize: typography.xxl,
     fontWeight: fontWeight.extraBold,
-    letterSpacing: 0,
-    marginVertical: spacing.xs,
+    fontVariant: ['tabular-nums'],
   },
-  timerActions: {
-    width: '100%',
+  activeProgressBarContainer: {
+    height: 4,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.full,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
   },
-  timerActionStack: {
+  activeProgressBarFill: {
+    height: '100%',
+    backgroundColor: Colors.primary,
+    borderRadius: radius.full,
+  },
+  activeActionsRow: {
+    flexDirection: 'row',
     gap: spacing.sm,
   },
   timerBtn: {
+    flex: 1,
+    flexDirection: 'row',
     borderRadius: radius.full,
     paddingVertical: spacing.sm,
     alignItems: 'center',
     minHeight: layout.minTouchTarget,
     justifyContent: 'center',
   },
-  btnStart: {
-    backgroundColor: Colors.primaryContainer,
-  },
   btnPause: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: Colors.surfaceContainerLowest,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderColor: 'rgba(0, 101, 145, 0.25)',
   },
-  btnFinish: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+  btnPauseText: {
+    color: Colors.primary,
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
   },
-  timerBtnText: {
+  btnResume: {
+    backgroundColor: Colors.primary,
+  },
+  btnResumeText: {
     color: Colors.onPrimary,
     fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+  },
+  btnFinishActive: {
+    backgroundColor: '#10b981',
+    flex: 1.3,
+  },
+  btnFinishText: {
+    color: Colors.onPrimary,
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+  },
+  idleSessionContainer: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  idleSessionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  idleSessionTitle: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    letterSpacing: 0.8,
+  },
+  idleSessionSubtitle: {
+    fontSize: typography.xs,
+    color: Colors.onSurfaceVariant,
+    textAlign: 'center',
+    lineHeight: 16,
+    marginBottom: spacing.base,
+    paddingHorizontal: spacing.base,
+  },
+  btnFreestyle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    minHeight: 40,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  btnFreestyleText: {
+    color: Colors.onPrimary,
+    fontSize: typography.xs + 1,
     fontWeight: fontWeight.bold,
   },
   card: {
@@ -2901,22 +3125,7 @@ const styles = StyleSheet.create({
   routineEmptyState: {
     paddingVertical: spacing.md,
   },
-  routineStartButton: {
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    backgroundColor: Colors.primaryContainer,
-    minHeight: layout.minTouchTarget,
-    justifyContent: 'center',
-  },
-  routineStartButtonActive: {
-    backgroundColor: 'rgba(14, 165, 233, 0.2)',
-  },
-  routineStartText: {
-    fontSize: typography.sm,
-    fontWeight: fontWeight.bold,
-    color: Colors.onPrimary,
-  },
+
   // Modal styles
   modalOverlay: {
     flex: 1,
