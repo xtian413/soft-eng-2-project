@@ -4,6 +4,24 @@
 
 ---
 ---
+### [2026-06-07 22:00 +0800] STYLE: Compact calendar card container + centered "Fitness Journey" header
+- **Branch**: `jb-branch`
+- **Commit**: `6ecdeda`
+- **Files Modified**:
+  - `frontend/src/screens/dashboard/Profile/subcomponents/TrainingCalendar.tsx`
+  - `frontend/src/screens/dashboard/Profile/hooks/useProfileStats.ts`
+- **Changes**:
+  - ✅ **Card Container for Unexpanded View**: Compact week grid now wrapped in `compactCard` matching the app's card theme (`surfaceContainerLowest`, `radius.lg`, border+shadow) — consistent with every other card on the Profile tab.
+  - ✅ **Centered Header Layout**: Three-column header with nav arrows + calendar icon on the left (`‹ 📅 ›`), "Fitness Journey" title centered, "View All" + chevron on the right.
+  - ✅ **Week Navigation**: Added `weekOffset` state with prev/next arrows for browsing past/future weeks in compact mode. Days computed from `historyWorkouts`/`historyDietLogs` with fallback to `days` prop.
+  - ✅ **Weekday Labels Row**: Su–Sa labels above the day grid in muted `Colors.outline`.
+  - ✅ **Redesigned Day Cells**: Light blue-tinted background (`surfaceContainerLow`), centered date number, blue activity dot below, today highlighted with `Colors.primary` border.
+  - ✅ **Removed Workout Name Badges**: Compact view now shows clean date + dot — workout names omitted for visual clarity.
+  - ✅ **Type Safety**: Added optional `hasActivity?` field to `CalendarDay` interface.
+  - ✅ **Dead Code Removal**: Removed unused `getWorkoutStyle()`, `WorkoutStyle` interface, `weekCardWidth` computation, old day card styles.
+  - ✅ **Expanded Mode Unchanged**: Expanded month view retains its existing dedicated header and full functionality.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors
+
 ### [2026-06-07 17:45 +0800] STYLE: TrainingCalendar visual overhaul — 2-row week grid, themed history container, weekday labels
 - **Branch**: `jb-branch`
 - **Commit**: `d826d0a`

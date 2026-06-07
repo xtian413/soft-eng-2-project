@@ -1,6 +1,6 @@
 # context.md — Project-Wide Context & Notes
 ## Gemi
-**Last Updated**: 2026-06-07T17:45:00+08:00
+**Last Updated**: 2026-06-07T22:00:00+08:00
 
 ---
 
@@ -106,14 +106,16 @@ On mobile (< 768px): `grid-template-columns: repeat(2, 1fr)`
 On desktop (≥ 768px): `grid-template-columns: repeat(4, 1fr)`
 - All macro cards: `grid-column: span 1`
 
-### TrainingCalendar Component (2026-06-07)
+### TrainingCalendar Component (2026-06-07, updated 22:00)
+
 The `TrainingCalendar` component in `ProfileTab` manages its own expanded/collapsed state internally:
 
-- **Compact mode (unexpanded)**: 2-row `flexWrap` grid — 4 cards on the top row, 3 on the bottom. Cards are compact (minHeight 72, smaller typography, flat design, no heavy shadows). Card widths computed dynamically from `useWindowDimensions` for consistent 4-column layout.
-- **Expanded mode**: Full month grid inside a themed `historyCard` container (`surfaceContainerLowest`, `radius.lg`, subtle border+shadow matching app card styles). Includes month navigation arrows, 3-letter weekday headers (`Sun Mon Tue ...`) aligned with the grid, activity dots on tracked days, and a detail panel with section dividers for meals, workouts, sleep, and water.
-- **Grid sizing**: Expanded grid cell sizes calculated dynamically via `(containerMaxWidth - cardPadding*2 - gap*6) / 7` to fit within the card on any screen width.
-- **Toggle**: "View All" / "Weekly View" text link; month offset resets to current month on reopen.
-- **Data flow**: `ProfileTab` fetches history data eagerly on mount and passes `historyWorkouts`, `historyDietLogs`, `historyLoading`, `historyError` as props to TrainingCalendar.
+- **Compact mode (unexpanded)**: Wrapped in a themed `compactCard` container matching the rest of the Profile tab (`surfaceContainerLowest`, `radius.lg`, border+shadow). Header uses a three-column layout: left (`‹ 📅 ›` nav arrows + Calendar icon), center ("Fitness Journey" title), and right ("View All" + chevron). A weekday labels row (`Su Mo Tu We Th Fr Sa`) sits above a 7-column grid of day cells. Day cells use `surfaceContainerLow` background with centered date numbers and blue activity dots. Today's cell is highlighted with a `Colors.primary` border. Week navigation via `weekOffset` state browses past/future weeks computed from `historyWorkouts`/`historyDietLogs`.
+- **Expanded mode**: Full month grid inside a themed `historyCard` container. Includes month navigation arrows, 3-letter weekday headers aligned with the grid, activity dots on tracked days, and a detail panel with section dividers for meals, workouts, sleep, and water.
+- **Grid sizing**: Both compact and expanded cell sizes calculated dynamically via `(containerMaxWidth - cardPadding*2 - gap*6) / 7` using `useWindowDimensions`.
+- **Toggle**: "View All" / "Weekly View" text link; month/week offsets reset on toggle.
+- **Data flow**: `ProfileTab` fetches history data eagerly on mount and passes `historyWorkouts`, `historyDietLogs`, `historyLoading`, `historyError` as props. Compact mode falls back to `days` prop when history data is empty.
+- **Title**: Renamed from "Training Calendar" to "Fitness Journey".
 
 ### React Router Navigation Flow
 ```
