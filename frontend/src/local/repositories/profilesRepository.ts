@@ -6,6 +6,7 @@ import {
 
 type ProfileGender = LocalProfile['gender'];
 type ProfileGoal = LocalProfile['goal'];
+type ProfileActivityLevel = LocalProfile['activity_level'];
 
 export interface UpsertLocalProfileInput {
   user_id: string;
@@ -14,6 +15,12 @@ export interface UpsertLocalProfileInput {
   weight_kg?: number | null;
   gender?: ProfileGender;
   goal?: ProfileGoal;
+  age?: number | null;
+  activity_level?: ProfileActivityLevel;
+  target_weight_kg?: number | null;
+  macro_protein_pct?: number | null;
+  macro_carbs_pct?: number | null;
+  macro_fats_pct?: number | null;
 }
 
 export interface RemoteProfileInput {
@@ -22,6 +29,12 @@ export interface RemoteProfileInput {
   weight_kg?: number | null;
   gender?: ProfileGender;
   goal?: ProfileGoal;
+  age?: number | null;
+  activity_level?: ProfileActivityLevel;
+  target_weight_kg?: number | null;
+  macro_protein_pct?: number | null;
+  macro_carbs_pct?: number | null;
+  macro_fats_pct?: number | null;
   created_at?: string;
 }
 
@@ -33,6 +46,12 @@ const PROFILE_COLUMNS = [
   'weight_kg',
   'gender',
   'goal',
+  'age',
+  'activity_level',
+  'target_weight_kg',
+  'macro_protein_pct',
+  'macro_carbs_pct',
+  'macro_fats_pct',
   'created_at',
   'updated_at',
   'deleted_at',
@@ -73,7 +92,7 @@ function normalizeGender(value: ProfileGender | undefined) {
 }
 
 function normalizeGoal(value: ProfileGoal | undefined) {
-  return value === 'lose_weight' || value === 'build_muscle' || value === 'maintain'
+  return value === 'lose_weight' || value === 'build_muscle' || value === 'maintain' || value === 'moderate_cut' || value === 'aggressive_cut' || value === 'lean_bulk'
     ? value
     : null;
 }
@@ -143,6 +162,12 @@ export async function upsertLocalProfile(input: UpsertLocalProfileInput): Promis
              weight_kg = ?,
              gender = ?,
              goal = ?,
+             age = ?,
+             activity_level = ?,
+             target_weight_kg = ?,
+             macro_protein_pct = ?,
+             macro_carbs_pct = ?,
+             macro_fats_pct = ?,
              updated_at = ?,
              deleted_at = NULL,
              sync_status = 'pending',
@@ -153,6 +178,12 @@ export async function upsertLocalProfile(input: UpsertLocalProfileInput): Promis
         resolveNumber(input.weight_kg, existing.weight_kg),
         resolveGender(input.gender, existing.gender),
         resolveGoal(input.goal, existing.goal),
+        resolveNumber(input.age, existing.age),
+        resolveText(input.activity_level, existing.activity_level),
+        resolveNumber(input.target_weight_kg, existing.target_weight_kg),
+        resolveNumber(input.macro_protein_pct, existing.macro_protein_pct),
+        resolveNumber(input.macro_carbs_pct, existing.macro_carbs_pct),
+        resolveNumber(input.macro_fats_pct, existing.macro_fats_pct),
         now,
         input.user_id
       );
@@ -170,12 +201,18 @@ export async function upsertLocalProfile(input: UpsertLocalProfileInput): Promis
           weight_kg,
           gender,
           goal,
+          age,
+          activity_level,
+          target_weight_kg,
+          macro_protein_pct,
+          macro_carbs_pct,
+          macro_fats_pct,
           created_at,
           updated_at,
           deleted_at,
           sync_status,
           last_synced_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL)`,
         createLocalUuid(),
         input.user_id,
         resolveText(input.full_name, null),
@@ -183,6 +220,12 @@ export async function upsertLocalProfile(input: UpsertLocalProfileInput): Promis
         resolveNumber(input.weight_kg, null),
         resolveGender(input.gender, null),
         resolveGoal(input.goal, null),
+        resolveNumber(input.age, null),
+        resolveText(input.activity_level, null),
+        resolveNumber(input.target_weight_kg, null),
+        resolveNumber(input.macro_protein_pct, null),
+        resolveNumber(input.macro_carbs_pct, null),
+        resolveNumber(input.macro_fats_pct, null),
         now,
         now
       );
@@ -297,6 +340,12 @@ export async function upsertRemoteProfileForUser(
              weight_kg = ?,
              gender = ?,
              goal = ?,
+             age = ?,
+             activity_level = ?,
+             target_weight_kg = ?,
+             macro_protein_pct = ?,
+             macro_carbs_pct = ?,
+             macro_fats_pct = ?,
              updated_at = ?,
              sync_status = 'synced',
              last_synced_at = ?
@@ -306,6 +355,12 @@ export async function upsertRemoteProfileForUser(
         resolveNumber(remoteProfile.weight_kg, existing.weight_kg),
         resolveGender(remoteProfile.gender, existing.gender),
         resolveGoal(remoteProfile.goal, existing.goal),
+        resolveNumber(remoteProfile.age, existing.age),
+        resolveText(remoteProfile.activity_level, existing.activity_level),
+        resolveNumber(remoteProfile.target_weight_kg, existing.target_weight_kg),
+        resolveNumber(remoteProfile.macro_protein_pct, existing.macro_protein_pct),
+        resolveNumber(remoteProfile.macro_carbs_pct, existing.macro_carbs_pct),
+        resolveNumber(remoteProfile.macro_fats_pct, existing.macro_fats_pct),
         now,
         now,
         userId
@@ -333,12 +388,18 @@ export async function upsertRemoteProfileForUser(
         weight_kg,
         gender,
         goal,
+        age,
+        activity_level,
+        target_weight_kg,
+        macro_protein_pct,
+        macro_carbs_pct,
+        macro_fats_pct,
         created_at,
         updated_at,
         deleted_at,
         sync_status,
         last_synced_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?)`,
       createLocalUuid(),
       userId,
       resolveText(remoteProfile.full_name, null),
@@ -346,6 +407,12 @@ export async function upsertRemoteProfileForUser(
       resolveNumber(remoteProfile.weight_kg, null),
       resolveGender(remoteProfile.gender, null),
       resolveGoal(remoteProfile.goal, null),
+      resolveNumber(remoteProfile.age, null),
+      resolveText(remoteProfile.activity_level, null),
+      resolveNumber(remoteProfile.target_weight_kg, null),
+      resolveNumber(remoteProfile.macro_protein_pct, null),
+      resolveNumber(remoteProfile.macro_carbs_pct, null),
+      resolveNumber(remoteProfile.macro_fats_pct, null),
       createdAt,
       now,
       now

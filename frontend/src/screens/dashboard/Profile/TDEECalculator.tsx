@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing } from '@/theme/typography';
 import { Activity, Share2 } from 'lucide-react-native';
+import { useAuthStore } from '@/store/authStore';
+import type { ActivityLevel } from '@/screens/dashboard/types';
 
 type GenderKey = 'male' | 'female';
 type HeightUnit = 'cm' | 'in';
@@ -29,13 +31,26 @@ const lossLevels = [
 ];
 
 export function TDEECalculator() {
-  const [age, setAge] = useState('25');
-  const [gender, setGender] = useState<GenderKey>('male');
-  const [height, setHeight] = useState('180');
+  const { profile, updatePhysicalStats } = useAuthStore();
+
+  const [age, setAge] = useState(profile?.age ? String(profile.age) : '25');
+  const [gender, setGender] = useState<GenderKey>(profile?.gender || 'male');
+  const [height, setHeight] = useState(profile?.heightCm ? String(profile.heightCm) : '180');
   const [heightUnit, setHeightUnit] = useState<HeightUnit>('cm');
-  const [weight, setWeight] = useState('80');
+  const [weight, setWeight] = useState(profile?.weightKg ? String(profile.weightKg) : '80');
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('kg');
-  const [activityKey, setActivityKey] = useState(activityOptions[2].key);
+
+  const initialActivityKey = useMemo(() => {
+    if (!profile?.activityLevel) return 'moderate';
+    if (profile.activityLevel === 'sedentary') return 'sedentary';
+    if (profile.activityLevel === 'lightly_active') return 'light';
+    if (profile.activityLevel === 'moderately_active') return 'moderate';
+    if (profile.activityLevel === 'very_active') return 'very';
+    if (profile.activityLevel === 'extremely_active') return 'extreme';
+    return 'moderate';
+  }, [profile?.activityLevel]);
+
+  const [activityKey, setActivityKey] = useState(initialActivityKey);
 
   const selectedActivity = activityOptions.find((option) => option.key === activityKey) ?? activityOptions[2];
 

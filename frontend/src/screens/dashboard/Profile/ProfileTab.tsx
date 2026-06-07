@@ -3,7 +3,8 @@ import { Alert, ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInpu
 import { Colors } from '@/theme/colors';
 import { useAuthStore } from '@/store/authStore';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
-import type { GoalKey, MacroTargets } from '@/screens/dashboard/types';
+import type { GoalKey, MacroTargets, ActivityLevel } from '@/screens/dashboard/types';
+import { calculateMacros } from '@/utils/macroCalculator';
 import { Dumbbell, TrendingDown, Activity, ShieldCheck, LogOut, Lock, ChevronRight, ChevronLeft } from 'lucide-react-native';
 import { useProfileStats } from './hooks/useProfileStats';
 import { StatsRow } from './subcomponents/StatsRow';
@@ -18,6 +19,9 @@ const GOAL_LABELS: Record<GoalKey, string> = {
   build_muscle: 'Build Muscle',
   lose_weight: 'Lose Weight',
   maintain: 'Maintain',
+  moderate_cut: 'Moderate Cut',
+  aggressive_cut: 'Aggressive Cut',
+  lean_bulk: 'Lean Bulk',
 };
 
 interface ProfileTabProps {
@@ -31,6 +35,31 @@ interface ProfileTabProps {
   setActiveTab: (tab: 'dashboard' | 'food' | 'insights' | 'lift' | 'profile') => void;
 }
 
+function getDefaultMacroPercentages(
+  weightKg: number,
+  heightCm: number,
+  gender: 'male' | 'female',
+  goal: GoalKey,
+  age: number,
+  activityLevel: ActivityLevel
+) {
+  const targets = calculateMacros(weightKg, heightCm, gender, goal, age, activityLevel, null, null, null);
+  const pCal = targets.protein * 4;
+  const fCal = targets.fats * 9;
+  const cCal = targets.carbs * 4;
+  const totalCal = pCal + fCal + cCal;
+
+  if (totalCal === 0) {
+    return { proteinPct: 30, carbsPct: 40, fatsPct: 30 };
+  }
+
+  let pPct = Math.round((pCal / totalCal) * 100);
+  let fPct = Math.round((fCal / totalCal) * 100);
+  let cPct = 100 - pPct - fPct;
+
+  return { proteinPct: pPct, carbsPct: cPct, fatsPct: fPct };
+}
+
 export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets, onSignOut, setActiveTab }: ProfileTabProps) {
   const initials = fullName
     .split(' ')
@@ -39,13 +68,26 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
     .toUpperCase()
     .slice(0, 2);
 
-  const { updatePhysicalStats } = useAuthStore();
+  const { updatePhysicalStats, profile } = useAuthStore();
   const [isEditModalVisible, setEditModalVisible] = useState(false);
   const [isSignOutModalVisible, setSignOutModalVisible] = useState(false);
   const [isTDEEModalVisible, setTDEEModalVisible] = useState(false);
   const [editHeight, setEditHeight] = useState(String(heightCm));
   const [editWeight, setEditWeight] = useState(String(weightKg));
   const [editGoal, setEditGoal] = useState<GoalKey>(goal);
+  
+  // Expanded fields
+  const [editAge, setEditAge] = useState(profile?.age ? String(profile.age) : '22');
+  const [editGender, setEditGender] = useState<'male' | 'female'>(profile?.gender || 'male');
+  const [editActivityLevel, setEditActivityLevel] = useState<ActivityLevel>(profile?.activityLevel || 'lightly_active');
+  const [editTargetWeight, setEditTargetWeight] = useState(profile?.targetWeightKg ? String(profile.targetWeightKg) : String(weightKg));
+  
+  // Custom Macro slider state
+  const [useCustomMacros, setUseCustomMacros] = useState(false);
+  const [editProteinPct, setEditProteinPct] = useState(30);
+  const [editCarbsPct, setEditCarbsPct] = useState(40);
+  const [editFatsPct, setEditFatsPct] = useState(30);
+
   const [isSaving, setIsSaving] = useState(false);
   const [isHistoryOpen, setHistoryOpen] = useState(false);
   const [historyMonthOffset, setHistoryMonthOffset] = useState(0);
@@ -61,19 +103,83 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
     setEditHeight(String(heightCm));
     setEditWeight(String(weightKg));
     setEditGoal(goal);
+    setEditAge(profile?.age ? String(profile.age) : '22');
+    setEditGender(profile?.gender || 'male');
+    setEditActivityLevel(profile?.activityLevel || 'lightly_active');
+    setEditTargetWeight(profile?.targetWeightKg ? String(profile.targetWeightKg) : String(weightKg));
+    
+    const localProfile = profile;
+    const hasCustom =
+      !!localProfile &&
+      localProfile.macroProteinPct !== null &&
+      localProfile.macroCarbsPct !== null &&
+      localProfile.macroFatsPct !== null;
+
+    setUseCustomMacros(hasCustom);
+    if (hasCustom && localProfile) {
+      setEditProteinPct(localProfile.macroProteinPct!);
+      setEditCarbsPct(localProfile.macroCarbsPct!);
+      setEditFatsPct(localProfile.macroFatsPct!);
+    } else {
+      const defaults = getDefaultMacroPercentages(
+        weightKg,
+        heightCm,
+        localProfile?.gender || 'male',
+        goal,
+        localProfile?.age || 22,
+        localProfile?.activityLevel || 'lightly_active'
+      );
+      setEditProteinPct(defaults.proteinPct);
+      setEditCarbsPct(defaults.carbsPct);
+      setEditFatsPct(defaults.fatsPct);
+    }
     setEditModalVisible(true);
   };
 
   const handleSaveStats = async () => {
     const h = parseFloat(editHeight);
     const w = parseFloat(editWeight);
+    const a = parseInt(editAge, 10);
+    const tw = parseFloat(editTargetWeight);
+
     if (isNaN(h) || isNaN(w) || h <= 0 || w <= 0) {
       Alert.alert('Invalid Input', 'Please enter valid numbers for height and weight.');
       return;
     }
+
+    if (isNaN(a) || a < 1 || a > 120) {
+      Alert.alert('Invalid Input', 'Please enter a valid age between 1 and 120.');
+      return;
+    }
+
+    if (isNaN(tw) || tw <= 0) {
+      Alert.alert('Invalid Input', 'Please enter a valid target weight.');
+      return;
+    }
+
+    if (useCustomMacros) {
+      const sum = editProteinPct + editCarbsPct + editFatsPct;
+      if (sum !== 100) {
+        Alert.alert('Invalid Macros', `Macro percentages must sum to 100% (currently ${sum}%).`);
+        return;
+      }
+    }
+
     setIsSaving(true);
-    const res = await updatePhysicalStats(h, w, editGoal);
+    const res = await updatePhysicalStats(
+      h,
+      w,
+      editGoal,
+      editGender,
+      a,
+      editActivityLevel,
+      tw,
+      useCustomMacros ? editProteinPct : null,
+      useCustomMacros ? editCarbsPct : null,
+      useCustomMacros ? editFatsPct : null
+    );
     setIsSaving(false);
+
     if (res?.message) {
       Alert.alert('Error', res.message);
     } else {
@@ -354,17 +460,39 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
           </TouchableOpacity>
         </View>
         <View style={styles.statsGrid}>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Height</Text>
-            <Text style={styles.statValue}>{heightCm} cm</Text>
+          <View style={styles.statsGridRow}>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Height</Text>
+              <Text style={styles.statValue}>{heightCm} cm</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Weight</Text>
+              <Text style={styles.statValue}>{weightKg} kg</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Age</Text>
+              <Text style={styles.statValue}>{profile?.age || 22} y/o</Text>
+            </View>
           </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Weight</Text>
-            <Text style={styles.statValue}>{weightKg} kg</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Goal</Text>
-            <Text style={styles.statValue}>{GOAL_LABELS[goal]}</Text>
+          <View style={[styles.statsGridRow, { marginTop: spacing.md }]}>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Target Wt</Text>
+              <Text style={styles.statValue}>{profile?.targetWeightKg || weightKg} kg</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Activity</Text>
+              <Text style={styles.statValue} numberOfLines={1}>
+                {profile?.activityLevel === 'sedentary' ? 'Sedentary' :
+                 profile?.activityLevel === 'lightly_active' ? 'Light' :
+                 profile?.activityLevel === 'moderately_active' ? 'Moderate' :
+                 profile?.activityLevel === 'very_active' ? 'Very Act.' :
+                 profile?.activityLevel === 'extremely_active' ? 'Extreme' : 'Light'}
+              </Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Goal</Text>
+              <Text style={styles.statValue} numberOfLines={1}>{GOAL_LABELS[goal]}</Text>
+            </View>
           </View>
         </View>
       </View>
@@ -439,44 +567,204 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
       {/* Edit Stats Modal */}
       <Modal visible={isEditModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { maxHeight: '85%' }]}>
             <Text style={styles.modalTitle}>Edit Physical Stats</Text>
             
-            <Text style={styles.inputLabel}>Height (cm)</Text>
-            <TextInput
-              style={styles.input}
-              value={editHeight}
-              onChangeText={setEditHeight}
-              keyboardType="numeric"
-              accessibilityLabel="Height in centimeters"
-            />
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 20 }}>
+              <View style={styles.rowInputGroup}>
+                <View style={styles.inputBlock}>
+                  <Text style={styles.inputLabel}>Height (cm)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editHeight}
+                    onChangeText={setEditHeight}
+                    keyboardType="numeric"
+                    accessibilityLabel="Height in centimeters"
+                  />
+                </View>
+                <View style={styles.inputBlock}>
+                  <Text style={styles.inputLabel}>Weight (kg)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editWeight}
+                    onChangeText={setEditWeight}
+                    keyboardType="numeric"
+                    accessibilityLabel="Weight in kilograms"
+                  />
+                </View>
+              </View>
 
-            <Text style={styles.inputLabel}>Weight (kg)</Text>
-            <TextInput
-              style={styles.input}
-              value={editWeight}
-              onChangeText={setEditWeight}
-              keyboardType="numeric"
-              accessibilityLabel="Weight in kilograms"
-            />
+              <View style={styles.rowInputGroup}>
+                <View style={styles.inputBlock}>
+                  <Text style={styles.inputLabel}>Age</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editAge}
+                    onChangeText={setEditAge}
+                    keyboardType="numeric"
+                    accessibilityLabel="Age in years"
+                  />
+                </View>
+                <View style={styles.inputBlock}>
+                  <Text style={styles.inputLabel}>Target Wt (kg)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editTargetWeight}
+                    onChangeText={setEditTargetWeight}
+                    keyboardType="numeric"
+                    accessibilityLabel="Target weight in kilograms"
+                  />
+                </View>
+              </View>
 
-            <Text style={styles.inputLabel}>Goal</Text>
-            <View style={styles.goalRow}>
-              {(['lose_weight', 'build_muscle', 'maintain'] as GoalKey[]).map((g) => (
+              <Text style={styles.inputLabel}>Gender</Text>
+              <View style={styles.toggleRowDouble}>
+                {(['male', 'female'] as const).map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    activeOpacity={0.8}
+                    style={[styles.toggleButton, editGender === option && styles.toggleButtonActive]}
+                    onPress={() => setEditGender(option)}
+                  >
+                    <Text style={[styles.toggleButtonText, editGender === option && styles.toggleButtonTextActive]}>
+                      {option === 'male' ? 'Male' : 'Female'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.inputLabel}>Goal</Text>
+              <View style={styles.goalGrid}>
+                {(['lose_weight', 'moderate_cut', 'aggressive_cut', 'maintain', 'lean_bulk', 'build_muscle'] as GoalKey[]).map((g) => (
+                  <TouchableOpacity
+                    key={g}
+                    style={[styles.goalChoice, editGoal === g && styles.goalChoiceActive]}
+                    onPress={() => setEditGoal(g)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select ${GOAL_LABELS[g]} goal`}
+                    accessibilityState={{ selected: editGoal === g }}
+                  >
+                    <Text style={[styles.goalChoiceText, editGoal === g && styles.goalChoiceTextActive]}>
+                      {GOAL_LABELS[g]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.inputLabel}>Activity Level</Text>
+              <View style={styles.activityGrid}>
+                {[
+                  { key: 'sedentary', label: 'Sedentary', subtitle: 'Little/no exercise' },
+                  { key: 'lightly_active', label: 'Lightly Active', subtitle: '1-3 days/week' },
+                  { key: 'moderately_active', label: 'Moderately Active', subtitle: '3-5 days/week' },
+                  { key: 'very_active', label: 'Very Active', subtitle: '6-7 days/week' },
+                  { key: 'extremely_active', label: 'Extremely Active', subtitle: 'Intense daily' },
+                ].map((option) => (
+                  <TouchableOpacity
+                    key={option.key}
+                    activeOpacity={0.8}
+                    style={[styles.activityChoice, editActivityLevel === option.key && styles.activityChoiceActive]}
+                    onPress={() => setEditActivityLevel(option.key as ActivityLevel)}
+                  >
+                    <Text style={[styles.activityChoiceTitle, editActivityLevel === option.key && styles.activityChoiceTitleActive]}>
+                      {option.label}
+                    </Text>
+                    <Text style={styles.activityChoiceSubtitle}>{option.subtitle}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Customize Macros Section */}
+              <View style={styles.customizeMacrosHeader}>
+                <Text style={styles.inputLabel}>Custom Calorie/Macro Goals</Text>
                 <TouchableOpacity
-                  key={g}
-                  style={[styles.goalChoice, editGoal === g && styles.goalChoiceActive]}
-                  onPress={() => setEditGoal(g)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Select ${GOAL_LABELS[g]} goal`}
-                  accessibilityState={{ selected: editGoal === g }}
+                  onPress={() => {
+                    const nextCustom = !useCustomMacros;
+                    setUseCustomMacros(nextCustom);
+                    if (nextCustom) {
+                      const defaults = getDefaultMacroPercentages(
+                        parseFloat(editWeight) || weightKg,
+                        parseFloat(editHeight) || heightCm,
+                        editGender,
+                        editGoal,
+                        parseInt(editAge, 10) || 22,
+                        editActivityLevel
+                      );
+                      setEditProteinPct(defaults.proteinPct);
+                      setEditCarbsPct(defaults.carbsPct);
+                      setEditFatsPct(defaults.fatsPct);
+                    }
+                  }}
+                  style={styles.toggleTextLink}
                 >
-                  <Text style={[styles.goalChoiceText, editGoal === g && styles.goalChoiceTextActive]}>
-                    {GOAL_LABELS[g]}
+                  <Text style={styles.toggleTextLinkVal}>
+                    {useCustomMacros ? 'Use Auto-Calculated' : 'Customize Ratios'}
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
+              </View>
+
+              {useCustomMacros ? (
+                <View style={styles.macrosContainer}>
+                  {/* Segmented Color Bar */}
+                  <View style={styles.segmentedBar}>
+                    <View style={[styles.barSegment, { flex: editProteinPct, backgroundColor: '#0284c7' }]} />
+                    <View style={[styles.barSegment, { flex: editCarbsPct, backgroundColor: '#10b981' }]} />
+                    <View style={[styles.barSegment, { flex: editFatsPct, backgroundColor: '#f59e0b' }]} />
+                  </View>
+
+                  {/* Macro Adjustment Rows */}
+                  <MacroAdjusterRow
+                    label="Protein"
+                    value={editProteinPct}
+                    color="#0284c7"
+                    onDecrease={() => setEditProteinPct(Math.max(0, editProteinPct - 5))}
+                    onIncrease={() => setEditProteinPct(Math.min(100, editProteinPct + 5))}
+                  />
+                  <MacroAdjusterRow
+                    label="Carbs"
+                    value={editCarbsPct}
+                    color="#10b981"
+                    onDecrease={() => setEditCarbsPct(Math.max(0, editCarbsPct - 5))}
+                    onIncrease={() => setEditCarbsPct(Math.min(100, editCarbsPct + 5))}
+                  />
+                  <MacroAdjusterRow
+                    label="Fats"
+                    value={editFatsPct}
+                    color="#f59e0b"
+                    onDecrease={() => setEditFatsPct(Math.max(0, editFatsPct - 5))}
+                    onIncrease={() => setEditFatsPct(Math.min(100, editFatsPct + 5))}
+                  />
+
+                  <View style={styles.macroTotalRow}>
+                    <Text style={[styles.macroTotalText, (editProteinPct + editCarbsPct + editFatsPct) !== 100 && styles.macroTotalError]}>
+                      Total: {editProteinPct + editCarbsPct + editFatsPct}% { (editProteinPct + editCarbsPct + editFatsPct) === 100 ? '(Valid)' : '(Must sum to 100%)' }
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.resetMacrosBtn}
+                      onPress={() => {
+                        const defaults = getDefaultMacroPercentages(
+                          parseFloat(editWeight) || weightKg,
+                          parseFloat(editHeight) || heightCm,
+                          editGender,
+                          editGoal,
+                          parseInt(editAge, 10) || 22,
+                          editActivityLevel
+                        );
+                        setEditProteinPct(defaults.proteinPct);
+                        setEditCarbsPct(defaults.carbsPct);
+                        setEditFatsPct(defaults.fatsPct);
+                      }}
+                    >
+                      <Text style={styles.resetMacrosBtnText}>Optimal (0.8g/lb protein)</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <Text style={styles.autoMacrosText}>
+                  Macros will be automatically calculated based on Mifflin-St Jeor formulas targeting 0.8g protein per lb of body weight.
+                </Text>
+              )}
+            </ScrollView>
 
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -569,6 +857,38 @@ function TargetItem({ label, value, unit, color }: {
       <Text style={[styles.targetValue, { color }]}>{value}</Text>
       <Text style={styles.targetUnit}>{unit}</Text>
       <Text style={styles.targetLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function MacroAdjusterRow({
+  label,
+  value,
+  color,
+  onDecrease,
+  onIncrease,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  onDecrease: () => void;
+  onIncrease: () => void;
+}) {
+  return (
+    <View style={styles.adjusterRow}>
+      <View style={styles.adjusterLabelGroup}>
+        <View style={[styles.colorIndicator, { backgroundColor: color }]} />
+        <Text style={styles.adjusterLabel}>{label}</Text>
+      </View>
+      <View style={styles.adjusterControlGroup}>
+        <TouchableOpacity style={styles.adjusterBtn} onPress={onDecrease}>
+          <Text style={styles.adjusterBtnText}>-</Text>
+        </TouchableOpacity>
+        <Text style={styles.adjusterValue}>{value}%</Text>
+        <TouchableOpacity style={styles.adjusterBtn} onPress={onIncrease}>
+          <Text style={styles.adjusterBtnText}>+</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -907,11 +1227,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
     backgroundColor: 'rgba(190, 200, 210, 0.05)',
     borderRadius: radius.md,
-    padding: spacing.sm,
+    padding: spacing.md,
+  },
+  statsGridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
   },
   statBox: {
     flex: 1,
@@ -964,13 +1288,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     minHeight: layout.minTouchTarget,
   },
-  goalRow: {
+  goalGrid: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
     marginTop: spacing.xs,
   },
   goalChoice: {
-    flex: 1,
+    width: '48%',
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.3)',
     borderRadius: radius.md,
@@ -991,6 +1316,40 @@ const styles = StyleSheet.create({
   goalChoiceTextActive: {
     color: Colors.primary,
     fontWeight: fontWeight.bold,
+  },
+  activityGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  activityChoice: {
+    width: '48%',
+    backgroundColor: Colors.background,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.3)',
+    marginBottom: spacing.xs,
+    justifyContent: 'center',
+    minHeight: 52,
+  },
+  activityChoiceActive: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+  },
+  activityChoiceTitle: {
+    fontSize: typography.xs,
+    color: Colors.onSurface,
+    fontWeight: fontWeight.semiBold,
+  },
+  activityChoiceTitleActive: {
+    color: Colors.primary,
+  },
+  activityChoiceSubtitle: {
+    marginTop: 2,
+    fontSize: 10,
+    color: Colors.outline,
   },
   modalHeaderRow: {
     flexDirection: 'row',
@@ -1131,5 +1490,158 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: fontWeight.bold,
     fontSize: typography.sm,
+  },
+  
+  // Custom Macro Styles
+  customizeMacrosHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  toggleTextLink: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  toggleTextLinkVal: {
+    fontSize: typography.xs,
+    color: Colors.primary,
+    fontWeight: fontWeight.bold,
+  },
+  macrosContainer: {
+    backgroundColor: Colors.background,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.2)',
+    marginTop: spacing.xs,
+  },
+  segmentedBar: {
+    flexDirection: 'row',
+    height: 12,
+    borderRadius: radius.full,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+  },
+  barSegment: {
+    height: '100%',
+  },
+  adjusterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  adjusterLabelGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  colorIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: radius.full,
+  },
+  adjusterLabel: {
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    fontWeight: fontWeight.medium,
+  },
+  adjusterControlGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  adjusterBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+  },
+  adjusterBtnText: {
+    fontSize: typography.base,
+    color: Colors.onSurface,
+    fontWeight: fontWeight.bold,
+  },
+  adjusterValue: {
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    fontWeight: fontWeight.bold,
+    minWidth: 40,
+    textAlign: 'center',
+  },
+  macroTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(190, 200, 210, 0.1)',
+  },
+  macroTotalText: {
+    fontSize: typography.xs,
+    color: Colors.primary,
+    fontWeight: fontWeight.bold,
+  },
+  macroTotalError: {
+    color: Colors.error,
+  },
+  resetMacrosBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+  },
+  resetMacrosBtnText: {
+    fontSize: 10,
+    color: Colors.primary,
+    fontWeight: fontWeight.bold,
+  },
+  autoMacrosText: {
+    fontSize: typography.xs,
+    color: Colors.outline,
+    lineHeight: 18,
+    marginTop: spacing.xs,
+    paddingHorizontal: 4,
+  },
+  rowInputGroup: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  inputBlock: {
+    flex: 1,
+  },
+  toggleRowDouble: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  toggleButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.3)',
+    borderRadius: radius.full,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+  },
+  toggleButtonActive: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+  },
+  toggleButtonText: {
+    fontSize: typography.sm,
+    color: Colors.outline,
+    fontWeight: fontWeight.medium,
+  },
+  toggleButtonTextActive: {
+    color: Colors.primary,
+    fontWeight: fontWeight.bold,
   },
 });

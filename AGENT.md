@@ -408,3 +408,22 @@ EXPO_PUBLIC_API_BASE_URL=http://localhost:3000
 ```
 
 > Use `EXPO_PUBLIC_` prefix for all Expo env vars that need to be accessible in the app bundle.
+
+---
+
+## 11. Profile Page Refactor Plan
+
+Refactor the Profile tab into a full-featured athlete dashboard with interactive date-based history, weight logging, TDEE-driven calorie goals, and macro ratio customization.
+
+### Resolved Decisions
+- **Age:** Add an age input to the profile settings.
+- **Units:** Toggleable kg/lb, cm/in across the profile dashboard.
+- **Protein target:** 0.8g per lb of body weight as the default optimal target.
+
+### Refactor Phases
+- **Phase 1: Data Foundation & Schema Expansion (COMPLETED)** — SQLite schema changes (`daily_logs` table), expanded profile fields (`age`, `activity_level`, `target_weight_kg`, etc.), goal migration.
+- **Phase 2: TDEE & Macro Engine** — Implement Mifflin-St Jeor TDEE formulas, add macro ratio sliders (protein 0.8g/lb default), and expand `authStore.ts` profile state.
+- **Phase 3: Weight Logger & Calendar** — Quick weight entry UI on `WeightTrendCard` and interactive `HistoryCalendar` showing workouts, nutrition, sleep, and water.
+- **Phase 4: Calorie & Macro Goal Card** — Expandable inline calorie/macro goal config card.
+- **Phase 5: FoodTab Persistence** — Save and load sleep/water logs to/from SQLite `daily_logs` table.
+

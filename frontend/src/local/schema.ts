@@ -1,8 +1,8 @@
-import type { MealId } from '@/screens/dashboard/types';
+import type { MealId, GoalKey, ActivityLevel } from '@/screens/dashboard/types';
 
 export const GEMI_USER_DATABASE_NAME = 'gemi_user.db';
 
-export const LOCAL_SCHEMA_VERSION = 7;
+export const LOCAL_SCHEMA_VERSION = 9;
 
 export const LOCAL_TABLES = {
   schemaMigrations: 'schema_migrations',
@@ -15,6 +15,7 @@ export const LOCAL_TABLES = {
   bodyProgress: 'body_progress',
   aiInsights: 'ai_insights',
   syncQueue: 'sync_queue',
+  dailyLogs: 'daily_logs',
 } as const;
 
 export const SYNC_STATUSES = ['pending', 'synced', 'failed'] as const;
@@ -36,7 +37,22 @@ export interface LocalProfile extends LocalBaseRecord {
   height_cm: number | null;
   weight_kg: number | null;
   gender: 'male' | 'female' | null;
-  goal: 'lose_weight' | 'build_muscle' | 'maintain' | null;
+  goal: GoalKey | null;
+  age: number | null;
+  activity_level: ActivityLevel | null;
+  target_weight_kg: number | null;
+  macro_protein_pct: number | null;
+  macro_carbs_pct: number | null;
+  macro_fats_pct: number | null;
+}
+
+export interface LocalDailyLog extends LocalBaseRecord {
+  remote_id: string | null;
+  date: string;            // 'YYYY-MM-DD'
+  bedtime: string | null;  // 'HH:MM' 24h
+  waketime: string | null;
+  sleep_hours: number | null;
+  water_ml: number | null;
 }
 
 export interface LocalBodyProgress extends LocalBaseRecord {

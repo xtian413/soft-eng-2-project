@@ -1,6 +1,14 @@
 /** Shared types for the Dashboard tab screens matching web pages model */
 
-export type GoalKey = 'build_muscle' | 'lose_weight' | 'maintain';
+export type GoalKey = 'moderate_cut' | 'aggressive_cut' | 'lean_bulk' | 'maintain' | 'build_muscle' | 'lose_weight';
+
+export type ActivityLevel = 'sedentary' | 'lightly_active' | 'moderately_active' | 'very_active' | 'extremely_active';
+
+export interface MacroRatios {
+  proteinPct: number;
+  carbsPct: number;
+  fatsPct: number;
+}
 
 export interface MacroTargets {
   calories: number;
@@ -10,9 +18,12 @@ export interface MacroTargets {
 }
 
 export const GOAL_TARGETS: Record<GoalKey, MacroTargets> = {
-  build_muscle: { calories: 2300, protein: 150, carbs: 200, fats: 65 },
-  lose_weight:  { calories: 2000, protein: 130, carbs: 180, fats: 50 },
-  maintain:     { calories: 2400, protein: 140, carbs: 190, fats: 60 },
+  moderate_cut:   { calories: 2000, protein: 130, carbs: 180, fats: 50 },
+  aggressive_cut: { calories: 1500, protein: 130, carbs: 120, fats: 40 },
+  lean_bulk:      { calories: 2700, protein: 150, carbs: 250, fats: 70 },
+  maintain:       { calories: 2400, protein: 140, carbs: 190, fats: 60 },
+  build_muscle:   { calories: 2300, protein: 150, carbs: 200, fats: 65 },
+  lose_weight:    { calories: 2000, protein: 130, carbs: 180, fats: 50 },
 };
 
 export type MealId = 'breakfast' | 'lunch' | 'dinner' | 'snack';

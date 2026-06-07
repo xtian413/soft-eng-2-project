@@ -1,16 +1,17 @@
-import type { GoalKey, MacroTargets } from '@/screens/dashboard/types';
+import type { GoalKey, ActivityLevel, MacroTargets } from '@/screens/dashboard/types';
 
 export function calculateMacros(
   weightKg: number,
   heightCm: number,
   gender: 'male' | 'female',
   goal: GoalKey,
-  age: number = 22 // Default age per requirements
+  age: number = 22,
+  activityLevel: ActivityLevel = 'lightly_active',
+  macroProteinPct?: number | null,
+  macroCarbsPct?: number | null,
+  macroFatsPct?: number | null
 ): MacroTargets {
   // 1. Calculate BMR (Mifflin-St Jeor)
-  // Male: 10 * weight(kg) + 6.25 * height(cm) - 5 * age(y) + 5
-  // Female: 10 * weight(kg) + 6.25 * height(cm) - 5 * age(y) - 161
-  
   let bmr = 10 * weightKg + 6.25 * heightCm - 5 * age;
   if (gender === 'male') {
     bmr += 5;
@@ -18,36 +19,60 @@ export function calculateMacros(
     bmr -= 161;
   }
 
-  // 2. Calculate TDEE (Lightly Active multiplier)
-  const TDEE_MULTIPLIER = 1.375;
-  const tdee = bmr * TDEE_MULTIPLIER;
+  // 2. Calculate TDEE using activity level
+  let activityMultiplier = 1.375; // Default lightly active
+  if (activityLevel === 'sedentary') activityMultiplier = 1.2;
+  else if (activityLevel === 'lightly_active') activityMultiplier = 1.375;
+  else if (activityLevel === 'moderately_active') activityMultiplier = 1.55;
+  else if (activityLevel === 'very_active') activityMultiplier = 1.725;
+  else if (activityLevel === 'extremely_active') activityMultiplier = 1.9;
+
+  const tdee = bmr * activityMultiplier;
 
   // 3. Calculate Target Calories based on Goal
   let targetCalories = tdee;
-  if (goal === 'lose_weight') {
+  if (goal === 'lose_weight' || goal === 'moderate_cut') {
     targetCalories -= 500;
-  } else if (goal === 'build_muscle') {
+  } else if (goal === 'aggressive_cut') {
+    targetCalories -= 750;
+  } else if (goal === 'build_muscle' || goal === 'lean_bulk') {
     targetCalories += 300;
   }
   // 'maintain' keeps targetCalories = tdee
 
+  targetCalories = Math.max(1200, Math.round(targetCalories));
+
   // 4. Calculate Target Macros
-  // Protein: 2.2g per kg of body weight
-  const protein = Math.round(weightKg * 2.2);
+  let protein = 0;
+  let fats = 0;
+  let carbs = 0;
 
-  // Fats: 0.8g per kg of body weight
-  const fats = Math.round(weightKg * 0.8);
+  const hasCustomMacros =
+    typeof macroProteinPct === 'number' &&
+    typeof macroCarbsPct === 'number' &&
+    typeof macroFatsPct === 'number';
 
-  // Carbs: Remaining calories divided by 4
-  // 1g protein = 4 kcal, 1g fat = 9 kcal, 1g carb = 4 kcal
-  const caloriesFromProteinAndFat = (protein * 4) + (fats * 9);
-  const remainingCalories = targetCalories - caloriesFromProteinAndFat;
-  
-  // Ensure carbs don't go negative if goal is extreme
-  const carbs = Math.max(0, Math.round(remainingCalories / 4));
+  if (hasCustomMacros) {
+    protein = Math.max(0, Math.round((targetCalories * (macroProteinPct / 100)) / 4));
+    carbs = Math.max(0, Math.round((targetCalories * (macroCarbsPct / 100)) / 4));
+    fats = Math.max(0, Math.round((targetCalories * (macroFatsPct / 100)) / 9));
+  } else {
+    // Default targets
+    // Protein: 0.8g per lb of body weight
+    const weightLbs = weightKg * 2.20462;
+    protein = Math.round(weightLbs * 0.8);
+
+    // Fats: 0.8g per kg of body weight
+    fats = Math.round(weightKg * 0.8);
+
+    // Carbs: Remaining calories divided by 4
+    const caloriesFromProteinAndFat = (protein * 4) + (fats * 9);
+    const remainingCalories = targetCalories - caloriesFromProteinAndFat;
+    carbs = Math.max(0, Math.round(remainingCalories / 4));
+  }
 
   return {
-    calories: Math.round(targetCalories),
+    calories: targetCalories,
     protein,
     carbs,
     fats,

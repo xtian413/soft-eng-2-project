@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
@@ -19,6 +19,7 @@ import type { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuthStore } from '@/store/authStore';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
+import type { ActivityLevel } from '@/screens/dashboard/types';
 import {
   User,
   Mail,
@@ -29,6 +30,12 @@ import {
   Activity,
   Check,
   ChevronLeft,
+  Calendar,
+  Flame,
+  Zap,
+  Heart,
+  Mountain,
+  Armchair,
 } from 'lucide-react-native';
 
 const schema = z
@@ -39,11 +46,52 @@ const schema = z
     confirmPassword: z.string().min(6, 'Please confirm your password'),
     height: z.string().min(1, 'Height is required'),
     weight: z.string().min(1, 'Weight is required'),
+    birthMonth: z.string().min(1, 'Month is required'),
+    birthDay: z.string().min(1, 'Day is required'),
+    birthYear: z.string().min(4, 'Year is required'),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match',
     path: ['confirmPassword'],
-  });
+  })
+  .refine((data) => {
+    const month = parseInt(data.birthMonth, 10);
+    const day = parseInt(data.birthDay, 10);
+    const year = parseInt(data.birthYear, 10);
+    if (isNaN(month) || isNaN(day) || isNaN(year)) return false;
+    const date = new Date(year, month - 1, day);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  }, { message: 'Enter a valid date', path: ['birthDay'] })
+  .refine((data) => {
+    const year = parseInt(data.birthYear, 10);
+    const month = parseInt(data.birthMonth, 10);
+    const day = parseInt(data.birthDay, 10);
+    if (isNaN(year) || isNaN(month) || isNaN(day)) return false;
+    const birthDate = new Date(year, month - 1, day);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+    return age >= 13 && age <= 120;
+  }, { message: 'You must be at least 13 years old', path: ['birthYear'] });
+
+/** Calculates age from birthdate components */
+function calculateAge(month: number, day: number, year: number): number {
+  const birthDate = new Date(year, month - 1, day);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+  return age;
+}
+
+const ACTIVITY_LEVELS: { key: ActivityLevel; label: string; icon: typeof Armchair }[] = [
+  { key: 'sedentary', label: 'Sedentary', icon: Armchair },
+  { key: 'lightly_active', label: 'Lightly Active', icon: Heart },
+  { key: 'moderately_active', label: 'Moderate', icon: Flame },
+  { key: 'very_active', label: 'Very Active', icon: Zap },
+  { key: 'extremely_active', label: 'Extreme', icon: Mountain },
+];
 
 type RegisterForm = z.infer<typeof schema>;
 type RegisterNavigation = StackNavigationProp<AuthStackParamList, 'Register'>;
@@ -58,6 +106,7 @@ export default function RegisterScreen() {
   const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
   const [goal, setGoal] = useState<'lose_weight' | 'build_muscle' | 'maintain'>('lose_weight');
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderately_active');
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   const {
@@ -66,7 +115,7 @@ export default function RegisterScreen() {
     formState: { errors, isSubmitting },
   } = useForm<RegisterForm>({
     resolver: zodResolver(schema),
-    defaultValues: { fullName: '', email: '', password: '', confirmPassword: '', height: '', weight: '' },
+    defaultValues: { fullName: '', email: '', password: '', confirmPassword: '', height: '', weight: '', birthMonth: '', birthDay: '', birthYear: '' },
   });
 
   const onSubmit = async (values: RegisterForm) => {
@@ -81,12 +130,20 @@ export default function RegisterScreen() {
     const heightCm = heightUnit === 'cm' ? parsedHeight : parsedHeight * 30.48;
     const weightKg = weightUnit === 'kg' ? parsedWeight : parsedWeight * 0.45359237;
 
+    const age = calculateAge(
+      parseInt(values.birthMonth, 10),
+      parseInt(values.birthDay, 10),
+      parseInt(values.birthYear, 10)
+    );
+
     const error = await signUp(values.email, values.password, {
       fullName: values.fullName,
       height: heightCm,
       weight: weightKg,
       gender,
       goal,
+      age,
+      activityLevel,
     });
 
     if (error) {

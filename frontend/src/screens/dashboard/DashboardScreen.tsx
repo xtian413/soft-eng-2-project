@@ -116,9 +116,25 @@ export default function DashboardScreen() {
   const gender = profile?.gender || 'male';
   const weightKg = profile?.weightKg || 75;
   const heightCm = profile?.heightCm || 180;
+  const age = profile?.age || 22;
+  const activityLevel = profile?.activityLevel || 'lightly_active';
+  const macroProteinPct = profile?.macroProteinPct;
+  const macroCarbsPct = profile?.macroCarbsPct;
+  const macroFatsPct = profile?.macroFatsPct;
+
   const targets = useMemo(
-    () => calculateMacros(weightKg, heightCm, gender, goal),
-    [gender, goal, heightCm, weightKg],
+    () => calculateMacros(
+      weightKg,
+      heightCm,
+      gender,
+      goal,
+      age,
+      activityLevel,
+      macroProteinPct,
+      macroCarbsPct,
+      macroFatsPct
+    ),
+    [gender, goal, heightCm, weightKg, age, activityLevel, macroProteinPct, macroCarbsPct, macroFatsPct],
   );
 
   const fullName = (() => {
