@@ -3,7 +3,7 @@ import { Alert, ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInpu
 import { Colors } from '@/theme/colors';
 import { useAuthStore } from '@/store/authStore';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
-import { type GoalKey, type MacroTargets, type ActivityLevel, GOAL_LABELS } from '@/screens/dashboard/types';
+import { type GoalKey, type MacroTargets, type ActivityLevel, GOAL_LABELS, MACRO_PRESETS, type MacroRatios } from '@/screens/dashboard/types';
 import { calculateMacros, calculateTDEE } from '@/utils/macroCalculator';
 import { Dumbbell, TrendingDown, Activity, ShieldCheck, LogOut, Lock, ChevronRight, ChevronLeft } from 'lucide-react-native';
 import { useProfileStats } from './hooks/useProfileStats';
@@ -830,6 +830,37 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
 
                 {useCustomMacros ? (
                   <View style={styles.macrosContainer}>
+                    {/* Macro Ratio Presets */}
+                    <Text style={styles.presetsLabel}>Quick Presets</Text>
+                    <View style={styles.presetsRow}>
+                      {MACRO_PRESETS.map((preset) => {
+                        const isActive =
+                          editProteinPct === preset.ratios.proteinPct &&
+                          editCarbsPct === preset.ratios.carbsPct &&
+                          editFatsPct === preset.ratios.fatsPct;
+                        return (
+                          <TouchableOpacity
+                            key={preset.key}
+                            style={[styles.presetChip, isActive && styles.presetChipActive]}
+                            onPress={() => {
+                              setEditProteinPct(preset.ratios.proteinPct);
+                              setEditCarbsPct(preset.ratios.carbsPct);
+                              setEditFatsPct(preset.ratios.fatsPct);
+                            }}
+                            activeOpacity={0.75}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Apply ${preset.label} preset: ${preset.description}`}
+                          >
+                            <Text style={[styles.presetChipLabel, isActive && styles.presetChipLabelActive]}>
+                              {preset.label}
+                            </Text>
+                            <Text style={[styles.presetChipDesc, isActive && styles.presetChipDescActive]}>
+                              {preset.description}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
                     {/* Segmented Color Bar */}
                     <View style={styles.segmentedBar}>
                       <View style={[styles.barSegment, { flex: editProteinPct, backgroundColor: '#0284c7' }]} />
@@ -1856,5 +1887,56 @@ const styles = StyleSheet.create({
   toggleButtonTextActive: {
     color: Colors.primary,
     fontWeight: fontWeight.bold,
+  },
+
+  // Macro Preset Styles
+  presetsLabel: {
+    fontSize: 10,
+    color: Colors.outline,
+    fontWeight: fontWeight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+  },
+  presetsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  presetChip: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.3)',
+    backgroundColor: Colors.surface,
+    minWidth: '30%',
+    flex: 1,
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  presetChipActive: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+  },
+  presetChipLabel: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    textAlign: 'center',
+  },
+  presetChipLabelActive: {
+    color: Colors.primary,
+  },
+  presetChipDesc: {
+    fontSize: 9,
+    color: Colors.outline,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  presetChipDescActive: {
+    color: Colors.primary,
   },
 });

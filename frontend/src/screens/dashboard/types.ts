@@ -31,6 +31,46 @@ export const GOAL_TARGETS: Record<GoalKey, MacroTargets> = {
   lean_bulk:      { calories: 2700, protein: 150, carbs: 250, fats: 70 },
 };
 
+export interface MacroPreset {
+  key: string;
+  label: string;
+  description: string;
+  ratios: MacroRatios;
+}
+
+export const MACRO_PRESETS: MacroPreset[] = [
+  {
+    key: 'balanced',
+    label: 'Balanced',
+    description: 'All-purpose default split',
+    ratios: { proteinPct: 30, carbsPct: 40, fatsPct: 30 },
+  },
+  {
+    key: 'high_protein',
+    label: 'High Protein',
+    description: 'Muscle building & satiety',
+    ratios: { proteinPct: 40, carbsPct: 30, fatsPct: 30 },
+  },
+  {
+    key: 'low_carb',
+    label: 'Low Carb',
+    description: 'Fat loss focus',
+    ratios: { proteinPct: 35, carbsPct: 20, fatsPct: 45 },
+  },
+  {
+    key: 'ketogenic',
+    label: 'Ketogenic',
+    description: 'Very low carb, high fat',
+    ratios: { proteinPct: 25, carbsPct: 5, fatsPct: 70 },
+  },
+  {
+    key: 'endurance',
+    label: 'Endurance',
+    description: 'Higher carbs for performance',
+    ratios: { proteinPct: 20, carbsPct: 60, fatsPct: 20 },
+  },
+];
+
 export type MealId = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
 export interface FoodLogEntry {
