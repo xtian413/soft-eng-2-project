@@ -32,7 +32,7 @@ export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, 
 
   const sleepMetrics = useMemo(() => {
     let sleepQuality = 'Optimal';
-    let sleepQualityColor = '#10b981';
+    let sleepQualityColor: string = Colors.primary;
     if (sleepHours < 6) {
       sleepQuality = 'Poor';
       sleepQualityColor = Colors.error;
@@ -106,7 +106,7 @@ export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, 
       <View style={styles.sleepHeader}>
         <View style={styles.cardTitleRow}>
           <View style={styles.sleepIconWrapper}>
-            <Bed size={16} color="#8b5cf6" />
+            <Bed size={16} color={Colors.primary} />
           </View>
           <Text style={styles.sleepCardTitle}>SLEEP RECOVERY</Text>
         </View>
@@ -125,7 +125,7 @@ export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, 
           <Text style={styles.sleepStepperLabel}>Bedtime</Text>
           <TouchableOpacity style={styles.sleepTimeDisplayRowPressable} onPress={() => openTimePicker('bed')} activeOpacity={0.75}>
             <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(bedtime)}</Text>
-            <Edit2 size={14} color="#8b5cf6" style={styles.sleepTimeEditIcon} />
+            <Edit2 size={14} color="#0ea5e9" style={styles.sleepTimeEditIcon} />
           </TouchableOpacity>
           <View style={styles.stepperActionRow}>
             <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('bed', -30)} activeOpacity={0.75}>
@@ -141,7 +141,7 @@ export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, 
           <Text style={styles.sleepStepperLabel}>Wakeup</Text>
           <TouchableOpacity style={styles.sleepTimeDisplayRowPressable} onPress={() => openTimePicker('wake')} activeOpacity={0.75}>
             <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(waketime)}</Text>
-            <Edit2 size={14} color="#8b5cf6" style={styles.sleepTimeEditIcon} />
+            <Edit2 size={14} color="#0ea5e9" style={styles.sleepTimeEditIcon} />
           </TouchableOpacity>
           <View style={styles.stepperActionRow}>
             <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('wake', -30)} activeOpacity={0.75}>
@@ -179,7 +179,7 @@ export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, 
             <View style={styles.pickerHeader}>
               <View style={styles.pickerTitleRow}>
                 <View style={styles.pickerIconWrap}>
-                  {activeTimePicker === 'bed' ? <Moon size={14} color="#8b5cf6" /> : <Sun size={14} color="#fbbf24" />}
+                  {activeTimePicker === 'bed' ? <Moon size={14} color={Colors.primary} /> : <Sun size={14} color="#fbbf24" />}
                 </View>
                 <Text style={styles.pickerTitle}>Set {activeTimePicker === 'bed' ? 'Bedtime' : 'Wakeup Time'}</Text>
               </View>
@@ -246,12 +246,12 @@ export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, 
 
 const styles = StyleSheet.create({
   sleepCard: {
-    backgroundColor: Colors.surfaceContainerLowest,
+    backgroundColor: 'rgba(14, 165, 233, 0.06)',
     borderRadius: radius.lg,
     padding: spacing.base,
     marginBottom: spacing.base,
     borderWidth: 1.5,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderColor: 'rgba(14, 165, 233, 0.15)',
   },
   sleepHeader: {
     flexDirection: 'row',
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: radius.md,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: spacing.xs,
@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
   sleepCardTitle: {
     fontSize: typography.xs,
     fontWeight: fontWeight.bold,
-    color: '#8b5cf6',
+    color: Colors.primary,
     letterSpacing: 0.8,
   },
   sleepScoreWrap: {
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
   sleepCycleCountText: {
     fontSize: 11,
     fontWeight: fontWeight.bold,
-    color: '#8b5cf6',
+    color: Colors.primary,
     marginTop: 2,
   },
   sleepSubtext: {
@@ -317,12 +317,12 @@ const styles = StyleSheet.create({
     width: '100%',
     minHeight: 42,
     borderRadius: radius.md,
-    backgroundColor: 'rgba(139, 92, 246, 0.04)',
+    backgroundColor: Colors.surfaceContainerLowest,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderColor: 'rgba(14, 165, 233, 0.15)',
     marginBottom: 8,
     paddingHorizontal: 8,
   },
@@ -343,14 +343,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radius.sm,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderColor: 'rgba(14, 165, 233, 0.15)',
   },
   stepperBtnText: {
     fontSize: 10,
     fontWeight: fontWeight.bold,
-    color: '#8b5cf6',
+    color: '#0284c7',
   },
   sleepBarRow: {
     flexDirection: 'row',
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     width: '90%',
     maxWidth: 360,
     borderWidth: 1.5,
-    borderColor: 'rgba(139, 92, 246, 0.15)',
+    borderColor: 'rgba(14, 165, 233, 0.15)',
   },
   pickerHeader: {
     flexDirection: 'row',
@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: radius.md,
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLow,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.1)',
+    borderColor: 'rgba(14, 165, 233, 0.1)',
   },
   pickerItem: {
     width: '100%',
@@ -475,9 +475,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pickerItemActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
     borderLeftWidth: 3,
-    borderLeftColor: '#8b5cf6',
+    borderLeftColor: Colors.primary,
   },
   pickerItemText: {
     fontSize: typography.sm,
@@ -497,13 +497,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceContainerLow,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.1)',
+    borderColor: 'rgba(14, 165, 233, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   periodBtnActive: {
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-    borderColor: '#8b5cf6',
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    borderColor: Colors.primary,
     borderWidth: 1.5,
   },
   periodBtnText: {
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   periodBtnTextActive: {
-    color: '#8b5cf6',
+    color: Colors.primary,
   },
   pickerActions: {
     flexDirection: 'row',
@@ -536,7 +536,7 @@ const styles = StyleSheet.create({
     flex: 1.5,
     paddingVertical: 12,
     borderRadius: radius.md,
-    backgroundColor: '#8b5cf6',
+    backgroundColor: Colors.primary,
     alignItems: 'center',
   },
   pickerSaveBtnText: {

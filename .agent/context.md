@@ -1,6 +1,6 @@
 # context.md — Project-Wide Context & Notes
 ## Gemi
-**Last Updated**: 2026-06-07T09:15:00+08:00
+**Last Updated**: 2026-06-07T09:16:00+08:00
 
 ---
 
@@ -129,7 +129,7 @@ Profile data passed: `navigate('/dashboard', { state: { fullName, email, gender,
   * $\text{Calories Remaining} = \text{Target Calories} - \text{Calories Eaten}$
 * **Interactive Toggles**:
   * **Water Logger**: Fully customizable daily target (e.g. 4L goal support). Dynamically draws the number of glasses based on 250mL servings (capped at 12 maximum). WCAG-compliant touch targets (44px) wrap beautifully on narrow viewport screens. Shows a progress bar and remaining amount.
-  * **Sleep Logger**: Bedtime and Wake-up time HTML pickers. Features exact sleep schedule labels: "Slept at (last night)" and "Woke up (this morning)" with support for cross-midnight math, progress indicator, and warnings for sleep < 6h.
+  * **Sleep Logger**: Bedtime and Wake-up time custom React Native modal scroll pickers. Features sleep schedule metrics, sleep quality tracking, color-coded visual feedback based on target (8h goal) aligned with the primary design theme, progress indicator, and warning banner for sleep < 6h.
   - **Meal Checklist**: Breakfast, Lunch, Dinner, and Snacks. Breakfast starts preloaded with 540 kcal egg & toast. dinner has togglable Grilled Salmon. Snacks can be added directly via search or barcode scans.
   - **AI Quick Log**: Parses text for calories (e.g. `"200 kcal"`) or keyword mappings (e.g. eggs, toast, steak) and dynamically increments user macros with a matching toast alert.
   - **USDA Foundation Foods & Scale Configurator**: Ingested dynamically from a local FDC database JSON file. Dynamic module resolution requires parsing `.default` since dynamic imports in ES Modules return namespace containers. Searching is available globally from any view, as triggers monitor modal state (`isOptionsModalOpen`).

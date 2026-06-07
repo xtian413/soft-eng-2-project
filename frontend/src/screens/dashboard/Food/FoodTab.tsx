@@ -50,7 +50,7 @@ import { LoggedItemDetailsModal } from './LoggedItemDetailsModal';
 import { FoodSearchModal } from './FoodSearchModal';
 import { QuickParserCard, type QuickParserReviewItem } from './QuickParserCard';
 import { parseFoodDescription, type ParsedFoodItem, type ParsedFoodUnit } from '@/ai/foodParser';
-import { Lock } from 'lucide-react-native';
+
 
 interface FoodTabProps {
   userId: string | null;
@@ -1040,14 +1040,6 @@ export function FoodTab({
           setWaketime={setWaketime}
           triggerToast={triggerToast}
         />
-
-        {/* Privacy Note */}
-        <View style={styles.privacyWrap}>
-          <View style={styles.privacyRow}>
-            <Lock size={12} color={Colors.outline} style={{ marginRight: 6 }} />
-            <Text style={styles.privacyText}>Food logs stay local-first and sync when available.</Text>
-          </View>
-        </View>
       </ScrollView>
 
       <FoodSearchModal
@@ -1450,20 +1442,6 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontWeight: fontWeight.bold,
     flex: 1,
-  },
-  privacyWrap: {
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  privacyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  privacyText: {
-    fontSize: 10,
-    color: Colors.outline,
-    fontWeight: fontWeight.medium,
   },
   cardTitleRow: {
     flexDirection: 'row',
