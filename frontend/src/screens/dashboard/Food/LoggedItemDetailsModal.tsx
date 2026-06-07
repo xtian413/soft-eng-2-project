@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -11,17 +12,18 @@ import {
   View,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { ChevronDown, ChevronUp, Clock, Trash2, X } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Clock, Trash2, X, Plus, Minus } from 'lucide-react-native';
 import { Colors } from '@/theme/colors';
 import { fontWeight, radius, spacing, typography } from '@/theme/typography';
 import type { FoodLogEntry, MacroTargets, MealId } from '@/screens/dashboard/types';
+import { searchFoodDatabase, type GemiFoodItem } from '@/api/foodDatabaseApi';
 
 interface LoggedItemDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   viewingLoggedItem: FoodLogEntry | null;
   targets: MacroTargets;
-  onSaveChanges: (entry: FoodLogEntry, nextAmount: number, nextMealId: MealId) => Promise<void> | void;
+  onSaveChanges: (updatedEntry: FoodLogEntry) => Promise<void> | void;
   onDeleteEntry: (id: string) => void;
   isSaving: boolean;
 }
@@ -42,105 +44,181 @@ export function LoggedItemDetailsModal({
   onDeleteEntry,
   isSaving,
 }: LoggedItemDetailsModalProps) {
-  const [editAmount, setEditAmount] = useState('1');
+  const [editQuantity, setEditQuantity] = useState<number>(1);
+  const [editUnit, setEditUnit] = useState<string>('portion');
+  const [editWeight, setEditWeight] = useState<number>(100);
   const [editMealId, setEditMealId] = useState<MealId>('snack');
+  const [hydratedFood, setHydratedFood] = useState<GemiFoodItem | null>(null);
   const [validationMessage, setValidationMessage] = useState('');
+  const [isServingDropdownOpen, setIsServingDropdownOpen] = useState(false);
+  const [isMealDropdownOpen, setIsMealDropdownOpen] = useState(false);
+
+  // Accordion Expand/Collapse States
   const [isEnergyExpanded, setIsEnergyExpanded] = useState(true);
   const [isMacrosExpanded, setIsMacrosExpanded] = useState(true);
   const [isMicrosExpanded, setIsMicrosExpanded] = useState(true);
   const [isAllMicrosExpanded, setIsAllMicrosExpanded] = useState(false);
 
   useEffect(() => {
-    if (!viewingLoggedItem || !isOpen) return;
+    if (viewingLoggedItem && isOpen) {
+      setEditQuantity(viewingLoggedItem.servingSize || 1);
+      setEditUnit(viewingLoggedItem.servingUnit || 'portion');
+      setEditMealId(viewingLoggedItem.mealId || 'snack');
+      setHydratedFood(null);
+      setValidationMessage('');
+      setIsServingDropdownOpen(false);
+      setIsMealDropdownOpen(false);
 
-    setEditAmount(String(viewingLoggedItem.servingSize || 1));
-    setEditMealId(viewingLoggedItem.mealId || 'snack');
-    setValidationMessage('');
-  }, [isOpen, viewingLoggedItem]);
+      // Hydrate from USDA database by matching food name to obtain micronutrients and units
+      const hydrateDetails = async () => {
+        try {
+          const results = await searchFoodDatabase({ query: viewingLoggedItem.name, limit: 1 });
+          if (results && results.length > 0) {
+            const matched = results[0];
+            setHydratedFood(matched);
+            
+            // Sync serving weight based on the initial logged unit
+            if (viewingLoggedItem.servingUnit === '100g') {
+              setEditWeight(100);
+            } else if (viewingLoggedItem.servingUnit === '1g') {
+              setEditWeight(1);
+            } else {
+              setEditWeight(matched.defaultServingSize || 100);
+            }
+          }
+        } catch (err) {
+          console.error('[Gemi] Failed to hydrate food details:', err);
+        }
+      };
 
-  const numericAmount = Number(editAmount);
-  const isAmountValid = Number.isFinite(numericAmount) && numericAmount > 0;
-  const amountErrorMessage = validationMessage || (!isAmountValid ? 'Enter an amount greater than 0.' : '');
-  const previewItem = useMemo(() => {
-    if (!viewingLoggedItem || !isAmountValid) return viewingLoggedItem;
+      hydrateDetails();
+    }
+  }, [viewingLoggedItem, isOpen]);
 
-    const originalAmount = viewingLoggedItem.servingSize > 0 ? viewingLoggedItem.servingSize : 1;
-    const multiplier = numericAmount / originalAmount;
+  const calculatedValues = useMemo(() => {
+    let cals = 0;
+    let prot = 0;
+    let carb = 0;
+    let fat = 0;
+    let fiber = 0;
+    let sodium = 0;
+    let potassium = 0;
+    let calcium = 0;
+    let iron = 0;
+    let vitaminC = 0;
+    let folate = 0;
 
-    return {
-      ...viewingLoggedItem,
-      mealId: editMealId,
-      calories: Math.round(viewingLoggedItem.calories * multiplier),
-      protein: Number((viewingLoggedItem.protein * multiplier).toFixed(1)),
-      carbs: Number((viewingLoggedItem.carbs * multiplier).toFixed(1)),
-      fat: Number((viewingLoggedItem.fat * multiplier).toFixed(1)),
-      fiber: Number((viewingLoggedItem.fiber * multiplier).toFixed(1)),
-      sodium: Math.round(viewingLoggedItem.sodium * multiplier),
-      potassium: Math.round(viewingLoggedItem.potassium * multiplier),
-      calcium: Math.round(viewingLoggedItem.calcium * multiplier),
-      iron: Number((viewingLoggedItem.iron * multiplier).toFixed(2)),
-      vitaminC: Number((viewingLoggedItem.vitaminC * multiplier).toFixed(1)),
-      folate: Math.round(viewingLoggedItem.folate * multiplier),
-      servingSize: numericAmount,
-    };
-  }, [editAmount, editMealId, isAmountValid, numericAmount, viewingLoggedItem]);
-
-  const macroSummary = useMemo(() => {
-    if (!previewItem) {
-      return { proteinPct: 0, carbsPct: 0, fatPct: 0, totalMacroCalories: 0 };
+    if (!viewingLoggedItem) {
+      return { cals, prot, carb, fat, fiber, sodium, potassium, calcium, iron, vitaminC, folate };
     }
 
-    const proteinCalories = previewItem.protein * 4;
-    const carbsCalories = previewItem.carbs * 4;
-    const fatCalories = previewItem.fat * 9;
-    const totalMacroCalories = proteinCalories + carbsCalories + fatCalories;
+    if (hydratedFood) {
+      const multiplier = editQuantity * (editWeight / 100);
+      cals = Math.round(hydratedFood.calories * multiplier);
+      prot = Number((hydratedFood.protein * multiplier).toFixed(1));
+      carb = Number((hydratedFood.carbs * multiplier).toFixed(1));
+      fat = Number((hydratedFood.fat * multiplier).toFixed(1));
+      fiber = Number((hydratedFood.fiber * multiplier).toFixed(1));
+      sodium = Math.round(hydratedFood.sodium * multiplier);
+      potassium = Math.round(hydratedFood.potassium * multiplier);
+      calcium = Math.round(hydratedFood.calcium * multiplier);
+      iron = Number((hydratedFood.iron * multiplier).toFixed(2));
+      vitaminC = Number((hydratedFood.vitaminC * multiplier).toFixed(1));
+      folate = Math.round(hydratedFood.folate * multiplier);
+    } else {
+      const ratio = editQuantity / (viewingLoggedItem.servingSize || 1);
+      cals = Math.round(viewingLoggedItem.calories * ratio);
+      prot = Number((viewingLoggedItem.protein * ratio).toFixed(1));
+      carb = Number((viewingLoggedItem.carbs * ratio).toFixed(1));
+      fat = Number((viewingLoggedItem.fat * ratio).toFixed(1));
+      fiber = viewingLoggedItem.fiber ? Number((viewingLoggedItem.fiber * ratio).toFixed(1)) : 0;
+      sodium = viewingLoggedItem.sodium ? Math.round(viewingLoggedItem.sodium * ratio) : 0;
+      potassium = viewingLoggedItem.potassium ? Math.round(viewingLoggedItem.potassium * ratio) : 0;
+      calcium = viewingLoggedItem.calcium ? Math.round(viewingLoggedItem.calcium * ratio) : 0;
+      iron = viewingLoggedItem.iron ? Number((viewingLoggedItem.iron * ratio).toFixed(2)) : 0;
+      vitaminC = viewingLoggedItem.vitaminC ? Number((viewingLoggedItem.vitaminC * ratio).toFixed(1)) : 0;
+      folate = viewingLoggedItem.folate ? Math.round(viewingLoggedItem.folate * ratio) : 0;
+    }
 
-    return {
-      proteinPct: totalMacroCalories > 0 ? Math.round((proteinCalories / totalMacroCalories) * 100) : 0,
-      carbsPct: totalMacroCalories > 0 ? Math.round((carbsCalories / totalMacroCalories) * 100) : 0,
-      fatPct: totalMacroCalories > 0 ? Math.round((fatCalories / totalMacroCalories) * 100) : 0,
-      totalMacroCalories,
-    };
-  }, [previewItem]);
+    return { cals, prot, carb, fat, fiber, sodium, potassium, calcium, iron, vitaminC, folate };
+  }, [viewingLoggedItem, hydratedFood, editQuantity, editWeight]);
 
-  if (!viewingLoggedItem || !previewItem) return null;
+  const circularProgress = useMemo(() => {
+    const { prot, carb, fat } = calculatedValues;
+    const r = 32;
+    const circumference = 2 * Math.PI * r;
+    const totalMacroCals = (prot * 4) + (carb * 4) + (fat * 9);
+    const protRatio = totalMacroCals > 0 ? (prot * 4) / totalMacroCals : 0;
+    const carbRatio = totalMacroCals > 0 ? (carb * 4) / totalMacroCals : 0;
+    const fatRatio = totalMacroCals > 0 ? (fat * 9) / totalMacroCals : 0;
 
-  const caloriePct = Math.min(100, (previewItem.calories / targets.calories) * 100);
-  const circumference = 2 * Math.PI * 32;
-  const proteinLength = circumference * (macroSummary.proteinPct / 100);
-  const carbsLength = circumference * (macroSummary.carbsPct / 100);
-  const fatLength = circumference * (macroSummary.fatPct / 100);
-  const carbsOffset = -proteinLength;
-  const fatOffset = -(proteinLength + carbsLength);
+    const protLength = circumference * protRatio;
+    const carbLength = circumference * carbRatio;
+    const fatLength = circumference * fatRatio;
+
+    const protPct = Math.round(protRatio * 100);
+    const carbPct = Math.round(carbRatio * 100);
+    const fatPct = Math.round(fatRatio * 100);
+
+    return { r, circumference, protLength, carbLength, fatLength, protPct, carbPct, fatPct };
+  }, [calculatedValues]);
 
   const handleDelete = () => {
+    if (!viewingLoggedItem) return;
     onDeleteEntry(viewingLoggedItem.id);
     onClose();
   };
 
   const handleSave = async () => {
-    if (!isAmountValid) {
+    if (!viewingLoggedItem) return;
+    if (editQuantity <= 0 || !Number.isFinite(editQuantity)) {
       setValidationMessage('Enter an amount greater than 0.');
       return;
     }
 
     setValidationMessage('');
-    await onSaveChanges(viewingLoggedItem, numericAmount, editMealId);
+    const { cals, prot, carb, fat, fiber, sodium, potassium, calcium, iron, vitaminC, folate } = calculatedValues;
+
+    const updatedEntry: FoodLogEntry = {
+      ...viewingLoggedItem,
+      mealId: editMealId,
+      calories: cals,
+      protein: prot,
+      carbs: carb,
+      fat: fat,
+      fiber: fiber,
+      sodium: sodium,
+      potassium: potassium,
+      calcium: calcium,
+      iron: iron,
+      vitaminC: vitaminC,
+      folate: folate,
+      servingSize: editQuantity,
+      servingUnit: editUnit,
+    };
+
+    await onSaveChanges(updatedEntry);
   };
 
+  if (!viewingLoggedItem) return null;
+
+  const { cals, prot, carb, fat, fiber, sodium, potassium, calcium, iron, vitaminC, folate } = calculatedValues;
+  const { r, circumference, protLength, carbLength, fatLength, protPct, carbPct, fatPct } = circularProgress;
+
   const nutrients = [
-    { label: 'Fiber', value: previewItem.fiber || 0, target: 30, unit: 'g', decimals: 1 },
-    { label: 'Sodium', value: previewItem.sodium || 0, target: 2300, unit: 'mg', decimals: 0 },
-    { label: 'Potassium', value: previewItem.potassium || 0, target: 3400, unit: 'mg', decimals: 0 },
-    { label: 'Calcium', value: previewItem.calcium || 0, target: 1000, unit: 'mg', decimals: 0 },
-    { label: 'Iron', value: previewItem.iron || 0, target: 18, unit: 'mg', decimals: 2 },
-    { label: 'Vitamin C', value: previewItem.vitaminC || 0, target: 90, unit: 'mg', decimals: 1 },
-    { label: 'Folate', value: previewItem.folate || 0, target: 400, unit: 'mcg', decimals: 0 },
+    { label: 'Fiber', value: fiber, target: 30, unit: 'g', decimals: 1 },
+    { label: 'Sodium', value: sodium, target: 2300, unit: 'mg', decimals: 0 },
+    { label: 'Potassium', value: potassium, target: 3400, unit: 'mg', decimals: 0 },
+    { label: 'Calcium', value: calcium, target: 1000, unit: 'mg', decimals: 0 },
+    { label: 'Iron', value: iron, target: 18, unit: 'mg', decimals: 2 },
+    { label: 'Vitamin C', value: vitaminC, target: 90, unit: 'mg', decimals: 1 },
+    { label: 'Folate', value: folate, target: 400, unit: 'mcg', decimals: 0 },
   ];
 
   return (
     <Modal visible={isOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalContainer}>
+        {/* Sleek Custom Top Toolbar */}
         <View style={styles.modalHeaderRow}>
           <TouchableOpacity onPress={onClose} style={styles.headerButton} accessibilityRole="button" accessibilityLabel="Close food details">
             <X size={20} color={Colors.onSurface} />
@@ -154,136 +232,190 @@ export function LoggedItemDetailsModal({
         </View>
 
         <ScrollView style={styles.modalBody} contentContainerStyle={styles.modalBodyContent} showsVerticalScrollIndicator={false}>
+          {/* Metadata & Portion Selection Rows */}
           <View style={styles.cardSection}>
             <View style={styles.detailCardRow}>
               <Text style={styles.detailCardLabel}>Amount</Text>
-              <View style={styles.amountEditWrap}>
+              <View style={styles.stepperWrap}>
+                <TouchableOpacity
+                  style={styles.stepperBtn}
+                  onPress={() => setEditQuantity(Math.max(0.5, editQuantity - (editQuantity <= 1 ? 0.5 : 1)))}
+                  activeOpacity={0.7}
+                >
+                  <Minus size={14} color={Colors.primary} />
+                </TouchableOpacity>
                 <TextInput
-                  style={styles.amountInput}
-                  value={editAmount}
-                  onChangeText={(value) => {
-                    setEditAmount(value);
-                    setValidationMessage('');
+                  style={styles.stepperInput}
+                  value={String(editQuantity)}
+                  onChangeText={(v) => {
+                    const parsed = parseFloat(v);
+                    setEditQuantity(isNaN(parsed) ? 0 : parsed);
                   }}
-                  keyboardType="decimal-pad"
-                  placeholder="1"
+                  keyboardType="numeric"
+                  textAlign="center"
                   placeholderTextColor={Colors.outline}
-                  accessibilityLabel="Logged food amount"
+                  accessibilityLabel="Food amount quantity"
                 />
-                <Text style={styles.amountUnitText}>{viewingLoggedItem.servingUnit}</Text>
+                <TouchableOpacity
+                  style={styles.stepperBtn}
+                  onPress={() => setEditQuantity(editQuantity + (editQuantity < 1 ? 0.5 : 1))}
+                  activeOpacity={0.7}
+                >
+                  <Plus size={14} color={Colors.primary} />
+                </TouchableOpacity>
               </View>
             </View>
-            <View style={styles.detailCardRow}>
-              <Text style={styles.detailCardLabel}>Serving Unit</Text>
-              <Text style={styles.detailCardValue}>{viewingLoggedItem.servingUnit}</Text>
-            </View>
-            <View style={styles.detailCardRow}>
-              <Text style={styles.detailCardLabel}>Calories</Text>
-              <Text style={styles.calorieValue}>{previewItem.calories} kcal</Text>
-            </View>
-            <View style={styles.detailCardStacked}>
-              <Text style={styles.detailCardLabel}>Group</Text>
-              <View style={styles.mealSelectorRow}>
-                {MEAL_OPTIONS.map((meal) => (
-                  <TouchableOpacity
-                    key={meal.id}
-                    style={[styles.mealChip, editMealId === meal.id && styles.mealChipActive]}
-                    onPress={() => setEditMealId(meal.id)}
-                    activeOpacity={0.75}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: editMealId === meal.id }}
-                  >
-                    <Text style={[styles.mealChipText, editMealId === meal.id && styles.mealChipTextActive]}>
-                      {meal.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+
+            <View style={[styles.detailCardRow, { zIndex: 20 }]}>
+              <Text style={styles.detailCardLabel}>Serving Size</Text>
+              <View style={{ position: 'relative' }}>
+                <TouchableOpacity
+                  style={styles.dropdownTrigger}
+                  onPress={() => {
+                    setIsServingDropdownOpen(!isServingDropdownOpen);
+                    setIsMealDropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.dropdownTriggerText}>{editUnit}</Text>
+                  <ChevronDown size={14} color={Colors.outline} style={{ marginLeft: 6 }} />
+                </TouchableOpacity>
+                {isServingDropdownOpen && (
+                  <View style={styles.dropdownList}>
+                    <TouchableOpacity
+                      style={[styles.dropdownOption, editUnit === (hydratedFood?.defaultServingUnit || 'portion') && styles.dropdownOptionActive]}
+                      onPress={() => {
+                        const unit = hydratedFood?.defaultServingUnit || 'portion';
+                        setEditUnit(unit);
+                        setEditWeight(hydratedFood?.defaultServingSize || 100);
+                        setIsServingDropdownOpen(false);
+                      }}
+                    >
+                      <Text style={[styles.dropdownOptionText, editUnit === (hydratedFood?.defaultServingUnit || 'portion') && styles.dropdownOptionTextActive]}>
+                        {hydratedFood?.defaultServingUnit || 'portion'} ({hydratedFood?.defaultServingSize || 100}g)
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.dropdownOption, editUnit === '100g' && styles.dropdownOptionActive]}
+                      onPress={() => {
+                        setEditUnit('100g');
+                        setEditWeight(100);
+                        setIsServingDropdownOpen(false);
+                      }}
+                    >
+                      <Text style={[styles.dropdownOptionText, editUnit === '100g' && styles.dropdownOptionTextActive]}>100g</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.dropdownOption, editUnit === '1g' && styles.dropdownOptionActive]}
+                      onPress={() => {
+                        setEditUnit('1g');
+                        setEditWeight(1);
+                        setIsServingDropdownOpen(false);
+                      }}
+                    >
+                      <Text style={[styles.dropdownOptionText, editUnit === '1g' && styles.dropdownOptionTextActive]}>1g</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             </View>
+
             <View style={styles.detailCardRow}>
               <Text style={styles.detailCardLabel}>Timestamp</Text>
               <View style={styles.pickerRightBlock}>
-                <Clock size={14} color={Colors.primary} style={styles.clockIcon} />
+                <Clock size={14} color={Colors.primary} style={{ marginRight: 6 }} />
                 <Text style={styles.pickerRightText}>Logged locally</Text>
+              </View>
+            </View>
+
+            <View style={[styles.detailCardRow, { zIndex: 15 }]}>
+              <Text style={styles.detailCardLabel}>Group</Text>
+              <View style={{ position: 'relative' }}>
+                <TouchableOpacity
+                  style={styles.dropdownTrigger}
+                  onPress={() => {
+                    setIsMealDropdownOpen(!isMealDropdownOpen);
+                    setIsServingDropdownOpen(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.dropdownTriggerText}>
+                    {MEAL_OPTIONS.find((m) => m.id === editMealId)?.label || editMealId}
+                  </Text>
+                  <ChevronDown size={14} color={Colors.outline} style={{ marginLeft: 6 }} />
+                </TouchableOpacity>
+                {isMealDropdownOpen && (
+                  <View style={styles.dropdownList}>
+                    {MEAL_OPTIONS.map((opt) => (
+                      <TouchableOpacity
+                        key={opt.id}
+                        style={[styles.dropdownOption, editMealId === opt.id && styles.dropdownOptionActive]}
+                        onPress={() => {
+                          setEditMealId(opt.id);
+                          setIsMealDropdownOpen(false);
+                        }}
+                      >
+                        <Text style={[styles.dropdownOptionText, editMealId === opt.id && styles.dropdownOptionTextActive]}>
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
               </View>
             </View>
           </View>
 
-          {amountErrorMessage ? <Text style={styles.validationText}>{amountErrorMessage}</Text> : null}
+          {validationMessage ? <Text style={styles.validationText}>{validationMessage}</Text> : null}
 
-          <View style={styles.accordionCard}>
-            <TouchableOpacity style={styles.accordionHeaderRow} onPress={() => setIsEnergyExpanded((prev) => !prev)} activeOpacity={0.75}>
+          {/* 1. Energy Summary Collapsible Accordion */}
+          <View style={[styles.accordionCard, { marginTop: spacing.lg }]}>
+            <TouchableOpacity 
+              onPress={() => setIsEnergyExpanded(!isEnergyExpanded)} 
+              style={styles.accordionHeaderRow}
+              activeOpacity={0.7}
+            >
               <Text style={styles.accordionTitle}>Energy Summary</Text>
               {isEnergyExpanded ? <ChevronUp size={18} color={Colors.onSurface} /> : <ChevronDown size={18} color={Colors.onSurface} />}
             </TouchableOpacity>
 
             {isEnergyExpanded && (
               <View style={styles.energyContentRow}>
+                {/* Segmented Ring SVG */}
                 <View style={styles.ringContainer}>
                   <Svg width={90} height={90} viewBox="0 0 90 90">
-                    <Circle cx="45" cy="45" r="32" fill="none" stroke="rgba(229, 238, 255, 0.12)" strokeWidth="8" />
                     <Circle
                       cx="45"
                       cy="45"
-                      r="32"
+                      r={r}
                       fill="none"
-                      stroke={Colors.primary}
+                      stroke="#17273e"
                       strokeWidth="8"
-                      strokeDasharray={circumference}
-                      strokeDashoffset={circumference - (circumference * caloriePct) / 100}
-                      strokeLinecap="round"
-                      transform="rotate(-90 45 45)"
                     />
-                  </Svg>
-                  <View style={styles.ringCenterTextWrap}>
-                    <Text style={styles.ringCenterVal}>{Math.round(caloriePct)}%</Text>
-                    <Text style={styles.ringCenterLabel}>daily</Text>
-                  </View>
-                </View>
-                <View style={styles.energyLegendWrap}>
-                  <Text style={styles.legendText}>
-                    <Text style={styles.legendBoldText}>{previewItem.calories} kcal</Text> of {targets.calories} kcal target
-                  </Text>
-                  <Text style={styles.legendText}>Serving: {previewItem.servingSize} {previewItem.servingUnit}</Text>
-                </View>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.accordionCard}>
-            <TouchableOpacity style={styles.accordionHeaderRow} onPress={() => setIsMacrosExpanded((prev) => !prev)} activeOpacity={0.75}>
-              <Text style={styles.accordionTitle}>Macro Split</Text>
-              {isMacrosExpanded ? <ChevronUp size={18} color={Colors.onSurface} /> : <ChevronDown size={18} color={Colors.onSurface} />}
-            </TouchableOpacity>
-
-            {isMacrosExpanded && (
-              <View style={styles.energyContentRow}>
-                <View style={styles.ringContainer}>
-                  <Svg width={90} height={90} viewBox="0 0 90 90">
-                    <Circle cx="45" cy="45" r="32" fill="none" stroke="rgba(229, 238, 255, 0.12)" strokeWidth="8" />
-                    {proteinLength > 0 && (
+                    {protLength > 0 && (
                       <Circle
                         cx="45"
                         cy="45"
-                        r="32"
+                        r={r}
                         fill="none"
-                        stroke={Colors.proteinAccent}
+                        stroke={Colors.proteinAccent || '#22c55e'}
                         strokeWidth="8"
-                        strokeDasharray={`${proteinLength} ${circumference}`}
+                        strokeDasharray={`${protLength} ${circumference}`}
+                        strokeDashoffset={0}
                         strokeLinecap="round"
                         transform="rotate(-90 45 45)"
                       />
                     )}
-                    {carbsLength > 0 && (
+                    {carbLength > 0 && (
                       <Circle
                         cx="45"
                         cy="45"
-                        r="32"
+                        r={r}
                         fill="none"
-                        stroke={Colors.tertiaryFixedDim}
+                        stroke={Colors.tertiaryFixedDim || '#0ea5e9'}
                         strokeWidth="8"
-                        strokeDasharray={`${carbsLength} ${circumference}`}
-                        strokeDashoffset={carbsOffset}
+                        strokeDasharray={`${carbLength} ${circumference}`}
+                        strokeDashoffset={-protLength}
                         strokeLinecap="round"
                         transform="rotate(-90 45 45)"
                       />
@@ -292,30 +424,119 @@ export function LoggedItemDetailsModal({
                       <Circle
                         cx="45"
                         cy="45"
-                        r="32"
+                        r={r}
                         fill="none"
-                        stroke={Colors.secondaryContainer}
+                        stroke={Colors.secondaryContainer || '#ef4444'}
                         strokeWidth="8"
                         strokeDasharray={`${fatLength} ${circumference}`}
-                        strokeDashoffset={fatOffset}
+                        strokeDashoffset={-(protLength + carbLength)}
                         strokeLinecap="round"
                         transform="rotate(-90 45 45)"
                       />
                     )}
                   </Svg>
+                  <View style={styles.ringCenterTextWrap}>
+                    <Text style={styles.ringCenterVal}>{cals}</Text>
+                    <Text style={styles.ringCenterLabel}>kcal</Text>
+                  </View>
                 </View>
+
                 <View style={styles.energyLegendWrap}>
-                  <LegendRow color={Colors.proteinAccent} label={`Protein ${macroSummary.proteinPct}%`} value={`${previewItem.protein}g`} />
-                  <LegendRow color={Colors.tertiaryFixedDim} label={`Carbs ${macroSummary.carbsPct}%`} value={`${previewItem.carbs}g`} />
-                  <LegendRow color={Colors.secondaryContainer} label={`Fats ${macroSummary.fatPct}%`} value={`${previewItem.fat}g`} />
+                  <View style={styles.legendRow}>
+                    <View style={[styles.legendIndicator, { backgroundColor: Colors.proteinAccent || '#22c55e' }]} />
+                    <Text style={styles.legendText}>
+                      Protein ({protPct}%) — <Text style={styles.legendBoldText}>{prot}g</Text>
+                    </Text>
+                  </View>
+                  <View style={styles.legendRow}>
+                    <View style={[styles.legendIndicator, { backgroundColor: Colors.tertiaryFixedDim || '#0ea5e9' }]} />
+                    <Text style={styles.legendText}>
+                      Net Carbs ({carbPct}%) — <Text style={styles.legendBoldText}>{carb}g</Text>
+                    </Text>
+                  </View>
+                  <View style={styles.legendRow}>
+                    <View style={[styles.legendIndicator, { backgroundColor: Colors.secondaryContainer || '#ef4444' }]} />
+                    <Text style={styles.legendText}>
+                      Fat ({fatPct}%) — <Text style={styles.legendBoldText}>{fat}g</Text>
+                    </Text>
+                  </View>
                 </View>
               </View>
             )}
           </View>
 
+          {/* 2. Macronutrient Targets Accordion */}
           <View style={styles.accordionCard}>
-            <TouchableOpacity style={styles.accordionHeaderRow} onPress={() => setIsMicrosExpanded((prev) => !prev)} activeOpacity={0.75}>
-              <Text style={styles.accordionTitle}>Micronutrient Highlights</Text>
+            <TouchableOpacity 
+              onPress={() => setIsMacrosExpanded(!isMacrosExpanded)} 
+              style={styles.accordionHeaderRow}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.accordionTitle}>Macronutrient Targets</Text>
+              {isMacrosExpanded ? <ChevronUp size={18} color={Colors.onSurface} /> : <ChevronDown size={18} color={Colors.onSurface} />}
+            </TouchableOpacity>
+
+            {isMacrosExpanded && (
+              <View style={styles.accordionBodyContent}>
+                {/* Energy */}
+                <View style={styles.targetBarItem}>
+                  <View style={styles.targetBarLabelRow}>
+                    <Text style={styles.targetBarName}>Energy</Text>
+                    <Text style={styles.targetBarRatio}>{cals} / {targets.calories} kcal</Text>
+                    <Text style={styles.targetBarPct}>{Math.round((cals / targets.calories) * 100)}%</Text>
+                  </View>
+                  <View style={styles.barContainerBg}>
+                    <View style={[styles.barFill, { width: `${Math.min(100, (cals / targets.calories) * 100)}%`, backgroundColor: Colors.primary }]} />
+                  </View>
+                </View>
+
+                {/* Protein */}
+                <View style={styles.targetBarItem}>
+                  <View style={styles.targetBarLabelRow}>
+                    <Text style={styles.targetBarName}>Protein</Text>
+                    <Text style={styles.targetBarRatio}>{prot} / {targets.protein} g</Text>
+                    <Text style={styles.targetBarPct}>{Math.round((prot / targets.protein) * 100)}%</Text>
+                  </View>
+                  <View style={styles.barContainerBg}>
+                    <View style={[styles.barFill, { width: `${Math.min(100, (prot / targets.protein) * 100)}%`, backgroundColor: Colors.proteinAccent }]} />
+                  </View>
+                </View>
+
+                {/* Carbs */}
+                <View style={styles.targetBarItem}>
+                  <View style={styles.targetBarLabelRow}>
+                    <Text style={styles.targetBarName}>Net Carbs</Text>
+                    <Text style={styles.targetBarRatio}>{carb} / {targets.carbs} g</Text>
+                    <Text style={styles.targetBarPct}>{Math.round((carb / targets.carbs) * 100)}%</Text>
+                  </View>
+                  <View style={styles.barContainerBg}>
+                    <View style={[styles.barFill, { width: `${Math.min(100, (carb / targets.carbs) * 100)}%`, backgroundColor: Colors.tertiaryFixedDim }]} />
+                  </View>
+                </View>
+
+                {/* Fat */}
+                <View style={styles.targetBarItem}>
+                  <View style={styles.targetBarLabelRow}>
+                    <Text style={styles.targetBarName}>Fat</Text>
+                    <Text style={styles.targetBarRatio}>{fat} / {targets.fats} g</Text>
+                    <Text style={styles.targetBarPct}>{Math.round((fat / targets.fats) * 100)}%</Text>
+                  </View>
+                  <View style={styles.barContainerBg}>
+                    <View style={[styles.barFill, { width: `${Math.min(100, (fat / targets.fats) * 100)}%`, backgroundColor: Colors.secondaryContainer }]} />
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* 3. Highlighted Targets (2-Column Grid Accordion) */}
+          <View style={styles.accordionCard}>
+            <TouchableOpacity 
+              onPress={() => setIsMicrosExpanded(!isMicrosExpanded)} 
+              style={styles.accordionHeaderRow}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.accordionTitle}>Highlighted Targets</Text>
               {isMicrosExpanded ? <ChevronUp size={18} color={Colors.onSurface} /> : <ChevronDown size={18} color={Colors.onSurface} />}
             </TouchableOpacity>
 
@@ -339,8 +560,13 @@ export function LoggedItemDetailsModal({
             )}
           </View>
 
+          {/* 4. Complete Nutrient Summary (Detailed List Accordion) */}
           <View style={styles.accordionCard}>
-            <TouchableOpacity style={styles.accordionHeaderRow} onPress={() => setIsAllMicrosExpanded((prev) => !prev)} activeOpacity={0.75}>
+            <TouchableOpacity 
+              onPress={() => setIsAllMicrosExpanded(!isAllMicrosExpanded)} 
+              style={styles.accordionHeaderRow}
+              activeOpacity={0.7}
+            >
               <Text style={styles.accordionTitle}>Complete Nutrient Summary</Text>
               {isAllMicrosExpanded ? <ChevronUp size={18} color={Colors.onSurface} /> : <ChevronDown size={18} color={Colors.onSurface} />}
             </TouchableOpacity>
@@ -367,24 +593,13 @@ export function LoggedItemDetailsModal({
               </View>
             )}
           </View>
-
-          <TouchableOpacity
-            style={styles.deleteFoodActionBtn}
-            onPress={handleDelete}
-            disabled={isSaving}
-            accessibilityRole="button"
-            accessibilityLabel={`Delete ${viewingLoggedItem.name}`}
-          >
-            <Trash2 size={16} color={Colors.onPrimary} style={styles.deleteIcon} />
-            <Text style={styles.deleteFoodActionText}>Delete Food Entry</Text>
-          </TouchableOpacity>
         </ScrollView>
 
         <View style={styles.stickyFooter}>
           <TouchableOpacity
-            style={[styles.saveChangesButton, (!isAmountValid || isSaving) && styles.disabledButton]}
+            style={[styles.saveChangesButton, isSaving && styles.disabledButton]}
             onPress={handleSave}
-            disabled={!isAmountValid || isSaving}
+            disabled={isSaving}
             accessibilityRole="button"
             accessibilityLabel="Save food log changes"
           >
@@ -397,17 +612,6 @@ export function LoggedItemDetailsModal({
         </View>
       </SafeAreaView>
     </Modal>
-  );
-}
-
-function LegendRow({ color, label, value }: { color: string; label: string; value: string }) {
-  return (
-    <View style={styles.legendRow}>
-      <View style={[styles.legendIndicator, { backgroundColor: color }]} />
-      <Text style={styles.legendText}>
-        {label}: <Text style={styles.legendBoldText}>{value}</Text>
-      </Text>
-    </View>
   );
 }
 
@@ -452,7 +656,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.base,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.12)',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   detailCardRow: {
     flexDirection: 'row',
@@ -463,83 +667,104 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(190, 200, 210, 0.08)',
   },
-  detailCardStacked: {
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(190, 200, 210, 0.08)',
-    gap: spacing.sm,
-  },
   detailCardLabel: {
     fontSize: typography.sm,
     fontWeight: fontWeight.semiBold,
     color: Colors.onSurface,
   },
-  detailCardValue: {
-    fontSize: typography.xs,
-    fontWeight: fontWeight.bold,
-    color: Colors.onSurface,
-  },
-  capitalized: {
-    textTransform: 'capitalize',
-  },
-  amountEditWrap: {
+  stepperWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceContainerLowest,
+    backgroundColor: Colors.surfaceContainerLow,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.16)',
-    minHeight: 38,
-    minWidth: 120,
-    overflow: 'hidden',
+    borderColor: 'rgba(190, 200, 210, 0.24)',
   },
-  amountInput: {
-    flex: 1,
-    minWidth: 64,
+  stepperBtn: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperInput: {
+    width: 44,
+    height: 38,
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    backgroundColor: '#ffffff',
+    textAlign: 'center',
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.24)',
+    paddingVertical: 0,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
+  },
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.24)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs + 2,
+  },
+  dropdownTriggerText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    textTransform: 'capitalize',
+  },
+  dropdownList: {
+    position: 'absolute',
+    top: 42,
+    right: 0,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    zIndex: 999,
+    minWidth: 160,
+    overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 8px 24px rgba(0,0,0,0.4)',
+      },
+    }),
+  },
+  dropdownOption: {
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  dropdownOptionActive: {
+    backgroundColor: Colors.primaryContainer,
+  },
+  dropdownOptionText: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.semiBold,
+    color: Colors.outline,
+  },
+  dropdownOptionTextActive: {
+    color: Colors.onPrimary,
+    fontWeight: fontWeight.bold,
+  },
+  pickerRightBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    color: Colors.onSurface,
-    fontSize: typography.sm,
-    fontWeight: fontWeight.bold,
-    textAlign: 'right',
-  },
-  amountUnitText: {
-    paddingRight: spacing.md,
-    color: Colors.outline,
-    fontSize: typography.xs,
-    fontWeight: fontWeight.bold,
-  },
-  calorieValue: {
-    fontSize: typography.sm,
-    color: Colors.primary,
-    fontWeight: fontWeight.extraBold,
-    fontVariant: ['tabular-nums'],
-  },
-  mealSelectorRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  mealChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 7,
-    borderRadius: radius.full,
-    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.16)',
+    borderColor: 'rgba(190, 200, 210, 0.24)',
   },
-  mealChipActive: {
-    backgroundColor: Colors.primaryContainer,
-    borderColor: Colors.primaryContainer,
-  },
-  mealChipText: {
-    color: Colors.onSurfaceVariant,
+  pickerRightText: {
     fontSize: typography.xs,
     fontWeight: fontWeight.bold,
-  },
-  mealChipTextActive: {
-    color: Colors.onPrimary,
+    color: Colors.onSurface,
   },
   validationText: {
     color: Colors.error,
@@ -547,51 +772,6 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     marginHorizontal: spacing.base,
     marginTop: spacing.sm,
-  },
-  pickerRightBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surfaceContainerLowest,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.12)',
-  },
-  clockIcon: {
-    marginRight: 6,
-  },
-  pickerRightText: {
-    fontSize: typography.xs,
-    fontWeight: fontWeight.bold,
-    color: Colors.onSurface,
-  },
-  summaryBento: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.base,
-    marginTop: spacing.base,
-  },
-  summaryBentoBox: {
-    width: '48%',
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: radius.md,
-    padding: spacing.base,
-    borderLeftWidth: 3,
-    borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.12)',
-  },
-  summaryBigVal: {
-    fontSize: typography.lg,
-    fontWeight: fontWeight.extraBold,
-    color: Colors.onSurface,
-    fontVariant: ['tabular-nums'],
-  },
-  summaryLabel: {
-    fontSize: typography.xs,
-    color: Colors.outline,
-    marginTop: 2,
   },
   accordionCard: {
     backgroundColor: Colors.surfaceContainerLow,
@@ -704,6 +884,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.base,
     paddingBottom: spacing.base,
     gap: 12,
+  },
+  targetBarItem: {
+    gap: 5,
+  },
+  targetBarLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  targetBarName: {
+    fontSize: typography.xs + 1,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  targetBarRatio: {
+    fontSize: typography.xs,
+    color: Colors.outline,
+    flex: 1,
+    textAlign: 'right',
+    marginRight: spacing.sm,
+  },
+  targetBarPct: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  barContainerBg: {
+    height: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: radius.full,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: radius.full,
   },
   nutrientListItem: {
     gap: 4,

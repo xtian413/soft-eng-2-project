@@ -950,44 +950,18 @@ export function FoodTab({
   };
 
   const handleUpdateEntry = async (
-    entry: FoodLogEntry,
-    nextAmount: number,
-    nextMealId: MealId
+    updatedEntry: FoodLogEntry
   ) => {
     if (!userId) {
       triggerToast('Please log in before editing food logs.');
       return;
     }
 
-    if (!Number.isFinite(nextAmount) || nextAmount <= 0) {
-      triggerToast('Enter an amount greater than 0.');
-      return;
-    }
-
     if (isSavingLog) return;
-
-    const originalAmount = entry.servingSize > 0 ? entry.servingSize : 1;
-    const multiplier = nextAmount / originalAmount;
-    const updatedEntry: FoodLogEntry = {
-      ...entry,
-      mealId: nextMealId,
-      calories: Math.round(entry.calories * multiplier),
-      protein: Number((entry.protein * multiplier).toFixed(1)),
-      carbs: Number((entry.carbs * multiplier).toFixed(1)),
-      fat: Number((entry.fat * multiplier).toFixed(1)),
-      fiber: Number((entry.fiber * multiplier).toFixed(1)),
-      sodium: Math.round(entry.sodium * multiplier),
-      potassium: Math.round(entry.potassium * multiplier),
-      calcium: Math.round(entry.calcium * multiplier),
-      iron: Number((entry.iron * multiplier).toFixed(2)),
-      vitaminC: Number((entry.vitaminC * multiplier).toFixed(1)),
-      folate: Math.round(entry.folate * multiplier),
-      servingSize: nextAmount,
-    };
 
     setIsSavingLog(true);
     try {
-      const updatedLocalLog = await updateLocalDietLog(userId, entry.id, {
+      const updatedLocalLog = await updateLocalDietLog(userId, updatedEntry.id, {
         meal_id: updatedEntry.mealId,
         meal_name: updatedEntry.name,
         calories: updatedEntry.calories,
@@ -1006,7 +980,7 @@ export function FoodTab({
       });
       const localEntry = localDietLogToFoodLogEntry(updatedLocalLog);
 
-      setFoodLogs((prev) => prev.map((item) => (item.id === entry.id ? localEntry : item)));
+      setFoodLogs((prev) => prev.map((item) => (item.id === updatedEntry.id ? localEntry : item)));
       setViewingLoggedItem(null);
       triggerToast(`Updated ${localEntry.name}`);
     } catch (err) {
@@ -1094,6 +1068,7 @@ export function FoodTab({
         customCarbs={customCarbs}
         customFat={customFat}
         customUnit={customUnit}
+        targets={targets}
         onClose={() => {
           setSelectedItem(null);
           setIsModalOpen(false);
