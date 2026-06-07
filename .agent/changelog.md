@@ -3,6 +3,30 @@
 **Format**: `[YYYY-MM-DD HH:MM +TZ] TYPE: description`
 
 ---
+### [2026-06-07 11:30 +0800] REFACTOR: Phase 2 TDEE & Macro Engine code review fixes + goal consolidation
+- **Branch**: `jb-branch`
+- **Files Modified**:
+  - `frontend/src/screens/dashboard/types.ts`
+  - `frontend/src/utils/macroCalculator.ts`
+  - `frontend/src/screens/dashboard/Profile/ProfileTab.tsx`
+  - `frontend/src/screens/auth/RegisterScreen.tsx`
+  - `frontend/src/store/authStore.ts`
+  - `frontend/src/screens/dashboard/DashboardScreen.tsx`
+  - `frontend/src/local/repositories/profilesRepository.ts`
+  - `AGENT.md`
+  - `.agent/changelog.md`
+  - `.agent/context.md`
+- **Changes**:
+  - ✅ **Goal Consolidation**: Removed vague goals (`lose_weight`, `build_muscle`). Now 4 specific goals: `moderate_cut` (-500), `aggressive_cut` (-750), `maintain` (0), `lean_bulk` (+300). Updated all consumers.
+  - ✅ **Gender-Aware Calorie Floor**: Min calories now 1500 (male) / 1200 (female) per NIH guidelines.
+  - ✅ **Minimum Fat Floor**: Custom macros enforce 0.5g/kg dietary fat minimum for hormone function.
+  - ✅ **Goal-Adaptive Protein**: Scales by goal: 1.0g/lb (aggressive cut), 0.85g/lb (moderate cut), 0.8g/lb (otherwise).
+  - ✅ **Shared TDEE**: Extracted `calculateTDEE()` to `macroCalculator.ts`. Removed duplicated BMR/TDEE from `ProfileTab.tsx`.
+  - ✅ **Debug Panel Removed**: Stripped debug logs from production ProfileTab edit modal.
+  - ✅ **Save Confirmation**: Added alert after successful profile stat save.
+  - ✅ **Live Macro Gram Preview**: Custom macro sliders now show computed grams in real-time.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors
+
 ### [2026-05-30 18:10 +0800] DOCS: LFM2.5 migration plan and .agent alignment
 - **Branch**: (not committed yet)
 - **Files Modified**:

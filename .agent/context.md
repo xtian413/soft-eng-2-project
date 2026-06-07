@@ -12,9 +12,9 @@
 | Course | CCS 308-CS33S1 |
 | Author | Christian Gamos (`chris.gamos.13@gmail.com`) |
 | Repo | `soft-eng-2-project` |
-| Active Branch | `feature/food` |
+| Active Branch | `jb-branch` |
 | Base Branch | `master` |
-| Web App URL (dev) | `http://localhost:5173/` |
+| Web App URL (dev) | N/A — web/ subproject deleted; project is now pure Expo React Native |
 
 ---
 
@@ -34,21 +34,20 @@ soft-eng-2-project/
 │   └── src/
 │       ├── ai/           ← on-device inference (LFM2.5 via llama.cpp; rename gemmaService.ts later)
 │       ├── api/, components/, hooks/, lib/, navigation/, screens/, store/, types/
+│       ├── local/        ← SQLite local-first repositories, migrations, sync
+│       └── theme/        ← Design tokens (colors, typography)
 ├── supabase/             ← Supabase migrations + config
 │   └── migrations/       ← 001–006 SQL files + timestamped duplicates
-└── web/                  ← Vite + React 19 web companion app
-    └── src/
-        ├── pages/
-        │   ├── Auth/     ← Login.tsx, Register.tsx, Auth.css
-        │   └── Dashboard/ ← Dashboard.tsx, Dashboard.css, types.ts
-        │       ├── AIChat/ ← AIChat.tsx, AIChat.css, hooks/useAIChat.ts
-        │       ├── Food/ ← Food.tsx, Food.css, hooks/useFood.ts, subcomponents/FoodModal.tsx
-        │       ├── Home/ ← Home.tsx
-        │       ├── Lift/ ← Lift.tsx, Lift.css
-        │       └── Profile/ ← Profile.tsx, Profile.css
-        ├── App.tsx       ← Route definitions
-        └── main.tsx      ← BrowserRouter entry point
 ```
+> **Note:** The `web/` Vite companion app was deleted (2026-05-30, `mono-repo-integration`). Gemi is now pure Expo React Native.
+
+### Goal System (4 goals, consolidated 2026-06-07)
+| Goal | Calorie Offset | Protein (g/lb) |
+|------|---------------|-----------------|
+| `moderate_cut` | -500 kcal | 0.85 |
+| `aggressive_cut` | -750 kcal | 1.0 |
+| `maintain` | 0 | 0.8 |
+| `lean_bulk` | +300 kcal | 0.8 |
 
 ---
 

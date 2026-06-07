@@ -1,5 +1,37 @@
 import type { GoalKey, ActivityLevel, MacroTargets } from '@/screens/dashboard/types';
 
+/** BMR computed via Mifflin-St Jeor equation, TDEE via activity multiplier. */
+export function calculateTDEE(
+  weightKg: number,
+  heightCm: number,
+  age: number,
+  gender: 'male' | 'female',
+  activityLevel: ActivityLevel
+): { bmr: number; tdee: number } {
+  let bmr = 10 * weightKg + 6.25 * heightCm - 5 * age;
+  if (gender === 'male') {
+    bmr += 5;
+  } else {
+    bmr -= 161;
+  }
+
+  const activityMultipliers: Record<ActivityLevel, number> = {
+    sedentary: 1.2,
+    lightly_active: 1.375,
+    moderately_active: 1.55,
+    very_active: 1.725,
+    extremely_active: 1.9,
+  };
+
+  const tdee = bmr * (activityMultipliers[activityLevel] ?? 1.375);
+
+  return {
+    bmr: Math.round(bmr),
+    tdee: Math.round(tdee),
+  };
+}
+
+/** Calculates daily calorie target and macro split based on body stats, goal, and optional custom ratios. */
 export function calculateMacros(
   weightKg: number,
   heightCm: number,
@@ -11,61 +43,58 @@ export function calculateMacros(
   macroCarbsPct?: number | null,
   macroFatsPct?: number | null
 ): MacroTargets {
-  // 1. Calculate BMR (Mifflin-St Jeor)
-  let bmr = 10 * weightKg + 6.25 * heightCm - 5 * age;
-  if (gender === 'male') {
-    bmr += 5;
-  } else {
-    bmr -= 161;
-  }
+  const { tdee } = calculateTDEE(weightKg, heightCm, age, gender, activityLevel);
 
-  // 2. Calculate TDEE using activity level
-  let activityMultiplier = 1.375; // Default lightly active
-  if (activityLevel === 'sedentary') activityMultiplier = 1.2;
-  else if (activityLevel === 'lightly_active') activityMultiplier = 1.375;
-  else if (activityLevel === 'moderately_active') activityMultiplier = 1.55;
-  else if (activityLevel === 'very_active') activityMultiplier = 1.725;
-  else if (activityLevel === 'extremely_active') activityMultiplier = 1.9;
-
-  const tdee = bmr * activityMultiplier;
-
-  // 3. Calculate Target Calories based on Goal
+  // Calorie offset by goal
   let targetCalories = tdee;
-  if (goal === 'lose_weight' || goal === 'moderate_cut') {
+  if (goal === 'moderate_cut') {
     targetCalories -= 500;
   } else if (goal === 'aggressive_cut') {
     targetCalories -= 750;
-  } else if (goal === 'build_muscle' || goal === 'lean_bulk') {
+  } else if (goal === 'lean_bulk') {
     targetCalories += 300;
   }
   // 'maintain' keeps targetCalories = tdee
 
-  targetCalories = Math.max(1200, Math.round(targetCalories));
+  const minCalories = gender === 'male' ? 1500 : 1200;
+  targetCalories = Math.max(minCalories, Math.round(targetCalories));
 
-  // 4. Calculate Target Macros
-  let protein = 0;
-  let fats = 0;
-  let carbs = 0;
-
+  // Calculate macros
   const hasCustomMacros =
     typeof macroProteinPct === 'number' &&
     typeof macroCarbsPct === 'number' &&
     typeof macroFatsPct === 'number';
 
+  let protein: number;
+  let fats: number;
+  let carbs: number;
+
   if (hasCustomMacros) {
-    protein = Math.max(0, Math.round((targetCalories * (macroProteinPct / 100)) / 4));
-    carbs = Math.max(0, Math.round((targetCalories * (macroCarbsPct / 100)) / 4));
-    fats = Math.max(0, Math.round((targetCalories * (macroFatsPct / 100)) / 9));
+    const pctP = macroProteinPct as number;
+    const pctC = macroCarbsPct as number;
+    const pctF = macroFatsPct as number;
+
+    const rawFats = Math.round((targetCalories * (pctF / 100)) / 9);
+    const minFatGrams = Math.round(weightKg * 0.5);
+    fats = Math.max(minFatGrams, rawFats);
+
+    protein = Math.max(0, Math.round((targetCalories * (pctP / 100)) / 4));
+    carbs = Math.max(0, Math.round((targetCalories * (pctC / 100)) / 4));
   } else {
-    // Default targets
-    // Protein: 0.8g per lb of body weight
+    // Default targets — protein scales by goal intensity
     const weightLbs = weightKg * 2.20462;
-    protein = Math.round(weightLbs * 0.8);
+    if (goal === 'aggressive_cut') {
+      protein = Math.round(weightLbs * 1.0);
+    } else if (goal === 'moderate_cut') {
+      protein = Math.round(weightLbs * 0.85);
+    } else {
+      protein = Math.round(weightLbs * 0.8);
+    }
 
     // Fats: 0.8g per kg of body weight
     fats = Math.round(weightKg * 0.8);
 
-    // Carbs: Remaining calories divided by 4
+    // Carbs: remaining calories divided by 4
     const caloriesFromProteinAndFat = (protein * 4) + (fats * 9);
     const remainingCalories = targetCalories - caloriesFromProteinAndFat;
     carbs = Math.max(0, Math.round(remainingCalories / 4));

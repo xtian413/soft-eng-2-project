@@ -92,7 +92,7 @@ function normalizeGender(value: ProfileGender | undefined) {
 }
 
 function normalizeGoal(value: ProfileGoal | undefined) {
-  return value === 'lose_weight' || value === 'build_muscle' || value === 'maintain' || value === 'moderate_cut' || value === 'aggressive_cut' || value === 'lean_bulk'
+  return value === 'moderate_cut' || value === 'aggressive_cut' || value === 'maintain' || value === 'lean_bulk'
     ? value
     : null;
 }

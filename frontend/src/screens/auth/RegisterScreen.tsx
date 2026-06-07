@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useNavigation } from '@react-navigation/native';
 import type { StackNavigationProp } from '@react-navigation/stack';
@@ -19,7 +19,6 @@ import type { AuthStackParamList } from '@/navigation/AuthNavigator';
 import { useAuthStore } from '@/store/authStore';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
-import type { ActivityLevel } from '@/screens/dashboard/types';
 import {
   User,
   Mail,
@@ -31,12 +30,8 @@ import {
   Check,
   ChevronLeft,
   Calendar,
-  Flame,
-  Zap,
-  Heart,
-  Mountain,
-  Armchair,
 } from 'lucide-react-native';
+import { type ActivityLevel, type GoalKey, GOAL_LABELS } from '@/screens/dashboard/types';
 
 const schema = z
   .object({
@@ -44,54 +39,14 @@ const schema = z
     email: z.string().email('Enter a valid email address'),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     confirmPassword: z.string().min(6, 'Please confirm your password'),
+    birthdate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format').refine(date => !isNaN(Date.parse(date)), 'Invalid date'),
     height: z.string().min(1, 'Height is required'),
     weight: z.string().min(1, 'Weight is required'),
-    birthMonth: z.string().min(1, 'Month is required'),
-    birthDay: z.string().min(1, 'Day is required'),
-    birthYear: z.string().min(4, 'Year is required'),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match',
     path: ['confirmPassword'],
-  })
-  .refine((data) => {
-    const month = parseInt(data.birthMonth, 10);
-    const day = parseInt(data.birthDay, 10);
-    const year = parseInt(data.birthYear, 10);
-    if (isNaN(month) || isNaN(day) || isNaN(year)) return false;
-    const date = new Date(year, month - 1, day);
-    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
-  }, { message: 'Enter a valid date', path: ['birthDay'] })
-  .refine((data) => {
-    const year = parseInt(data.birthYear, 10);
-    const month = parseInt(data.birthMonth, 10);
-    const day = parseInt(data.birthDay, 10);
-    if (isNaN(year) || isNaN(month) || isNaN(day)) return false;
-    const birthDate = new Date(year, month - 1, day);
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-    return age >= 13 && age <= 120;
-  }, { message: 'You must be at least 13 years old', path: ['birthYear'] });
-
-/** Calculates age from birthdate components */
-function calculateAge(month: number, day: number, year: number): number {
-  const birthDate = new Date(year, month - 1, day);
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-  return age;
-}
-
-const ACTIVITY_LEVELS: { key: ActivityLevel; label: string; icon: typeof Armchair }[] = [
-  { key: 'sedentary', label: 'Sedentary', icon: Armchair },
-  { key: 'lightly_active', label: 'Lightly Active', icon: Heart },
-  { key: 'moderately_active', label: 'Moderate', icon: Flame },
-  { key: 'very_active', label: 'Very Active', icon: Zap },
-  { key: 'extremely_active', label: 'Extreme', icon: Mountain },
-];
+  });
 
 type RegisterForm = z.infer<typeof schema>;
 type RegisterNavigation = StackNavigationProp<AuthStackParamList, 'Register'>;
@@ -105,8 +60,8 @@ export default function RegisterScreen() {
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm');
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
-  const [goal, setGoal] = useState<'lose_weight' | 'build_muscle' | 'maintain'>('lose_weight');
-  const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderately_active');
+  const [goal, setGoal] = useState<GoalKey>('moderate_cut');
+  const [activityLevel, setActivityLevel] = useState<ActivityLevel>('sedentary');
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   const {
@@ -115,7 +70,7 @@ export default function RegisterScreen() {
     formState: { errors, isSubmitting },
   } = useForm<RegisterForm>({
     resolver: zodResolver(schema),
-    defaultValues: { fullName: '', email: '', password: '', confirmPassword: '', height: '', weight: '', birthMonth: '', birthDay: '', birthYear: '' },
+    defaultValues: { fullName: '', email: '', password: '', confirmPassword: '', birthdate: '', height: '', weight: '' },
   });
 
   const onSubmit = async (values: RegisterForm) => {
@@ -130,11 +85,13 @@ export default function RegisterScreen() {
     const heightCm = heightUnit === 'cm' ? parsedHeight : parsedHeight * 30.48;
     const weightKg = weightUnit === 'kg' ? parsedWeight : parsedWeight * 0.45359237;
 
-    const age = calculateAge(
-      parseInt(values.birthMonth, 10),
-      parseInt(values.birthDay, 10),
-      parseInt(values.birthYear, 10)
-    );
+    const birthDateObj = new Date(values.birthdate);
+    const today = new Date();
+    let age = today.getFullYear() - birthDateObj.getFullYear();
+    const m = today.getMonth() - birthDateObj.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDateObj.getDate())) {
+      age--;
+    }
 
     const error = await signUp(values.email, values.password, {
       fullName: values.fullName,
@@ -152,12 +109,12 @@ export default function RegisterScreen() {
     }
 
     if (Platform.OS === 'web') {
-      window.alert(`Welcome to Gemi! Your physical profile (Goal: ${goal.replace('_', ' ')}) has been set up successfully.`);
+      window.alert(`Welcome to Gemi! Your physical profile (Goal: ${GOAL_LABELS[goal]}) has been set up successfully.`);
       navigation.navigate('Login');
     } else {
       Alert.alert(
         'Account Created',
-        `Welcome to Gemi! Your physical profile (Goal: ${goal.replace('_', ' ')}) has been set up successfully.`,
+        `Welcome to Gemi! Your physical profile (Goal: ${GOAL_LABELS[goal]}) has been set up successfully.`,
         [{ text: 'Start Journey', onPress: () => navigation.navigate('Login') }]
       );
     }
@@ -309,6 +266,27 @@ export default function RegisterScreen() {
             <Text style={styles.errorText}>{errors.confirmPassword.message}</Text>
           )}
 
+          {/* Birthdate */}
+          <View style={styles.inputWrapper}>
+            <Calendar size={18} color={Colors.outline} style={styles.inputIcon} />
+            <Controller
+              control={control}
+              name="birthdate"
+              render={({ field: { onChange, value } }) => (
+                <TextInput
+                  onChangeText={onChange}
+                  placeholder="Birthdate (YYYY-MM-DD)"
+                  placeholderTextColor={Colors.outline}
+                  style={styles.input}
+                  value={value}
+                  editable={!isSubmitting}
+                  accessibilityLabel="Birthdate"
+                />
+              )}
+            />
+          </View>
+          {errors.birthdate && <Text style={styles.errorText}>{errors.birthdate.message}</Text>}
+
           {/* Floating Glassmorphism Physical Stats & Goal Card */}
           <View style={styles.card}>
             {/* Header row with Title & Gender Toggle */}
@@ -442,38 +420,58 @@ export default function RegisterScreen() {
             <View style={styles.statInputRow}>
               <Text style={styles.inputLabel}>Fitness Goal</Text>
               <View style={styles.goalSelectorGrid}>
-                <TouchableOpacity
-                  style={[styles.goalBtn, goal === 'lose_weight' && styles.goalBtnActive]}
-                  onPress={() => setGoal('lose_weight')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Select lose weight goal"
-                  accessibilityState={{ selected: goal === 'lose_weight' }}
-                >
-                  <TrendingDown size={24} color={goal === 'lose_weight' ? '#0ea5e9' : '#6e7881'} />
-                  <Text style={[styles.goalBtnText, goal === 'lose_weight' && styles.goalBtnTextActive]}>Lose Weight</Text>
-                </TouchableOpacity>
+                {([
+                  { key: 'moderate_cut' as GoalKey, icon: 'cut', label: GOAL_LABELS.moderate_cut, desc: '~0.5 kg/week loss' },
+                  { key: 'aggressive_cut' as GoalKey, icon: 'cut', label: GOAL_LABELS.aggressive_cut, desc: '~0.75 kg/week loss' },
+                  { key: 'maintain' as GoalKey, icon: 'maintain', label: GOAL_LABELS.maintain, desc: 'Keep current weight' },
+                  { key: 'lean_bulk' as GoalKey, icon: 'bulk', label: GOAL_LABELS.lean_bulk, desc: '~0.25 kg/week gain' },
+                ]).map(({ key, icon, label, desc }) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[styles.goalBtn, goal === key && styles.goalBtnActive]}
+                    onPress={() => setGoal(key)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select ${label} goal`}
+                    accessibilityState={{ selected: goal === key }}
+                  >
+                    {icon === 'cut' ? (
+                      <TrendingDown size={24} color={goal === key ? '#0ea5e9' : '#6e7881'} />
+                    ) : icon === 'bulk' ? (
+                      <Dumbbell size={24} color={goal === key ? '#0ea5e9' : '#6e7881'} />
+                    ) : (
+                      <Activity size={24} color={goal === key ? '#0ea5e9' : '#6e7881'} />
+                    )}
+                    <Text style={[styles.goalBtnText, goal === key && styles.goalBtnTextActive]}>{label}</Text>
+                    <Text style={styles.goalBtnDesc}>{desc}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
-                <TouchableOpacity
-                  style={[styles.goalBtn, goal === 'build_muscle' && styles.goalBtnActive]}
-                  onPress={() => setGoal('build_muscle')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Select build muscle goal"
-                  accessibilityState={{ selected: goal === 'build_muscle' }}
-                >
-                  <Dumbbell size={24} color={goal === 'build_muscle' ? '#0ea5e9' : '#6e7881'} />
-                  <Text style={[styles.goalBtnText, goal === 'build_muscle' && styles.goalBtnTextActive]}>Build Muscle</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.goalBtn, goal === 'maintain' && styles.goalBtnActive]}
-                  onPress={() => setGoal('maintain')}
-                  accessibilityRole="button"
-                  accessibilityLabel="Select maintain goal"
-                  accessibilityState={{ selected: goal === 'maintain' }}
-                >
-                  <Activity size={24} color={goal === 'maintain' ? '#0ea5e9' : '#6e7881'} />
-                  <Text style={[styles.goalBtnText, goal === 'maintain' && styles.goalBtnTextActive]}>Maintain</Text>
-                </TouchableOpacity>
+            {/* Activity Level Selector row */}
+            <View style={styles.statInputRow}>
+              <Text style={styles.inputLabel}>Activity Level</Text>
+              <View style={styles.activityLevelGrid}>
+                {[
+                  { id: 'sedentary', label: 'Sedentary' },
+                  { id: 'lightly_active', label: 'Lightly Active' },
+                  { id: 'moderately_active', label: 'Moderately Active' },
+                  { id: 'very_active', label: 'Very Active' },
+                  { id: 'extremely_active', label: 'Extremely Active' },
+                ].map((level) => (
+                  <TouchableOpacity
+                    key={level.id}
+                    style={[styles.activityBtn, activityLevel === level.id && styles.activityBtnActive]}
+                    onPress={() => setActivityLevel(level.id as ActivityLevel)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select ${level.label} activity level`}
+                    accessibilityState={{ selected: activityLevel === level.id }}
+                  >
+                    <Text style={[styles.activityBtnText, activityLevel === level.id && styles.activityBtnTextActive]}>
+                      {level.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
           </View>
@@ -802,7 +800,56 @@ const styles = StyleSheet.create({
     color: '#6e7881',
     textAlign: 'center',
   },
+  goalBtnDesc: {
+    fontSize: 9,
+    color: Colors.outline,
+    marginTop: 2,
+    textAlign: 'center',
+  },
   goalBtnTextActive: {
+    color: '#0ea5e9',
+  },
+  activityLevelGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  activityBtn: {
+    flex: 1,
+    minWidth: '30%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.3)',
+    borderRadius: 16,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    minHeight: 48,
+  },
+  activityBtnActive: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0ea5e9',
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 4px 8px rgba(14, 165, 233, 0.1)',
+      },
+      default: {
+        shadowColor: '#0ea5e9',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 2,
+      },
+    }),
+  },
+  activityBtnText: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+    color: '#6e7881',
+    textAlign: 'center',
+  },
+  activityBtnTextActive: {
     color: '#0ea5e9',
   },
   checkboxRow: {

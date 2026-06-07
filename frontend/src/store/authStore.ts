@@ -112,7 +112,7 @@ function normalizeGender(value: unknown): ProfileState['gender'] {
 }
 
 function normalizeGoal(value: unknown): ProfileState['goal'] {
-  return value === 'lose_weight' || value === 'build_muscle' || value === 'maintain' || value === 'moderate_cut' || value === 'aggressive_cut' || value === 'lean_bulk'
+  return value === 'moderate_cut' || value === 'aggressive_cut' || value === 'maintain' || value === 'lean_bulk'
     ? value
     : null;
 }
@@ -301,26 +301,26 @@ export const useAuthStore = create<AuthState>()(
       ) => {
         const userId = get().user?.id;
         const currentProfile = get().profile;
-        if (!userId || !currentProfile) return { message: 'Not logged in' };
+        if (!userId) return { message: 'Not logged in' };
 
         try {
           const localProfile = await upsertLocalProfile({
             user_id: userId,
-            full_name: currentProfile.fullName,
+            full_name: currentProfile?.fullName || get().user?.user_metadata?.full_name || null,
             height_cm: heightCm,
             weight_kg: weightKg,
-            gender: gender !== undefined ? gender : currentProfile.gender,
+            gender: gender !== undefined ? gender : (currentProfile?.gender || 'male'),
             goal,
-            age: age !== undefined ? age : currentProfile.age,
-            activity_level: activityLevel !== undefined ? activityLevel : currentProfile.activityLevel,
-            target_weight_kg: targetWeightKg !== undefined ? targetWeightKg : currentProfile.targetWeightKg,
-            macro_protein_pct: macroProteinPct !== undefined ? macroProteinPct : currentProfile.macroProteinPct,
-            macro_carbs_pct: macroCarbsPct !== undefined ? macroCarbsPct : currentProfile.macroCarbsPct,
-            macro_fats_pct: macroFatsPct !== undefined ? macroFatsPct : currentProfile.macroFatsPct,
+            age: age !== undefined ? age : (currentProfile?.age || 22),
+            activity_level: activityLevel !== undefined ? activityLevel : (currentProfile?.activityLevel || 'lightly_active'),
+            target_weight_kg: targetWeightKg !== undefined ? targetWeightKg : (currentProfile?.targetWeightKg || weightKg),
+            macro_protein_pct: macroProteinPct !== undefined ? macroProteinPct : (currentProfile?.macroProteinPct || null),
+            macro_carbs_pct: macroCarbsPct !== undefined ? macroCarbsPct : (currentProfile?.macroCarbsPct || null),
+            macro_fats_pct: macroFatsPct !== undefined ? macroFatsPct : (currentProfile?.macroFatsPct || null),
           });
 
           // Keep profile weight as a current-value cache; body_progress remains history.
-          if (currentProfile.weightKg !== weightKg) {
+          if (!currentProfile || currentProfile.weightKg !== weightKg) {
             await createBodyProgressLocal({
               user_id: userId,
               weight_kg: weightKg,
