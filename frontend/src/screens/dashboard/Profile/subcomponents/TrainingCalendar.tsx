@@ -1,7 +1,7 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, ActivityIndicator,
+  View, Text, TouchableOpacity,
+  StyleSheet, ActivityIndicator, useWindowDimensions,
 } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
@@ -36,8 +36,8 @@ function getWorkoutStyle(type: string): WorkoutStyle {
   }
 }
 
-/** Horizontal scrollable training calendar for the current week,
- *  expandable in-place to a full month grid with day detail panels. */
+/** 2-row week calendar grid (4+3), expandable in-place to a full month
+ *  grid with day detail panels inside a themed card container. */
 export function TrainingCalendar({
   days, loading,
   historyWorkouts, historyDietLogs, historyLoading, historyError, onDateSelect,
@@ -94,6 +94,12 @@ export function TrainingCalendar({
   const handleSelectHistoryMonth = (direction: 'previous' | 'next') =>
     setMonthOffset((c) => c + (direction === 'previous' ? -1 : 1));
 
+  const { width: screenWidth } = useWindowDimensions();
+  const containerMaxWidth = Math.min(screenWidth - spacing.base * 2, layout.modalMaxWidth);
+  const weekCardWidth = Math.floor((containerMaxWidth - spacing.sm * 3) / 4);
+  // expanded grid cell width — accounts for card padding + 6 gaps between 7 columns
+  const historyCellWidth = Math.floor((containerMaxWidth - spacing.base * 2 - spacing.xs * 6) / 7);
+
   return (
     <View style={styles.container}>
       {/* --- header row --- */}
@@ -116,7 +122,7 @@ export function TrainingCalendar({
 
       {isExpanded ? (
         /* ----- expanded mode: full month grid ----- */
-        <>
+        <View style={styles.historyCard}>
           {/* month navigation */}
           <View style={styles.expandedNavRow}>
             <TouchableOpacity
@@ -144,16 +150,26 @@ export function TrainingCalendar({
             </View>
           ) : (
             <>
+              {/* weekday header row */}
+              <View style={styles.expandedWeekdayRow}>
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, i) => (
+                  <View key={`wd-${i}`} style={[styles.expandedWeekdayCell, { width: historyCellWidth }]}>
+                    <Text style={styles.expandedWeekdayLabel}>{label}</Text>
+                  </View>
+                ))}
+              </View>
+
               {/* day grid */}
               <View style={styles.expandedGrid}>
                 {Array.from({ length: historyWeekdayOffset }).map((_, i) => (
-                  <View key={`blank-${i}`} style={styles.expandedDayPlaceholder} />
+                  <View key={`blank-${i}`} style={[styles.expandedDayPlaceholder, { width: historyCellWidth, height: historyCellWidth }]} />
                 ))}
                 {historyDays.map((day) => (
                   <TouchableOpacity
                     key={day.dateStr}
                     style={[
                       styles.expandedDayCard,
+                      { width: historyCellWidth, height: historyCellWidth },
                       day.dateStr === selectedDate && styles.expandedDayCardActive,
                     ]}
                     onPress={() => handleSelectHistoryDate(day.dateStr)}
@@ -181,7 +197,10 @@ export function TrainingCalendar({
                       <Text style={styles.expandedSectionTitle}>Food Intake</Text>
                       {selectedHistorySummary.meals.length > 0 ? (
                         selectedHistorySummary.meals.map((meal) => (
-                          <Text key={meal.id} style={styles.expandedLineItem}>• {meal.meal_name}</Text>
+                          <View key={meal.id} style={styles.expandedDetailRow}>
+                            <View style={styles.expandedDetailDot} />
+                            <Text style={styles.expandedLineItem}>{meal.meal_name}</Text>
+                          </View>
                         ))
                       ) : (
                         <Text style={styles.expandedMissingText}>No meals recorded</Text>
@@ -191,7 +210,10 @@ export function TrainingCalendar({
                       <Text style={styles.expandedSectionTitle}>Workout Sessions</Text>
                       {selectedHistorySummary.workouts.length > 0 ? (
                         selectedHistorySummary.workouts.map((workout) => (
-                          <Text key={workout.id} style={styles.expandedLineItem}>• {workout.name}</Text>
+                          <View key={workout.id} style={styles.expandedDetailRow}>
+                            <View style={styles.expandedDetailDot} />
+                            <Text style={styles.expandedLineItem}>{workout.name}</Text>
+                          </View>
                         ))
                       ) : (
                         <Text style={styles.expandedMissingText}>No workouts recorded</Text>
@@ -227,26 +249,26 @@ export function TrainingCalendar({
               </View>
             </>
           )}
-        </>
+        </View>
       ) : (
-        /* ----- compact mode: horizontal week scroll (unchanged) ----- */
+        /* ----- compact mode: 2-row week grid ----- */
         loading ? (
           <ActivityIndicator
             color={Colors.primary}
             style={{ marginVertical: spacing.base }}
           />
         ) : (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.scroll}
-          >
+          <View style={styles.weekGrid}>
             {days.map((day) => {
               const ws = getWorkoutStyle(day.workoutType);
               return (
                 <TouchableOpacity
                   key={day.dateStr}
-                  style={[styles.dayCard, day.isToday && styles.dayCardToday]}
+                  style={[
+                    styles.dayCard,
+                    { width: weekCardWidth },
+                    day.isToday && styles.dayCardToday,
+                  ]}
                   onPress={() => {
                     if (day.isClickable && onDateSelect) {
                       onDateSelect(day.dateStr);
@@ -278,7 +300,7 @@ export function TrainingCalendar({
                 </TouchableOpacity>
               );
             })}
-          </ScrollView>
+          </View>
         )
       )}
     </View>
@@ -304,25 +326,25 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
     fontWeight: fontWeight.bold,
     color: Colors.primary,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
   },
-  scroll: {
+  weekGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
-    paddingBottom: spacing.xs,
+    justifyContent: 'flex-start',
   },
   dayCard: {
-    width: 72,
-    minHeight: layout.minTouchTarget * 2,
+    minHeight: 72,
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: radius.md,
-    padding: spacing.sm,
+    padding: spacing.xs,
+    paddingVertical: spacing.sm,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(190,200,210,0.2)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
+    borderColor: 'rgba(190,200,210,0.25)',
     position: 'relative',
   },
   dayCardToday: {
@@ -340,9 +362,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   dayLabel: {
-    fontSize: typography.xs,
+    fontSize: 10,
     color: Colors.outline,
     marginBottom: 4,
+    fontWeight: fontWeight.medium,
   },
   dayLabelToday: {
     color: Colors.primary,
@@ -350,16 +373,16 @@ const styles = StyleSheet.create({
   },
   dateNum: {
     fontSize: typography.xl,
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.extraBold,
     color: Colors.onSurface,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   dateNumToday: {
     color: Colors.primary,
   },
   badge: {
     paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: radius.full,
   },
   badgeText: {
@@ -367,11 +390,24 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   dash: {
-    fontSize: typography.xs,
+    fontSize: 11,
     color: Colors.outlineVariant,
+    fontWeight: fontWeight.medium,
   },
 
   // --- expanded mode styles ---
+  historyCard: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: radius.lg,
+    padding: spacing.base,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
   expandedNavRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -379,18 +415,39 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   expandedNavButton: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: radius.full,
     backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
   },
   expandedMonthLabel: {
-    fontSize: typography.sm,
+    fontSize: typography.base,
     color: Colors.onSurface,
-    fontWeight: fontWeight.medium,
+    fontWeight: fontWeight.bold,
   },
+  // --- weekday header row ---
+  expandedWeekdayRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  expandedWeekdayCell: {
+    width: 46,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  expandedWeekdayLabel: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    letterSpacing: 0.3,
+  },
+
   expandedGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -398,12 +455,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   expandedDayPlaceholder: {
-    width: 44,
-    height: 44,
+    width: 46,
+    height: 46,
   },
   expandedDayCard: {
-    width: 44,
-    height: 44,
+    width: 46,
+    height: 46,
     borderRadius: radius.md,
     backgroundColor: Colors.surface,
     borderWidth: 1,
@@ -412,8 +469,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   expandedDayCardActive: {
-    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    backgroundColor: 'rgba(14, 165, 233, 0.12)',
     borderColor: Colors.primary,
+    borderWidth: 1.5,
   },
   expandedDayNumber: {
     fontSize: typography.sm,
@@ -424,40 +482,62 @@ const styles = StyleSheet.create({
     color: Colors.primary,
   },
   expandedDot: {
-    width: 6,
-    height: 6,
+    width: 5,
+    height: 5,
     borderRadius: radius.full,
     backgroundColor: Colors.primary,
-    marginTop: spacing.xs,
+    marginTop: 3,
+  },
+  // --- detail row with dot ---
+  expandedDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  expandedDetailDot: {
+    width: 5,
+    height: 5,
+    borderRadius: radius.full,
+    backgroundColor: Colors.outlineVariant,
+    marginRight: spacing.sm,
+    marginTop: 1,
   },
   expandedSummaryCard: {
     backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     padding: spacing.base,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.12)',
   },
   expandedSummaryTitle: {
-    fontSize: typography.sm,
+    fontSize: typography.base,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   expandedSection: {
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(190, 200, 210, 0.1)',
   },
   expandedSectionTitle: {
-    fontSize: typography.xs,
+    fontSize: 10,
     color: Colors.outline,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
     textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    fontWeight: fontWeight.bold,
   },
   expandedLineItem: {
     fontSize: typography.sm,
     color: Colors.onSurface,
-    marginBottom: spacing.xs,
+    flex: 1,
   },
   expandedMissingText: {
     fontSize: typography.sm,
     color: Colors.outline,
+    fontStyle: 'italic',
   },
   expandedEmptyText: {
     fontSize: typography.sm,
@@ -466,7 +546,7 @@ const styles = StyleSheet.create({
   },
   expandedMonthEmpty: {
     marginTop: spacing.md,
-    padding: spacing.sm,
+    padding: spacing.md,
     backgroundColor: Colors.surface,
     borderRadius: radius.md,
     alignItems: 'center',
@@ -484,14 +564,20 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
   },
   viewDetailsBtn: {
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.base,
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.xl,
     borderRadius: radius.full,
-    backgroundColor: Colors.primaryContainer,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
-    minHeight: 36,
+    minHeight: 42,
     justifyContent: 'center',
+    alignSelf: 'flex-start',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 2,
   },
   viewDetailsBtnText: {
     color: Colors.onPrimary,
