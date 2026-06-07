@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
-import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle } from 'lucide-react-native';
+import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle, Sparkles } from 'lucide-react-native';
 import { getMuscleDataForExercise } from './exerciseMuscles';
 import { BodyMuscleMap } from './BodyMuscleMap';
 import { WGERExerciseBrowser } from './WGERExerciseBrowser';
@@ -108,6 +108,16 @@ const formatWeight = (value: number): string => {
 
 export function LiftTab({ triggerToast }: LiftTabProps) {
   const user = useAuthStore((state) => state.user);
+  const profile = useAuthStore((state) => state.profile);
+
+  const fullName = profile?.fullName || user?.user_metadata?.fullName || user?.user_metadata?.full_name || 'User';
+
+  const getGreeting = () => {
+    const hours = new Date().getHours();
+    if (hours < 12) return 'Good morning';
+    if (hours < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
 
   // Timer state
   const [isRunning, setIsRunning] = useState(false);
@@ -1448,6 +1458,19 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Dynamic Header Greeting */}
+        <View style={styles.welcomeSection}>
+          <View style={styles.welcomeGreetingRow}>
+            <Text style={styles.welcomeTitle}>
+              {getGreeting()}, {fullName.split(' ')[0]}!
+            </Text>
+            <Sparkles size={18} color="#eab308" fill="#eab308" style={styles.greetingSparkle} />
+          </View>
+          <Text style={styles.welcomeSubtitle}>
+            Track your routines and daily training sessions.
+          </Text>
+        </View>
+
         {/* Session Timer Card */}
         <View style={styles.timerCard}>
           <View style={styles.timerHeaderRow}>
@@ -1510,7 +1533,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
               }}
               activeOpacity={0.8}
             >
-              <Plus size={14} color={Colors.onPrimary} strokeWidth={2.5} />
+              <Plus size={12} color={Colors.primary} strokeWidth={3} />
               <Text style={styles.routineAddText}>Create</Text>
             </TouchableOpacity>
           </View>
@@ -1593,8 +1616,13 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                 onPress={() => handleStartRoutine(selectedRoutine)}
                 activeOpacity={0.85}
               >
-                <Text style={styles.routineStartText}>
-                  {activeRoutineId === selectedRoutine.id ? 'Routine Active' : 'Start Routine'}
+                <Text
+                  style={[
+                    styles.routineStartText,
+                    activeRoutineId === selectedRoutine.id && styles.routineStartTextActive,
+                  ]}
+                >
+                  {activeRoutineId === selectedRoutine.id ? '✓ Routine Active' : 'Start Routine'}
                 </Text>
               </TouchableOpacity>
 
@@ -2567,6 +2595,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  welcomeSection: {
+    marginBottom: spacing.base,
+    marginTop: spacing.xs,
+  },
+  welcomeGreetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  greetingSparkle: {
+    marginTop: -2,
+  },
+  welcomeTitle: {
+    fontSize: typography.xl,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  welcomeSubtitle: {
+    fontSize: typography.sm,
+    color: Colors.onSurfaceVariant,
+    marginTop: 2,
+  },
   routineCard: {
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: radius.lg,
@@ -2574,12 +2624,17 @@ const styles = StyleSheet.create({
     marginBottom: spacing.base,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.15)',
+    shadowColor: Colors.onSurface,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
   },
   routineHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   routineTitle: {
     fontSize: typography.xs,
@@ -2590,17 +2645,18 @@ const styles = StyleSheet.create({
   routineAddButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 4,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.xs + 2,
     borderRadius: radius.full,
-    backgroundColor: Colors.primaryContainer,
-    minHeight: layout.minTouchTarget,
+    backgroundColor: 'rgba(0, 101, 145, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 101, 145, 0.15)',
   },
   routineAddText: {
     fontSize: typography.xs,
     fontWeight: fontWeight.bold,
-    color: Colors.onPrimary,
+    color: Colors.primary,
   },
   routineHint: {
     fontSize: typography.xs,
@@ -2608,80 +2664,120 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   routinePills: {
-    marginBottom: spacing.base,
+    marginBottom: spacing.md,
   },
   routinePill: {
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: Colors.outline,
+    borderColor: 'rgba(0, 101, 145, 0.12)',
+    backgroundColor: Colors.surfaceContainerLow,
     marginRight: spacing.xs,
-    minHeight: 36,
+    minHeight: 32,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   routinePillActive: {
-    backgroundColor: Colors.primaryContainer,
-    borderColor: Colors.primaryContainer,
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   routinePillText: {
     fontSize: typography.xs,
-    color: Colors.outline,
-    fontWeight: fontWeight.medium,
+    color: Colors.primary,
+    fontWeight: fontWeight.bold,
   },
   routinePillTextActive: {
     color: Colors.onPrimary,
   },
   routineDetails: {
-    gap: spacing.sm,
+    gap: spacing.base,
+    marginTop: spacing.xs,
   },
   routineExerciseList: {
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   routineExerciseRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.sm,
-    borderRadius: radius.md,
-    backgroundColor: Colors.surface,
+    padding: spacing.base,
+    borderRadius: radius.lg,
+    backgroundColor: Colors.surfaceContainerLow,
     borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.2)',
+    borderColor: 'rgba(190, 200, 210, 0.15)',
   },
   routineExerciseRowActive: {
-    borderColor: Colors.primaryContainer,
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(0, 101, 145, 0.04)',
   },
   routineExerciseInfo: {
     flex: 1,
   },
   routineExerciseName: {
-    fontSize: typography.sm,
+    fontSize: typography.base,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,
   },
   routineExerciseMeta: {
     fontSize: typography.xs,
-    color: Colors.outline,
-    marginTop: 2,
+    color: Colors.onSurfaceVariant,
+    marginTop: 4,
+    fontWeight: fontWeight.medium,
   },
   routineExerciseTag: {
-    fontSize: typography.xs,
-    color: Colors.primaryContainer,
+    fontSize: typography.xs - 1,
+    color: Colors.primary,
+    backgroundColor: 'rgba(0, 101, 145, 0.12)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
     fontWeight: fontWeight.bold,
+    textTransform: 'uppercase',
+  },
+  routineStartButton: {
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
+    marginTop: spacing.xs,
+  },
+  routineStartButtonActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  routineStartText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onPrimary,
+  },
+  routineStartTextActive: {
+    color: '#10b981',
   },
   routineEditButton: {
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
     alignItems: 'center',
+    backgroundColor: Colors.surfaceContainerLowest,
     borderWidth: 1,
-    borderColor: Colors.primaryContainer,
+    borderColor: 'rgba(0, 101, 145, 0.25)',
     minHeight: layout.minTouchTarget,
     justifyContent: 'center',
   },
   routineEditText: {
     fontSize: typography.sm,
     fontWeight: fontWeight.bold,
-    color: Colors.primaryContainer,
+    color: Colors.primary,
   },
   routineWorkoutList: {
     gap: spacing.sm,
