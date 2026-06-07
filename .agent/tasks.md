@@ -164,3 +164,13 @@
   - ✅ **Water Intake (HCI)**: Replaced single-glass increment with customizable goal-oriented tracker (e.g. 4L goal support). Dynamic number of glass toggle buttons rendering based on selected target (e.g. 4L goal = 16 glasses). High touch target minimum WCAG compliant (44px) button sizes optimized for mobile views.
   - ✅ **Sleep Log (HCI)**: Replaced static `sleepHours` display with bedtime/wake-time `<input type="time">` pickers. Clear contextual copy added: "Log last night → this morning" with labels: "Slept at (last night)" and "Woke up (this morning)" ensuring complete sleep schedules clarity.
   - **Build**: ✅ `tsc --noEmit && vite build` — 1.90s, 0 errors
+
+### [TASK-C013] Premium Food Log UI Refactoring — Mobile
+- **Completed**: 2026-06-07 | **Commit**: `5b7b3e7`
+- **Files Modified**: `FoodSearchModal.tsx`, `LoggedItemDetailsModal.tsx`, `FoodTab.tsx`
+- **Changes**:
+  - ✅ **Stepper Styling**: Updated amount input fields to feature centered alignments, solid white backgrounds (`#ffffff`), and custom left/right border separators.
+  - ✅ **Meal Group Dropdown**: Refactored static "Group" category displays into interactive dropdown selection boxes with options list overlays.
+  - ✅ **Mutually Exclusive Focus**: Integrated exclusive open-state controls for Serving Size and Meal Group dropdown selections.
+  - ✅ **Layout Corrections**: Fixed bento container overflows (`visible`) to prevent absolute drop menus clipping on viewport boundaries, and removed the duplicate red bottom "Delete Food Entry" button in favor of the top toolbar's delete button.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors

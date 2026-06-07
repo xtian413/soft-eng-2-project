@@ -312,6 +312,24 @@
 
 ---
 
+### [2026-06-07 09:15 +0800] FEAT: Modernize Food Search & Log Details UI with Dropdown Group Selector
+- **Commit**: `5b7b3e7`
+- **Branch**: `feature/food`
+- **Files Modified**:
+  - `frontend/src/screens/dashboard/Food/FoodSearchModal.tsx`
+  - `frontend/src/screens/dashboard/Food/LoggedItemDetailsModal.tsx`
+  - `frontend/src/screens/dashboard/Food/FoodTab.tsx`
+  - `frontend/metro.config.js`
+- **Changes**:
+  - ✅ **Centered Amount Stepper**: Updated quantity amount inputs to feature centered text alignments, solid white backgrounds (`#ffffff`), and custom left/right border separators.
+  - ✅ **Meal Group Dropdown**: Refactored static "Group" categories in both Food Search modal and Logged Items details modal into clickable dropdown triggers.
+  - ✅ **Mutually Exclusive Focus**: Implemented exclusive open-states for Serving Size and Meal Group dropdown selections (opening one automatically closes the other).
+  - ✅ **Overflow Fix**: Adjusted bento card containers to use `overflow: 'visible'` layout so that absolute dropdown overlays are not clipped on mobile and web viewports.
+  - ✅ **Redundancy Cleanup**: Removed the duplicate red "Delete Food Entry" button at the bottom of the logged items modal, relying on the top toolbar's delete button to clean up clutter.
+  - **Build**: ✅ Checked with `npx tsc --noEmit` yielding zero compilation errors.
+
+---
+
 ## How to Update This Changelog
 
 After every major change, append a new entry using this format:
