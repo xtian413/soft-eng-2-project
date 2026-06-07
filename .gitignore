@@ -1,0 +1,11 @@
+node_modules/
+.env
+dist/
+.expo/
+.codex/
+*.log
+*.bin
+*.task
+*.tflite
+.worktrees/
+.mcp.json

@@ -1,0 +1,3195 @@
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  TextInput,
+  Animated,
+  PanResponder,
+  PanResponderInstance,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  AppState,
+  type AppStateStatus,
+} from 'react-native';
+import { Colors } from '@/theme/colors';
+import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
+import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle } from 'lucide-react-native';
+import { getMuscleDataForExercise } from './exerciseMuscles';
+import { BodyMuscleMap } from './BodyMuscleMap';
+import { WGERExerciseBrowser } from './WGERExerciseBrowser';
+import type { ExerciseDbExercise } from '@/api/exerciseDbService';
+import { createWorkout, fetchWorkoutById } from '@/api/workoutApi';
+import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/store/authStore';
+import type { CompletedWorkoutInput, LocalRoutineWithExercises, LocalWorkoutWithSets } from '@/local/schema';
+import {
+  completedWorkoutToRemoteCreateInput,
+  matchRemoteWorkoutSets,
+} from '@/local/workoutsMapper';
+import {
+  localRoutinesToViews,
+  matchRemoteRoutineExercises,
+  remoteRoutineToLocalInput,
+  routineDraftsToLocalInput,
+  routineViewToLocalInput,
+  type RemoteRoutineRow,
+  type RemoteRoutineSetRow,
+  type RoutineView,
+  type RoutineViewExercise,
+} from '@/local/routinesMapper';
+import {
+  createWorkoutWithSetsLocal,
+  getRecentWorkoutsByUser,
+  getUnsyncedNewWorkoutsByUser,
+  markWorkoutRemoteCreateIncomplete,
+  markWorkoutSyncFailed,
+  markWorkoutSynced,
+} from '@/local/repositories/workoutsRepository';
+import {
+  createRoutineWithExercisesLocal,
+  getRoutinesByUser,
+  getUnsyncedRoutinesByUser,
+  markRoutineSyncFailed,
+  markRoutineSynced,
+  updateRoutineWithExercisesLocal,
+  updateRoutineRemoteIds,
+  upsertRemoteRoutineForUser,
+} from '@/local/repositories/routinesRepository';
+
+interface LiftTabProps {
+  triggerToast: (msg: string) => void;
+}
+
+interface SetLog {
+  id: string;
+  exerciseId: string;
+  exerciseName: string;
+  muscleGroup?: string | null;
+  setNum: number;
+  weight: number;
+  reps: number;
+  repsLeft?: number;
+  repsRight?: number;
+  rir: number;
+  isChecked: boolean;
+}
+
+interface Exercise {
+  id: string;
+  name: string;
+  category: 'barbell' | 'dumbbell' | 'cable' | 'bodyweight' | 'machine';
+  isCustom: boolean;
+  muscleGroup?: string | null;
+}
+
+type RoutineExercise = RoutineViewExercise;
+type Routine = RoutineView;
+
+interface RoutineDraftExercise {
+  id: string;
+  name: string;
+  sets: string;
+  reps: string;
+  weight: string;
+  weightUnit: 'lbs' | 'kg';
+  muscleGroup?: string;
+}
+
+// Strip decimals unless the value actually has meaningful fractional part
+const formatWeight = (value: number): string => {
+  if (!Number.isFinite(value) || value <= 0) return '';
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(Math.round(rounded)) : String(rounded);
+};
+
+export function LiftTab({ triggerToast }: LiftTabProps) {
+  const user = useAuthStore((state) => state.user);
+
+  // Timer state
+  const [isRunning, setIsRunning] = useState(false);
+  const [elapsedSecs, setElapsedSecs] = useState(0);
+  const [isLbs, setIsLbs] = useState(true);
+
+  // Routine state
+  const [routines, setRoutines] = useState<Routine[]>([]);
+  const [selectedRoutineId, setSelectedRoutineId] = useState<string | null>(null);
+  const [activeRoutineId, setActiveRoutineId] = useState<string | null>(null);
+  const [isRoutineLoading, setIsRoutineLoading] = useState(false);
+  const [showRoutineModal, setShowRoutineModal] = useState(false);
+  const [routineNameInput, setRoutineNameInput] = useState('');
+  const [routineDraftExercises, setRoutineDraftExercises] = useState<RoutineDraftExercise[]>([]);
+  const [isSavingRoutine, setIsSavingRoutine] = useState(false);
+  const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
+  const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
+  const [routineProgress, setRoutineProgress] = useState<
+    Record<string, { sets: string; reps: string; weight: string; doneSets: boolean[] }>
+  >({});
+
+  // Exercise management state
+  const [exercisesList, setExercisesList] = useState<Exercise[]>([]);
+  const [currentExerciseId, setCurrentExerciseId] = useState('');
+  const currentExercise =
+    exercisesList.find((e) => e.id === currentExerciseId) ||
+    ({ id: '', name: '', category: 'barbell', isCustom: false } as Exercise);
+
+  // Set configuration input state
+  const [inputWeight, setInputWeight] = useState('185');
+  const [inputReps, setInputReps] = useState('8');
+  const [inputRepsLeft, setInputRepsLeft] = useState('8');
+  const [inputRepsRight, setInputRepsRight] = useState('8');
+  const [inputRir, setInputRir] = useState('2');
+  const [isUnilateral, setIsUnilateral] = useState(false);
+
+  // UI state
+  const [setsList, setSetsList] = useState<SetLog[]>([]);
+  const [completedWorkouts, setCompletedWorkouts] = useState<LocalWorkoutWithSets[]>([]);
+  const [isFinishingWorkout, setIsFinishingWorkout] = useState(false);
+  const [showCustomExerciseModal, setShowCustomExerciseModal] = useState(false);
+  const [showExerciseBrowser, setShowExerciseBrowser] = useState(false);
+  const [exerciseBrowserTarget, setExerciseBrowserTarget] = useState<'routine' | 'workout'>('workout');
+  const [pendingExercise, setPendingExercise] = useState<ExerciseDbExercise | null>(null);
+  const [showExerciseConfigSheet, setShowExerciseConfigSheet] = useState(false);
+  const [configSets, setConfigSets] = useState('3');
+  const [configReps, setConfigReps] = useState('10');
+  const [configWeight, setConfigWeight] = useState('');
+  const [configWeightUnit, setConfigWeightUnit] = useState<'lbs' | 'kg'>('lbs');
+  const [selectedMuscleId, setSelectedMuscleId] = useState<number | null>(null);
+  const [selectedMuscleName, setSelectedMuscleName] = useState<string>('');
+  const [customExerciseName, setCustomExerciseName] = useState('');
+  const [customExerciseCategory, setCustomExerciseCategory] = useState<Exercise['category']>('barbell');
+  const [highlightMode, setHighlightMode] = useState<'none' | 'click' | 'exercise'>('none');
+  const [primaryMuscleIds, setPrimaryMuscleIds] = useState<number[]>([]);
+  const [secondaryMuscleIds, setSecondaryMuscleIds] = useState<number[]>([]);
+  const currentExerciseSets = setsList.filter((set) => set.exerciseId === currentExerciseId);
+
+  // Swipe state
+  const swipeAnimRefs = useRef<{ [key: string]: Animated.Value }>({});
+  const panResponderRefs = useRef<{ [key: string]: PanResponderInstance }>({});
+  const routineModalScrollRef = useRef<ScrollView>(null);
+  const uniqueIdRef = useRef(0);
+  const isLoadingRoutinesRef = useRef(false);
+  const isRetryingRoutineSyncsRef = useRef(false);
+  const isRetryingWorkoutCreatesRef = useRef(false);
+  const inFlightWorkoutCreateIdsRef = useRef(new Set<string>());
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+
+  const createUniqueId = (prefix: string) => {
+    uniqueIdRef.current += 1;
+    return `${prefix}-${Date.now()}-${uniqueIdRef.current}`;
+  };
+
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scaleAnim = useState(new Animated.Value(1))[0];
+
+  // Timer effect
+  useEffect(() => {
+    if (isRunning) {
+      intervalRef.current = setInterval(() => {
+        setElapsedSecs((s) => s + 1);
+      }, 1000);
+
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(scaleAnim, {
+            toValue: 1.02,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(scaleAnim, {
+            toValue: 1.0,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      scaleAnim.setValue(1);
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [isRunning, scaleAnim]);
+
+  const formatTime = (secs: number): string => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return [h, m, s].map((v) => String(v).padStart(2, '0')).join(':');
+  };
+
+  const getErrorMessage = (error: unknown) => {
+    if (error instanceof Error) return error.message;
+    const candidate = error as { message?: string };
+    return candidate?.message ?? String(error);
+  };
+
+  type SyncWorkoutResult = {
+    didSync: boolean;
+    message?: string;
+    skippedInFlight?: boolean;
+  };
+
+  const logRoutineError = (label: string, error: unknown) => {
+    const candidate = error as {
+      name?: string;
+      message?: string;
+      details?: string;
+      hint?: string;
+      code?: string;
+      stack?: string;
+    };
+
+    console.warn(label, {
+      name: error instanceof Error ? error.name : candidate?.name,
+      message: error instanceof Error ? error.message : candidate?.message ?? String(error),
+      code: candidate?.code,
+      details: candidate?.details,
+      hint: candidate?.hint,
+      stack: error instanceof Error ? error.stack : candidate?.stack,
+    });
+  };
+
+  const convertInputWeightToKg = (weight: number) => (isLbs ? weight * 0.45359237 : weight);
+
+  const estimateOneRepMax = (weightKg: number, reps: number) => {
+    if (!Number.isFinite(weightKg) || !Number.isFinite(reps) || weightKg <= 0 || reps <= 0) return null;
+    return Number((weightKg * (1 + reps / 30)).toFixed(2));
+  };
+
+  const loadCompletedWorkoutHistory = async () => {
+    if (!user?.id) {
+      setCompletedWorkouts([]);
+      return;
+    }
+
+    try {
+      const workouts = await getRecentWorkoutsByUser(user.id, 10);
+      setCompletedWorkouts(workouts);
+    } catch (error) {
+      console.error('[LiftTab] Failed to load local workout history:', error);
+    }
+  };
+
+  useEffect(() => {
+    loadCompletedWorkoutHistory();
+  }, [user?.id]);
+
+  const buildRoutineCompletedWorkoutPayload = (): CompletedWorkoutInput | null => {
+    if (!activeRoutine) return null;
+
+    const sets: CompletedWorkoutInput['sets'] = activeRoutine.exercises.flatMap((exercise) => {
+      const progress = routineProgress[exercise.id];
+      if (!progress) return [];
+
+      const reps = Math.max(1, parseInt(progress.reps, 10) || 1);
+      const weight = parseFloat(progress.weight) || 0;
+      const weightKg = isLbs ? weight * 0.45359237 : weight;
+
+      return progress.doneSets.flatMap((isDone, index) =>
+        isDone
+          ? [
+              {
+                exerciseName: exercise.exercise_name,
+                muscleGroup: exercise.muscle_group ?? null,
+                setNumber: index + 1,
+                reps,
+                weightKg: weightKg > 0 ? weightKg : null,
+                rir: 0,
+                estimated1rm: estimateOneRepMax(weightKg, reps),
+              },
+            ]
+          : []
+      );
+    });
+
+    return {
+      name: activeRoutine.name,
+      performedAt: new Date().toISOString(),
+      notes: 'routine_session',
+      sets,
+    };
+  };
+
+  const buildFreeformCompletedWorkoutPayload = (): CompletedWorkoutInput | null => {
+    const checkedSets = setsList.filter((set) => set.isChecked);
+    if (checkedSets.length === 0) return null;
+
+    const workoutName =
+      exercisesList.length === 1
+        ? exercisesList[0].name
+        : exercisesList.length > 1
+        ? 'Custom Workout'
+        : currentExercise.name || 'Workout';
+
+    return {
+      name: workoutName,
+      performedAt: new Date().toISOString(),
+      sets: checkedSets.map((set) => {
+        const weightKg = convertInputWeightToKg(set.weight);
+        return {
+          exerciseName: set.exerciseName,
+          muscleGroup: set.muscleGroup ?? null,
+          setNumber: set.setNum,
+          reps: set.reps,
+          weightKg,
+          rir: set.rir,
+          estimated1rm: estimateOneRepMax(weightKg, set.reps),
+        };
+      }),
+    };
+  };
+
+  const buildCompletedWorkoutPayload = (): CompletedWorkoutInput | null => {
+    return activeRoutine ? buildRoutineCompletedWorkoutPayload() : buildFreeformCompletedWorkoutPayload();
+  };
+
+  const completedWorkoutPayloadFromLocal = (workout: LocalWorkoutWithSets): CompletedWorkoutInput => ({
+    name: workout.name,
+    performedAt: workout.performed_at,
+    notes: workout.notes,
+    sets: workout.sets.map((set) => ({
+      exerciseName: set.exercise_name,
+      muscleGroup: set.muscle_group,
+      setNumber: set.set_number,
+      reps: set.reps,
+      weightKg: set.weight_kg,
+      durationSeconds: set.duration_seconds,
+      rir: set.rir,
+      estimated1rm: set.est_1rm,
+    })),
+  });
+
+  const syncWorkoutToRemote = async (
+    localWorkout: LocalWorkoutWithSets,
+    payload: CompletedWorkoutInput,
+    options?: {
+      showFailureToast?: boolean;
+      authenticatedUserId?: string;
+      updateVisibleHistory?: boolean;
+    }
+  ): Promise<SyncWorkoutResult> => {
+    const authenticatedUserId = options?.authenticatedUserId ?? user?.id;
+    if (!authenticatedUserId) return { didSync: false, message: 'Missing authenticated user.' };
+    if (localWorkout.user_id !== authenticatedUserId) {
+      const message = 'Skipping workout sync for a different authenticated user.';
+      console.warn('[LiftTab]', message);
+      return { didSync: false, message };
+    }
+    if (inFlightWorkoutCreateIdsRef.current.has(localWorkout.id)) {
+      console.log('[LiftTab] Workout create sync skipped: already in-flight', {
+        localWorkoutId: localWorkout.id,
+      });
+      return { didSync: false, skippedInFlight: true };
+    }
+
+    const showFailureToast = options?.showFailureToast ?? true;
+    const updateVisibleHistory = options?.updateVisibleHistory ?? true;
+    inFlightWorkoutCreateIdsRef.current.add(localWorkout.id);
+    let remoteWorkoutId: string | null = null;
+    try {
+      const remoteWorkout = await createWorkout(completedWorkoutToRemoteCreateInput(payload));
+      remoteWorkoutId = remoteWorkout.id;
+
+      const remoteWithSets = await fetchWorkoutById(remoteWorkout.id);
+      const matchResult = matchRemoteWorkoutSets(localWorkout.sets, remoteWithSets.workout_sets ?? []);
+      if (matchResult.unmatchedLocalSetIds.length > 0) {
+        throw new Error(
+          `Remote workout saved, but ${matchResult.unmatchedLocalSetIds.length} local set(s) could not be matched.`
+        );
+      }
+
+      const synced = await markWorkoutSynced(
+        authenticatedUserId,
+        localWorkout.id,
+        remoteWorkout.id,
+        matchResult.matches
+      );
+      if (updateVisibleHistory) {
+        setCompletedWorkouts((prev) => [synced, ...prev.filter((workout) => workout.id !== synced.id)]);
+      }
+      return { didSync: true };
+    } catch (error) {
+      console.error('[LiftTab] Failed to sync workout to backend:', getErrorMessage(error));
+      if (remoteWorkoutId) {
+        await markWorkoutRemoteCreateIncomplete(authenticatedUserId, localWorkout.id, remoteWorkoutId).catch(
+          (markError) => {
+            console.error('[LiftTab] Failed to mark workout remote create incomplete:', markError);
+          }
+        );
+      } else {
+        await markWorkoutSyncFailed(authenticatedUserId, localWorkout.id).catch((markError) => {
+          console.error('[LiftTab] Failed to mark workout sync failed:', markError);
+        });
+      }
+      if (showFailureToast) {
+        triggerToast(`Workout saved locally. Remote sync pending.`);
+      }
+      return { didSync: false, message: getErrorMessage(error) };
+    } finally {
+      inFlightWorkoutCreateIdsRef.current.delete(localWorkout.id);
+    }
+  };
+
+  const retryPendingWorkoutCreates = async (userId: string) => {
+    if (isRetryingWorkoutCreatesRef.current) {
+      console.log('[LiftTab] Workout create retry skipped: already running');
+      return;
+    }
+
+    isRetryingWorkoutCreatesRef.current = true;
+    try {
+      console.log('[LiftTab] Workout create retry begin');
+      const unsyncedWorkouts = await getUnsyncedNewWorkoutsByUser(userId);
+      console.log('[LiftTab] Unsynced new workouts found:', unsyncedWorkouts.length);
+      let syncedAnyWorkout = false;
+
+      for (const workout of unsyncedWorkouts) {
+        if (inFlightWorkoutCreateIdsRef.current.has(workout.id)) {
+          console.log('[LiftTab] Workout create retry skipped: already in-flight', {
+            localWorkoutId: workout.id,
+          });
+          continue;
+        }
+
+        console.log('[LiftTab] Retrying workout create:', { localWorkoutId: workout.id });
+        const result = await syncWorkoutToRemote(workout, completedWorkoutPayloadFromLocal(workout), {
+          showFailureToast: false,
+          authenticatedUserId: userId,
+          updateVisibleHistory: false,
+        });
+        if (result.didSync) {
+          syncedAnyWorkout = true;
+        }
+        if (!result.didSync && !result.skippedInFlight) {
+          console.log('[LiftTab] Workout create retry left pending:', {
+            localWorkoutId: workout.id,
+            message: result.message,
+          });
+        }
+      }
+
+      if (syncedAnyWorkout) {
+        const recentWorkouts = await getRecentWorkoutsByUser(userId, 10);
+        setCompletedWorkouts(recentWorkouts);
+      }
+      console.log('[LiftTab] Workout create retry complete');
+    } catch (error) {
+      console.error('[LiftTab] Workout create retry pass failed:', getErrorMessage(error));
+    } finally {
+      isRetryingWorkoutCreatesRef.current = false;
+    }
+  };
+
+  const resetFinishedSessionState = () => {
+    setIsRunning(false);
+    setElapsedSecs(0);
+    scaleAnim.setValue(1);
+    if (activeRoutineId) {
+      setActiveRoutineId(null);
+      setRoutineProgress({});
+    }
+    setExercisesList([]);
+    setCurrentExerciseId('');
+    setSetsList([]);
+  };
+
+  const handleFinishSession = async () => {
+    if (isFinishingWorkout) return;
+
+    if (!user?.id) {
+      triggerToast('Please sign in to save workouts');
+      return;
+    }
+
+    const payload = buildCompletedWorkoutPayload();
+    if (!payload || payload.sets.length === 0) {
+      triggerToast('Log at least one completed set before finishing');
+      return;
+    }
+
+    setIsFinishingWorkout(true);
+    try {
+      const localWorkout = await createWorkoutWithSetsLocal(user.id, payload);
+      setCompletedWorkouts((prev) => [localWorkout, ...prev.filter((workout) => workout.id !== localWorkout.id)]);
+      resetFinishedSessionState();
+      triggerToast('✓ Workout saved');
+      void syncWorkoutToRemote(localWorkout, payload);
+    } catch (error) {
+      console.error('[LiftTab] Failed to save local workout:', error);
+      triggerToast(`Workout save failed: ${getErrorMessage(error)}`);
+    } finally {
+      setIsFinishingWorkout(false);
+    }
+  };
+
+  const convertWeightValue = (value: number, toLbs: boolean) => {
+    return toLbs ? value / 0.45359237 : value * 0.45359237;
+  };
+
+  const toggleUnit = (nextIsLbs: boolean) => {
+    if (nextIsLbs === isLbs) return;
+    setIsLbs(nextIsLbs);
+    setRoutineProgress((prev) => {
+      const updated: Record<string, { sets: string; reps: string; weight: string; doneSets: boolean[] }> = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        const currentWeight = parseFloat(value.weight) || 0;
+        const nextWeight = convertWeightValue(currentWeight, nextIsLbs);
+        updated[key] = { ...value, weight: formatWeight(nextWeight) };
+      });
+      return updated;
+    });
+  };
+
+  const selectedRoutine = routines.find((routine) => routine.id === selectedRoutineId) || null;
+  const activeRoutine = routines.find((routine) => routine.id === activeRoutineId) || null;
+
+  const applyRoutinesToState = (nextRoutines: Routine[]) => {
+    setRoutines(nextRoutines);
+    setSelectedRoutineId((currentId) =>
+      currentId && nextRoutines.some((routine) => routine.id === currentId)
+        ? currentId
+        : nextRoutines[0]?.id ?? null
+    );
+  };
+
+  const fetchRemoteRoutineInputs = async (userId: string) => {
+    const { data: routineRows, error: routineError } = await supabase
+      .from('routines')
+      .select('id,routine_name,routines_id')
+      .eq('user_id', userId);
+
+    if (routineError) throw routineError;
+
+    const routinesWithTemplates = ((routineRows || []) as RemoteRoutineRow[]).filter(
+      (routine) => !!routine.routines_id
+    );
+    const workoutIds = routinesWithTemplates.map((routine) => routine.routines_id as string);
+
+    const { data: setRows, error: setError } = await supabase
+      .from('workout_sets')
+      .select('id,workout_id,exercise_name,muscle_group,set_number,reps,weight_kg')
+      .in('workout_id', workoutIds.length > 0 ? workoutIds : ['00000000-0000-0000-0000-000000000000']);
+
+    if (setError) throw setError;
+
+    return routinesWithTemplates.map((routine) =>
+      remoteRoutineToLocalInput(routine, (setRows || []) as RemoteRoutineSetRow[])
+    );
+  };
+
+  const refreshRemoteRoutines = async (userId: string) => {
+    try {
+      const remoteInputs = await fetchRemoteRoutineInputs(userId);
+
+      for (const remoteInput of remoteInputs) {
+        await upsertRemoteRoutineForUser(userId, remoteInput);
+      }
+
+      const mergedLocalRows = await getRoutinesByUser(userId);
+      applyRoutinesToState(localRoutinesToViews(mergedLocalRows));
+    } catch (error) {
+      logRoutineError('[LiftTab] Remote routine refresh failed:', error);
+      throw error;
+    }
+  };
+
+  const loadRoutines = async () => {
+    if (isLoadingRoutinesRef.current) {
+      console.log('[LiftTab] Routine load skipped: already running');
+      return;
+    }
+
+    isLoadingRoutinesRef.current = true;
+    console.log('[LiftTab] Routine load begin');
+    setIsRoutineLoading(true);
+    try {
+      const authUser = user ?? (await supabase.auth.getUser()).data.user;
+      if (!authUser) {
+        applyRoutinesToState([]);
+        return;
+      }
+
+      console.log('[LiftTab] Routine load authenticated user:', authUser.id);
+      const localRows = await getRoutinesByUser(authUser.id);
+      console.log('[LiftTab] Local routines loaded:', localRows.length);
+      applyRoutinesToState(localRoutinesToViews(localRows));
+      setIsRoutineLoading(false);
+
+      console.log('[LiftTab] Workout background retry started for authenticated user:', authUser.id);
+      void retryPendingWorkoutCreates(authUser.id);
+      console.log('[LiftTab] Routine background retry started');
+      void retryPendingRoutineSyncs(authUser.id);
+    } catch (error) {
+      logRoutineError('[LiftTab] Failed to load local routines:', error);
+      triggerToast('Failed to load routines');
+    } finally {
+      setIsRoutineLoading(false);
+      isLoadingRoutinesRef.current = false;
+    }
+  };
+
+  useEffect(() => {
+    loadRoutines();
+  }, [user?.id]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const previousAppState = appStateRef.current;
+      appStateRef.current = nextAppState;
+
+      if (
+        user?.id &&
+        nextAppState === 'active' &&
+        (previousAppState === 'background' || previousAppState === 'inactive')
+      ) {
+        loadRoutines();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [user?.id]);
+
+  const addDraftExercise = () => {
+    setRoutineDraftExercises((prev) => [
+      ...prev,
+      {
+        id: createUniqueId('draft'),
+        name: '',
+        sets: '3',
+        reps: '10',
+        weight: '',
+        weightUnit: isLbs ? 'lbs' : 'kg',
+      },
+    ]);
+  };
+
+  const updateDraftExercise = (id: string, patch: Partial<RoutineDraftExercise>) => {
+    setRoutineDraftExercises((prev) =>
+      prev.map((exercise) => (exercise.id === id ? { ...exercise, ...patch } : exercise))
+    );
+  };
+
+  const removeDraftExercise = (id: string) => {
+    setRoutineDraftExercises((prev) => prev.filter((exercise) => exercise.id !== id));
+  };
+
+  const resetRoutineDraft = () => {
+    setRoutineNameInput('');
+    setRoutineDraftExercises([]);
+    setEditingRoutineId(null);
+    setEditingWorkoutId(null);
+  };
+
+  const startEditRoutine = (routine: Routine) => {
+    const workoutId = routine.routines_id;
+    setEditingRoutineId(routine.id);
+    setEditingWorkoutId(workoutId ?? null);
+    setRoutineNameInput(routine.name);
+
+    const draftExercises = routine.exercises.map((exercise) => {
+      const weightValue = isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg;
+      return {
+        id: createUniqueId('draft-edit'),
+        name: exercise.exercise_name,
+        sets: String(exercise.sets),
+        reps: String(exercise.reps),
+        weight: formatWeight(weightValue),
+        weightUnit: isLbs ? 'lbs' : 'kg',
+        muscleGroup: exercise.muscle_group || undefined,
+      } as RoutineDraftExercise;
+    });
+
+    setRoutineDraftExercises(draftExercises);
+    setShowRoutineModal(true);
+  };
+
+  const syncRoutineToRemote = async (
+    localRoutine: LocalRoutineWithExercises,
+    options?: { showFailureToast?: boolean }
+  ) => {
+    const authUser = user ?? (await supabase.auth.getUser()).data.user;
+    if (!authUser) return;
+    if (authUser.id !== localRoutine.user_id) {
+      console.warn('[LiftTab] Skipping routine sync for a different authenticated user.');
+      return;
+    }
+
+    const showFailureToast = options?.showFailureToast ?? true;
+
+    try {
+      let workoutId = localRoutine.remote_template_workout_id;
+      let routineId = localRoutine.remote_id;
+      console.log('[LiftTab] Routine sync begin:', {
+        localRoutineId: localRoutine.id,
+        remoteId: routineId,
+        remoteTemplateWorkoutId: workoutId,
+      });
+
+      if (routineId && !workoutId) {
+        const { data: existingRoutine, error: existingRoutineError } = await supabase
+          .from('routines')
+          .select('routines_id')
+          .eq('id', routineId)
+          .eq('user_id', authUser.id)
+          .maybeSingle();
+
+        if (existingRoutineError) throw existingRoutineError;
+
+        workoutId = existingRoutine?.routines_id || null;
+        if (workoutId) {
+          await updateRoutineRemoteIds(authUser.id, localRoutine.id, {
+            remoteTemplateWorkoutId: workoutId,
+          });
+          console.log('[LiftTab] Remote template workout ready:', {
+            localRoutineId: localRoutine.id,
+            workoutId,
+            source: 'existing routine',
+          });
+        }
+      }
+
+      if (!workoutId) {
+        const { data: workout, error: workoutError } = await supabase
+          .from('workouts')
+          .insert({
+            user_id: authUser.id,
+            name: localRoutine.routine_name,
+            notes: 'routine_template',
+            performed_at: new Date().toISOString(),
+          })
+          .select('id')
+          .single();
+
+        if (workoutError) throw workoutError;
+
+        workoutId = workout?.id || null;
+        if (!workoutId) throw new Error('Workout template creation failed');
+
+        await updateRoutineRemoteIds(authUser.id, localRoutine.id, {
+          remoteTemplateWorkoutId: workoutId,
+        });
+        console.log('[LiftTab] Remote template workout ready:', {
+          localRoutineId: localRoutine.id,
+          workoutId,
+          source: 'created',
+        });
+      } else {
+        console.log('[LiftTab] Remote template workout ready:', {
+          localRoutineId: localRoutine.id,
+          workoutId,
+          source: 'reused',
+        });
+        const { error: workoutUpdateError } = await supabase
+          .from('workouts')
+          .update({ name: localRoutine.routine_name })
+          .eq('id', workoutId)
+          .eq('user_id', authUser.id);
+
+        if (workoutUpdateError) throw workoutUpdateError;
+      }
+
+      if (routineId) {
+        console.log('[LiftTab] Remote routine ready:', {
+          localRoutineId: localRoutine.id,
+          routineId,
+          source: 'reused',
+        });
+        const { error: routineUpdateError } = await supabase
+          .from('routines')
+          .update({ routine_name: localRoutine.routine_name })
+          .eq('id', routineId)
+          .eq('user_id', authUser.id);
+
+        if (routineUpdateError) throw routineUpdateError;
+      } else {
+        const { data: routine, error: routineError } = await supabase
+          .from('routines')
+          .insert({ user_id: authUser.id, routine_name: localRoutine.routine_name, routines_id: workoutId })
+          .select('id,routines_id')
+          .single();
+
+        if (routineError) throw routineError;
+
+        routineId = routine?.id || null;
+        workoutId = routine?.routines_id || workoutId;
+
+        if (routineId) {
+          await updateRoutineRemoteIds(authUser.id, localRoutine.id, {
+            remoteId: routineId,
+            remoteTemplateWorkoutId: workoutId,
+          });
+          console.log('[LiftTab] Remote routine ready:', {
+            localRoutineId: localRoutine.id,
+            routineId,
+            source: 'created',
+          });
+        }
+      }
+
+      if (!routineId || !workoutId) {
+        throw new Error('Remote routine template creation failed');
+      }
+
+      const { error: deleteError } = await supabase
+        .from('workout_sets')
+        .delete()
+        .eq('workout_id', workoutId);
+
+      if (deleteError) throw deleteError;
+
+      const exerciseRows = localRoutine.exercises
+        .slice()
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .flatMap((exercise) => {
+          const sets = Math.max(1, Math.trunc(exercise.sets ?? 1));
+          const reps = Math.max(1, Math.trunc(exercise.reps ?? 1));
+
+          return Array.from({ length: sets }, (_, index) => ({
+            workout_id: workoutId,
+            exercise_name: exercise.exercise_name,
+            muscle_group: exercise.muscle_group || null,
+            set_number: index + 1,
+            reps,
+            weight_kg: exercise.weight_kg ?? 0,
+            rir: 0,
+            est_1rm: null,
+          }));
+        });
+
+      const { data: insertedSets, error: exerciseError } = await supabase
+        .from('workout_sets')
+        .insert(exerciseRows)
+        .select('id,workout_id,exercise_name,muscle_group,set_number,reps,weight_kg');
+
+      if (exerciseError) throw exerciseError;
+      console.log('[LiftTab] Remote workout_sets saved:', {
+        localRoutineId: localRoutine.id,
+        count: insertedSets?.length ?? 0,
+      });
+
+      const synced = await markRoutineSynced(
+        authUser.id,
+        localRoutine.id,
+        routineId,
+        workoutId,
+        matchRemoteRoutineExercises(localRoutine.exercises, (insertedSets || []) as RemoteRoutineSetRow[])
+      );
+
+      setRoutines((prev) =>
+        localRoutinesToViews([synced]).concat(prev.filter((routine) => routine.id !== synced.id))
+      );
+      console.log('[LiftTab] Routine sync complete:', {
+        localRoutineId: localRoutine.id,
+        remoteId: routineId,
+        remoteTemplateWorkoutId: workoutId,
+      });
+    } catch (error) {
+      if (showFailureToast) {
+        logRoutineError('[LiftTab] Failed to sync routine to Supabase:', error);
+      } else {
+        logRoutineError('[LiftTab] Background routine sync retry failed:', error);
+      }
+      await markRoutineSyncFailed(authUser.id, localRoutine.id).catch((markError) => {
+        if (showFailureToast) {
+          logRoutineError('[LiftTab] Failed to mark routine sync failed:', markError);
+        } else {
+          logRoutineError('[LiftTab] Failed to mark routine sync failed:', markError);
+        }
+      });
+      if (showFailureToast) {
+        triggerToast('Routine saved offline. It will sync when you reconnect.');
+      }
+    }
+  };
+
+  const retryPendingRoutineSyncs = async (userId: string) => {
+    if (isRetryingRoutineSyncsRef.current) return;
+
+    isRetryingRoutineSyncsRef.current = true;
+    try {
+      console.log('[LiftTab] Routine retry begin');
+      const unsyncedRoutines = await getUnsyncedRoutinesByUser(userId);
+      console.log('[LiftTab] Unsynced routines found:', unsyncedRoutines.length);
+
+      for (const routine of unsyncedRoutines) {
+        console.log('[LiftTab] Retrying routine:', {
+          localRoutineId: routine.id,
+          remoteId: routine.remote_id,
+          remoteTemplateWorkoutId: routine.remote_template_workout_id,
+        });
+        await syncRoutineToRemote(routine, { showFailureToast: false });
+      }
+
+      await refreshRemoteRoutines(userId);
+      console.log('[LiftTab] Routine retry complete');
+    } catch (error) {
+      logRoutineError('[LiftTab] Routine retry pass failed:', error);
+    } finally {
+      isRetryingRoutineSyncsRef.current = false;
+    }
+  };
+
+  const handleCreateRoutine = async () => {
+    const authUser = user ?? (await supabase.auth.getUser()).data.user;
+    if (!authUser) {
+      triggerToast('Please sign in to save routines');
+      return;
+    }
+
+    const trimmedName = routineNameInput.trim();
+    if (!trimmedName) {
+      triggerToast('Routine name is required');
+      return;
+    }
+
+    const cleanedExercises = routineDraftExercises.filter((exercise) => exercise.name.trim().length > 0);
+
+    if (cleanedExercises.length === 0) {
+      triggerToast('Add at least one exercise');
+      return;
+    }
+
+    setIsSavingRoutine(true);
+    try {
+      const existingRoutine = editingRoutineId
+        ? routines.find((routine) => routine.id === editingRoutineId) || null
+        : null;
+      const localInput = routineDraftsToLocalInput(trimmedName, cleanedExercises, {
+        remoteId: existingRoutine?.remote_id ?? null,
+        remoteTemplateWorkoutId: existingRoutine?.routines_id ?? editingWorkoutId ?? null,
+      });
+      const localRoutine = editingRoutineId
+        ? await updateRoutineWithExercisesLocal(authUser.id, editingRoutineId, localInput)
+        : await createRoutineWithExercisesLocal(authUser.id, localInput);
+      const nextRoutines = localRoutinesToViews(await getRoutinesByUser(authUser.id));
+      applyRoutinesToState(nextRoutines);
+
+      resetRoutineDraft();
+      setShowRoutineModal(false);
+      triggerToast(editingRoutineId ? '✓ Routine updated' : '✓ Routine saved');
+      void syncRoutineToRemote(localRoutine);
+    } catch (error) {
+      console.error('[LiftTab] Failed to save local routine:', error);
+      triggerToast(`Routine save failed: ${getErrorMessage(error)}`);
+    } finally {
+      setIsSavingRoutine(false);
+    }
+  };
+
+  const applyRoutineDefaults = (routineExercise: RoutineExercise | null) => {
+    if (!routineExercise) return;
+    setIsUnilateral(false);
+    const weight = isLbs ? routineExercise.weight_kg / 0.45359237 : routineExercise.weight_kg;
+    setInputWeight(formatWeight(weight));
+    setInputReps(String(routineExercise.reps));
+    setInputRepsLeft(String(routineExercise.reps));
+    setInputRepsRight(String(routineExercise.reps));
+  };
+
+  const handleStartRoutine = (routine: Routine) => {
+    if (routine.exercises.length === 0) return;
+
+    const initialProgress: Record<string, { sets: string; reps: string; weight: string; doneSets: boolean[] }> = {};
+    routine.exercises.forEach((exercise) => {
+      const weightValue = isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg;
+      const setCount = Math.max(1, exercise.sets);
+      initialProgress[exercise.id] = {
+        sets: String(setCount),
+        reps: String(exercise.reps),
+        weight: formatWeight(weightValue),
+        doneSets: Array.from({ length: setCount }, () => false),
+      };
+    });
+
+    const mappedExercises: Exercise[] = routine.exercises.map((exercise) => ({
+      id: exercise.id,
+      name: exercise.exercise_name,
+      category: 'barbell',
+      isCustom: false,
+      muscleGroup: exercise.muscle_group ?? null,
+    }));
+
+    setExercisesList(mappedExercises);
+    setCurrentExerciseId(mappedExercises[0].id);
+    setActiveRoutineId(routine.id);
+    setSelectedRoutineId(routine.id);
+    setRoutineProgress(initialProgress);
+    setSetsList([]);
+    applyRoutineDefaults(routine.exercises[0]);
+    setIsRunning(true);
+  };
+
+  const handleSelectRoutineExercise = (exerciseId: string) => {
+    if (!activeRoutine) return;
+    setCurrentExerciseId(exerciseId);
+    const exercise = activeRoutine.exercises.find((item) => item.id === exerciseId) || null;
+    applyRoutineDefaults(exercise);
+  };
+
+  const updateRoutineProgress = (
+    exerciseId: string,
+    patch: Partial<{ sets: string; reps: string; weight: string; doneSets: boolean[] }>
+  ) => {
+    setRoutineProgress((prev) => {
+      const current = prev[exerciseId];
+      if (!current) return prev;
+
+      let nextDoneSets = current.doneSets;
+      if (patch.sets !== undefined) {
+        const nextCount = Math.max(1, parseInt(patch.sets, 10) || 1);
+        if (nextCount > nextDoneSets.length) {
+          nextDoneSets = [...nextDoneSets, ...Array.from({ length: nextCount - nextDoneSets.length }, () => false)];
+        } else if (nextCount < nextDoneSets.length) {
+          nextDoneSets = nextDoneSets.slice(0, nextCount);
+        }
+      }
+
+      return {
+        ...prev,
+        [exerciseId]: {
+          ...current,
+          ...patch,
+          doneSets: patch.doneSets ?? nextDoneSets,
+        },
+      };
+    });
+  };
+
+  useEffect(() => {
+    if (!activeRoutine) return;
+    if (activeRoutine.exercises.length === 0) return;
+    const allDone = activeRoutine.exercises.every((exercise) =>
+      routineProgress[exercise.id]?.doneSets?.every(Boolean)
+    );
+    if (allDone) {
+      handleFinishSession();
+    }
+  }, [activeRoutine, routineProgress]);
+
+  const handleSaveRoutineDefaults = async (exerciseId: string = currentExerciseId) => {
+    if (!activeRoutine) return;
+
+    const exercise = activeRoutine.exercises.find((item) => item.id === exerciseId) || null;
+    if (!exercise) return;
+
+    const authUser = user ?? (await supabase.auth.getUser()).data.user;
+    if (!authUser) {
+      triggerToast('Please sign in to update routines');
+      return;
+    }
+
+    const currentProgress = routineProgress[exerciseId] || {
+      sets: String(exercise.sets),
+      reps: String(exercise.reps),
+      weight: formatWeight(isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg),
+      doneSets: Array.from({ length: Math.max(1, exercise.sets) }, () => false),
+    };
+
+    const nextSets = Math.max(1, parseInt(currentProgress.sets, 10) || 1);
+    const nextReps = Math.max(1, parseInt(currentProgress.reps, 10) || 1);
+    const nextWeight = parseFloat(currentProgress.weight) || 0;
+    const nextWeightKg = isLbs ? nextWeight * 0.45359237 : nextWeight;
+
+    try {
+      const updatedRoutine: Routine = {
+        ...activeRoutine,
+        exercises: activeRoutine.exercises.map((item) =>
+          item.id === exercise.id
+            ? { ...item, sets: nextSets, reps: nextReps, weight_kg: nextWeightKg }
+            : item
+        ),
+      };
+      const localRoutine = await updateRoutineWithExercisesLocal(
+        authUser.id,
+        activeRoutine.id,
+        routineViewToLocalInput(updatedRoutine)
+      );
+      const updatedRoutineView = localRoutinesToViews([localRoutine])[0];
+
+      setRoutines((prev) =>
+        prev.map((routine) => {
+          if (routine.id !== activeRoutine.id) return routine;
+          return updatedRoutineView;
+        })
+      );
+
+      setRoutineProgress((prev) => {
+        const current = prev[exerciseId];
+        if (!current) return prev;
+        const nextDoneSets = Array.from({ length: nextSets }, (_, index) => current.doneSets[index] ?? false);
+        return {
+          ...prev,
+          [exerciseId]: {
+            ...current,
+            sets: String(nextSets),
+            reps: String(nextReps),
+            weight: formatWeight(nextWeight),
+            doneSets: nextDoneSets,
+          },
+        };
+      });
+
+      triggerToast('✓ Defaults updated');
+      void syncRoutineToRemote(localRoutine);
+    } catch (error) {
+      console.error('[LiftTab] Failed to update local routine defaults:', error);
+      triggerToast(`Defaults update failed: ${getErrorMessage(error)}`);
+    }
+  };
+
+  // Create swipe handler for a specific set
+  const createSwipeHandler = (setId: string) => {
+    if (!swipeAnimRefs.current[setId]) {
+      swipeAnimRefs.current[setId] = new Animated.Value(0);
+    }
+
+    if (!panResponderRefs.current[setId]) {
+      panResponderRefs.current[setId] = PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (evt, { dx }) => Math.abs(dx) > 10,
+        onPanResponderMove: (evt, { dx }) => {
+          if (dx > 0) {
+            swipeAnimRefs.current[setId]?.setValue(Math.min(dx, 100));
+          }
+        },
+        onPanResponderRelease: (evt, { dx }) => {
+          if (dx > 60) {
+            // Swiped far enough — toggle check
+            handleToggleCheck(setId);
+            triggerToast('Set marked as complete!');
+            Animated.timing(swipeAnimRefs.current[setId]!, {
+              toValue: 0,
+              duration: 300,
+              useNativeDriver: true,
+            }).start();
+          } else {
+            // Snap back
+            Animated.timing(swipeAnimRefs.current[setId]!, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            }).start();
+          }
+        },
+      });
+    }
+
+    return panResponderRefs.current[setId];
+  };
+
+  const handleLogSet = () => {
+    if (!currentExerciseId || !currentExercise.name.trim()) {
+      triggerToast('Add or select an exercise before logging sets');
+      return;
+    }
+
+    const w = parseFloat(inputWeight) || 0;
+    const r = isUnilateral ? parseInt(inputRepsLeft) || 0 : parseInt(inputReps) || 0;
+    const rL = isUnilateral ? parseInt(inputRepsLeft) || 0 : undefined;
+    const rR = isUnilateral ? parseInt(inputRepsRight) || 0 : undefined;
+    const rir = parseInt(inputRir) || 0;
+
+    if (w <= 0 || r <= 0) {
+      triggerToast('Please enter valid Weight and Reps!');
+      return;
+    }
+
+    const newSet: SetLog = {
+      id: createUniqueId('set'),
+      exerciseId: currentExerciseId,
+      exerciseName: currentExercise.name,
+      muscleGroup: currentExercise.muscleGroup ?? null,
+      setNum: currentExerciseSets.length + 1,
+      weight: w,
+      reps: r,
+      repsLeft: rL,
+      repsRight: rR,
+      rir,
+      isChecked: true,
+    };
+
+    setSetsList((prev) => [...prev, newSet]);
+    triggerToast(
+      isUnilateral
+        ? `Logged Set #${newSet.setNum}: ${w}${isLbs ? 'lbs' : 'kg'} × L${rL} R${rR}`
+        : `Logged Set #${newSet.setNum}: ${w}${isLbs ? 'lbs' : 'kg'} × ${r} reps`
+    );
+  };
+
+  // Auto-fill from previous set
+  const handleFillFromSet = (set: SetLog) => {
+    setInputWeight(String(set.weight));
+    if (set.repsLeft !== undefined && set.repsRight !== undefined) {
+      setIsUnilateral(true);
+      setInputRepsLeft(String(set.repsLeft));
+      setInputRepsRight(String(set.repsRight));
+    } else {
+      setIsUnilateral(false);
+      setInputReps(String(set.reps));
+    }
+    setInputRir(String(set.rir));
+    triggerToast('✓ Inputs auto-filled from previous set');
+  };
+
+  const handleToggleCheck = (id: string) => {
+    setSetsList((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, isChecked: !s.isChecked } : s))
+    );
+  };
+
+  const handleAddCustomExercise = () => {
+    if (!customExerciseName.trim()) {
+      triggerToast('Please enter an exercise name!');
+      return;
+    }
+
+    const newExercise: Exercise = {
+      id: createUniqueId('custom-exercise'),
+      name: customExerciseName,
+      category: customExerciseCategory,
+      isCustom: true,
+      muscleGroup: customExerciseCategory,
+    };
+
+    setExercisesList((prev) => [...prev, newExercise]);
+    setCurrentExerciseId(newExercise.id);
+    setCustomExerciseName('');
+    setShowCustomExerciseModal(false);
+    triggerToast(`✓ Added custom exercise: ${customExerciseName}`);
+  };
+
+  const handleBodyPartClick = (muscleId: number, muscleName: string) => {
+    setSelectedMuscleId(muscleId);
+    setSelectedMuscleName(muscleName);
+    setHighlightMode('click');
+    setExerciseBrowserTarget(showRoutineModal ? 'routine' : 'workout');
+    setShowExerciseBrowser(true);
+  };
+
+  const handleSelectExerciseFromDB = (exercise: ExerciseDbExercise) => {
+    // Create exercise in local list
+    const newExercise: Exercise = {
+      id: createUniqueId('exercise'),
+      name: exercise.name || `Exercise ${exercise.id}`,
+      category: 'barbell',
+      isCustom: false,
+      muscleGroup: exercise.target || exercise.bodyPart || null,
+    };
+
+    // Debug: Log the exercise data
+    console.log('[LiftTab] Exercise selected:', {
+      name: newExercise.name,
+      muscles: exercise.primaryMuscleIds,
+      muscles_secondary: exercise.secondaryMuscleIds,
+    });
+
+    // Set highlighting to exercise mode showing what this exercise targets
+    setPrimaryMuscleIds(exercise.primaryMuscleIds);
+    setSecondaryMuscleIds(exercise.secondaryMuscleIds);
+    setExercisesList((prev) => [...prev, newExercise]);
+    setCurrentExerciseId(newExercise.id);
+    setShowExerciseBrowser(false);
+    triggerToast(`✓ Added: ${newExercise.name}`);
+  };
+
+  const normalizeExerciseName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+  const getRoutineDraftDefaults = (exerciseName: string) => {
+    const normalized = normalizeExerciseName(exerciseName);
+    const lastDraft = routineDraftExercises[routineDraftExercises.length - 1];
+
+    const previousMatch = routines
+      .flatMap((routine) => routine.exercises)
+      .find((routineExercise) => normalizeExerciseName(routineExercise.exercise_name) === normalized);
+
+    if (previousMatch) {
+      const weightValue = isLbs ? previousMatch.weight_kg / 0.45359237 : previousMatch.weight_kg;
+      return {
+        sets: String(Math.max(1, previousMatch.sets)),
+        reps: String(Math.max(1, previousMatch.reps)),
+        weight: formatWeight(weightValue),
+      };
+    }
+
+    if (lastDraft) {
+      return {
+        sets: lastDraft.sets || '3',
+        reps: lastDraft.reps || '10',
+        weight: lastDraft.weight || '',
+      };
+    }
+
+    return { sets: '3', reps: '10', weight: '' };
+  };
+
+  const handleAddExerciseToRoutineDraft = (exercise: ExerciseDbExercise) => {
+    const exerciseName = (exercise.name || `Exercise ${exercise.id}`).trim();
+    const muscleGroup = exercise.target || exercise.bodyPart || '';
+
+    const exists = routineDraftExercises.some(
+      (item) => normalizeExerciseName(item.name) === normalizeExerciseName(exerciseName)
+    );
+    if (exists) {
+      triggerToast(`Already added: ${exerciseName}`);
+      return;
+    }
+
+    const defaults = getRoutineDraftDefaults(exerciseName);
+
+    setRoutineDraftExercises((prev) => [
+      ...prev,
+      {
+        id: createUniqueId('routine-draft'),
+        name: exerciseName,
+        sets: defaults.sets,
+        reps: defaults.reps,
+        weight: defaults.weight,
+        weightUnit: isLbs ? 'lbs' : 'kg',
+        muscleGroup,
+      },
+    ]);
+    requestAnimationFrame(() => {
+      routineModalScrollRef.current?.scrollToEnd({ animated: true });
+    });
+  };
+
+  const handleAddExerciseFromBrowser = (exercise: ExerciseDbExercise) => {
+    // Pre-fill config sheet with smart defaults before adding
+    const exerciseName = (exercise.name || `Exercise ${exercise.id}`).trim();
+    const defaults = getRoutineDraftDefaults(exerciseName);
+
+    setPendingExercise(exercise);
+    setConfigSets(defaults.sets);
+    setConfigReps(defaults.reps);
+    setConfigWeight(defaults.weight);
+    setConfigWeightUnit(isLbs ? 'lbs' : 'kg');
+    setShowExerciseBrowser(false);
+    setShowExerciseConfigSheet(true);
+  };
+
+  const handleConfirmExerciseConfig = () => {
+    if (!pendingExercise) return;
+
+    if (exerciseBrowserTarget === 'routine') {
+      const exerciseName = (pendingExercise.name || `Exercise ${pendingExercise.id}`).trim();
+      const muscleGroup = pendingExercise.target || pendingExercise.bodyPart || '';
+      const exists = routineDraftExercises.some(
+        (item) => normalizeExerciseName(item.name) === normalizeExerciseName(exerciseName)
+      );
+      if (exists) {
+        triggerToast(`Already added: ${exerciseName}`);
+        setShowExerciseConfigSheet(false);
+        setPendingExercise(null);
+        setShowRoutineModal(true);
+        return;
+      }
+      setRoutineDraftExercises((prev) => [
+        ...prev,
+        {
+          id: createUniqueId('routine-draft'),
+          name: exerciseName,
+          sets: configSets,
+          reps: configReps,
+          weight: configWeight,
+          weightUnit: configWeightUnit,
+          muscleGroup,
+        },
+      ]);
+      requestAnimationFrame(() => {
+        routineModalScrollRef.current?.scrollToEnd({ animated: true });
+      });
+      triggerToast(`✓ Added: ${exerciseName} — keep adding or save`);
+      setShowExerciseConfigSheet(false);
+      setPendingExercise(null);
+      // Return to routine modal so user can keep adding more exercises
+      setShowRoutineModal(true);
+    } else {
+      // Workout target — add exercise and pre-fill the log inputs
+      const newExercise: Exercise = {
+        id: createUniqueId('exercise'),
+        name: pendingExercise.name || `Exercise ${pendingExercise.id}`,
+        category: 'barbell',
+        isCustom: false,
+        muscleGroup: pendingExercise.target || pendingExercise.bodyPart || null,
+      };
+      setPrimaryMuscleIds(pendingExercise.primaryMuscleIds);
+      setSecondaryMuscleIds(pendingExercise.secondaryMuscleIds);
+      setExercisesList((prev) => [...prev, newExercise]);
+      setCurrentExerciseId(newExercise.id);
+      // Pre-fill log inputs from config
+      const weightInCurrentUnit =
+        configWeightUnit === 'lbs' && !isLbs
+          ? formatWeight(parseFloat(configWeight) * 0.45359237)
+          : configWeightUnit === 'kg' && isLbs
+          ? formatWeight(parseFloat(configWeight) / 0.45359237)
+          : configWeight;
+      setInputWeight(weightInCurrentUnit);
+      setInputReps(configReps);
+      setInputRepsLeft(configReps);
+      setInputRepsRight(configReps);
+      triggerToast(`✓ Added: ${newExercise.name}`);
+    }
+
+    setShowExerciseConfigSheet(false);
+    setPendingExercise(null);
+  };
+
+  return (
+    <>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Session Timer Card */}
+        <View style={styles.timerCard}>
+          <View style={styles.timerHeaderRow}>
+            <Text style={styles.timerLabel}>ACTIVE TRAINING SESSION</Text>
+            <View style={styles.timerActiveDot} />
+          </View>
+          <Animated.Text style={[styles.timerDisplay, { transform: [{ scale: scaleAnim }] }]}>
+            {formatTime(elapsedSecs)}
+          </Animated.Text>
+          <View style={styles.timerActions}>
+            {isRunning ? (
+              <TouchableOpacity
+                style={[styles.timerBtn, styles.btnPause]}
+                onPress={() => setIsRunning(false)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.timerBtnContent}>
+                  <Pause size={14} color={Colors.onPrimary} style={{ marginRight: 6 }} />
+                  <Text style={styles.timerBtnText}>Pause Workout</Text>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.timerActionStack}>
+                <TouchableOpacity
+                  style={[styles.timerBtn, styles.btnStart]}
+                  onPress={() => setIsRunning(true)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.timerBtnContent}>
+                    <Play size={14} color={Colors.onPrimary} fill={Colors.onPrimary} style={{ marginRight: 6 }} />
+                    <Text style={styles.timerBtnText}>
+                      {elapsedSecs > 0 ? 'Resume Session' : 'Start Session'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {elapsedSecs > 0 && (
+                  <TouchableOpacity
+                    style={[styles.timerBtn, styles.btnFinish]}
+                    onPress={handleFinishSession}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.timerBtnText}>Finish Session</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Routine Section */}
+        <View style={styles.routineCard}>
+          <View style={styles.routineHeaderRow}>
+            <Text style={styles.routineTitle}>ROUTINES</Text>
+            <TouchableOpacity
+              style={styles.routineAddButton}
+              onPress={() => {
+                resetRoutineDraft();
+                setShowRoutineModal(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <Plus size={14} color={Colors.onPrimary} strokeWidth={2.5} />
+              <Text style={styles.routineAddText}>Create</Text>
+            </TouchableOpacity>
+          </View>
+
+          {!user ? (
+            <Text style={styles.routineHint}>Sign in to save routines across devices.</Text>
+          ) : isRoutineLoading ? (
+            <Text style={styles.routineHint}>Loading routines...</Text>
+          ) : routines.length === 0 ? (
+            <Text style={styles.routineHint}>No routines yet. Create one to get started.</Text>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.routinePills}>
+              {routines.map((routine) => (
+                <TouchableOpacity
+                  key={routine.id}
+                  style={[
+                    styles.routinePill,
+                    selectedRoutineId === routine.id && styles.routinePillActive,
+                  ]}
+                  onPress={() => setSelectedRoutineId(routine.id)}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      styles.routinePillText,
+                      selectedRoutineId === routine.id && styles.routinePillTextActive,
+                    ]}
+                  >
+                    {routine.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
+          {selectedRoutine && (
+            <View style={styles.routineDetails}>
+              {selectedRoutine.exercises.length === 0 ? (
+                <Text style={styles.routineHint}>No exercises saved yet.</Text>
+              ) : (
+                <View style={styles.routineExerciseList}>
+                  {selectedRoutine.exercises.map((exercise) => {
+                    const isActiveExercise = currentExerciseId === exercise.id && activeRoutineId === selectedRoutine.id;
+                    const weightValue = isLbs
+                      ? exercise.weight_kg / 0.45359237
+                      : exercise.weight_kg;
+                    const weightLabel = isLbs ? 'lbs' : 'kg';
+                    const weightText = formatWeight(weightValue) || '—';
+                    return (
+                      <TouchableOpacity
+                        key={exercise.id}
+                        style={[
+                          styles.routineExerciseRow,
+                          isActiveExercise && styles.routineExerciseRowActive,
+                        ]}
+                        onPress={() => handleSelectRoutineExercise(exercise.id)}
+                        activeOpacity={0.8}
+                        disabled={activeRoutineId !== selectedRoutine.id}
+                      >
+                        <View style={styles.routineExerciseInfo}>
+                          <Text style={styles.routineExerciseName}>{exercise.exercise_name}</Text>
+                          <Text style={styles.routineExerciseMeta}>
+                            {exercise.sets} sets × {exercise.reps} reps @ {weightText} {weightLabel}
+                          </Text>
+                        </View>
+                        {activeRoutineId === selectedRoutine.id && (
+                          <Text style={styles.routineExerciseTag}>Active</Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[
+                  styles.routineStartButton,
+                  activeRoutineId === selectedRoutine.id && styles.routineStartButtonActive,
+                ]}
+                onPress={() => handleStartRoutine(selectedRoutine)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.routineStartText}>
+                  {activeRoutineId === selectedRoutine.id ? 'Routine Active' : 'Start Routine'}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.routineEditButton}
+                onPress={() => startEditRoutine(selectedRoutine)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.routineEditText}>Edit Routine</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* Routine Workout Card */}
+        <View style={styles.card}>
+          {activeRoutine ? (
+            <>
+              <View style={styles.exerciseHeader}>
+                <View style={styles.exerciseTitleRow}>
+                  <View style={styles.tagChip}>
+                    <View style={styles.tagChipContent}>
+                      <Dumbbell size={10} color={Colors.primaryContainer} style={{ marginRight: 4 }} />
+                      <Text style={styles.tagChipText}>Routine</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.exerciseTitle}>{activeRoutine.name}</Text>
+                </View>
+                <View style={styles.exerciseActions}>
+                  <View style={styles.unitToggleRow}>
+                    <TouchableOpacity onPress={() => toggleUnit(true)}>
+                      <Text style={[styles.unitBtn, isLbs && styles.unitBtnActive]}>lbs</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.unitSlash}>/</Text>
+                    <TouchableOpacity onPress={() => toggleUnit(false)}>
+                      <Text style={[styles.unitBtn, !isLbs && styles.unitBtnActive]}>kg</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.routineWorkoutList}>
+                {activeRoutine.exercises.map((exercise) => {
+                  const progress = routineProgress[exercise.id] || {
+                    sets: String(exercise.sets),
+                    reps: String(exercise.reps),
+                    weight: formatWeight(isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg),
+                    doneSets: Array.from({ length: Math.max(1, exercise.sets) }, () => false),
+                  };
+
+                  return (
+                    <View key={exercise.id} style={styles.routineWorkoutRow}>
+                      <View style={styles.routineWorkoutHeader}>
+                        <Text style={styles.routineWorkoutName}>{exercise.exercise_name}</Text>
+                      </View>
+
+                      <View style={styles.routineWorkoutInputs}>
+                        <View style={styles.routineInputCol}>
+                          <Text style={styles.routineInputLabel}>Sets</Text>
+                          <TextInput
+                            style={styles.routineInput}
+                            value={progress.sets}
+                            onChangeText={(value) => updateRoutineProgress(exercise.id, { sets: value })}
+                            onBlur={() => handleSaveRoutineDefaults(exercise.id)}
+                            keyboardType="numeric"
+                          />
+                        </View>
+                        <View style={styles.routineInputCol}>
+                          <Text style={styles.routineInputLabel}>Reps</Text>
+                          <TextInput
+                            style={styles.routineInput}
+                            value={progress.reps}
+                            onChangeText={(value) => updateRoutineProgress(exercise.id, { reps: value })}
+                            onBlur={() => handleSaveRoutineDefaults(exercise.id)}
+                            keyboardType="numeric"
+                          />
+                        </View>
+                        <View style={styles.routineInputCol}>
+                          <Text style={styles.routineInputLabel}>Weight</Text>
+                          <TextInput
+                            style={styles.routineInput}
+                            value={progress.weight}
+                            onChangeText={(value) => updateRoutineProgress(exercise.id, { weight: value })}
+                            onBlur={() => handleSaveRoutineDefaults(exercise.id)}
+                            keyboardType="numeric"
+                          />
+                        </View>
+                      </View>
+
+                      <View style={styles.routineSetRow}>
+                        <Text style={styles.routineSetHint}>Tap any set to mark complete</Text>
+                        <View style={styles.routineSetGrid}>
+                        {progress.doneSets.map((isDone, index) => (
+                          <TouchableOpacity
+                            key={`${exercise.id}-set-${index}`}
+                            style={[
+                              styles.routineSetCard,
+                              isDone && styles.routineSetCardDone,
+                            ]}
+                            onPress={() => {
+                              const nextDone = [...progress.doneSets];
+                              nextDone[index] = !nextDone[index];
+                              updateRoutineProgress(exercise.id, { doneSets: nextDone });
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.routineSetCardNum, isDone && styles.routineSetCardNumDone]}>
+                              {index + 1}
+                            </Text>
+                            <Text style={[styles.routineSetCardMeta, isDone && styles.routineSetCardMetaDone]}>
+                              {progress.reps} reps
+                            </Text>
+                            {isDone && (
+                              <View style={styles.routineSetCardCheck}>
+                                <Check size={10} color="#10b981" strokeWidth={3} />
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </>
+          ) : (
+            <View style={styles.routineEmptyState}>
+              <Text style={styles.routineHint}>Start a routine to track sets, reps, and weight.</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Set History Table */}
+        {currentExerciseSets.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>SET HISTORY</Text>
+
+            <View style={styles.tableHeader}>
+              <Text style={[styles.thText, { flex: 0.6 }]}>Set #</Text>
+              <Text style={[styles.thText, { flex: 1.4 }]}>Previous</Text>
+              <Text style={[styles.thText, { flex: 2 }]}>Log</Text>
+              <Text style={[styles.thText, { flex: 0.8, textAlign: 'right' }]}>Done</Text>
+            </View>
+
+            <View style={styles.tableBody}>
+              {currentExerciseSets.map((set) => {
+                const animValue = swipeAnimRefs.current[set.id] || new Animated.Value(0);
+                const panResponder = createSwipeHandler(set.id);
+
+                return (
+                  <Animated.View
+                    key={set.id}
+                    style={[
+                      styles.tableRowWrapper,
+                      {
+                        transform: [{ translateX: animValue }],
+                        backgroundColor: animValue.interpolate({
+                          inputRange: [0, 100],
+                          outputRange: [set.isChecked ? '#10b98144' : 'transparent', '#10b981'],
+                        }),
+                      },
+                    ]}
+                    {...panResponder.panHandlers}
+                  >
+                    <TouchableOpacity
+                      style={styles.tableRowContent}
+                      onPress={() => handleFillFromSet(set)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.tdSetNum, { flex: 0.6 }]}>{set.setNum}</Text>
+                      <Text style={[styles.tdPrevious, { flex: 1.4 }]}>
+                        {set.setNum === 1 ? '175 lbs × 8' : set.setNum === 2 ? '175 lbs × 8' : '—'}
+                      </Text>
+                      <Text style={[styles.tdLog, { flex: 2 }]}>
+                        {set.weight} {isLbs ? 'lbs' : 'kg'} ×{' '}
+                        {set.repsLeft !== undefined && set.repsRight !== undefined
+                          ? `L${set.repsLeft} R${set.repsRight}`
+                          : `${set.reps}`}{' '}
+                        (RIR {set.rir})
+                      </Text>
+                      <View style={{ flex: 0.8, alignItems: 'flex-end' }}>
+                        <Copy size={14} color={Colors.outline} opacity={0.5} />
+                      </View>
+                    </TouchableOpacity>
+                  </Animated.View>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {completedWorkouts.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>RECENT SAVED WORKOUTS</Text>
+            <View style={styles.savedWorkoutList}>
+              {completedWorkouts.map((workout) => (
+                <View key={workout.id} style={styles.savedWorkoutRow}>
+                  <View style={styles.savedWorkoutHeader}>
+                    <Text style={styles.savedWorkoutName}>{workout.name}</Text>
+                    <Text style={styles.savedWorkoutMeta}>
+                      {workout.sets.length} sets · {workout.sync_status}
+                    </Text>
+                  </View>
+                  <Text style={styles.savedWorkoutDate}>{workout.performed_at.split('T')[0]}</Text>
+                  <Text style={styles.savedWorkoutSets}>
+                    {[...new Set(workout.sets.map((set) => set.exercise_name))]
+                      .slice(0, 3)
+                      .join(', ') || 'No sets'}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Routine Builder Modal */}
+      <Modal
+        visible={showRoutineModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowRoutineModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.routineModalShell}
+        >
+          {/* Fixed header — always visible */}
+          <View style={styles.routineModalHeader}>
+            <View style={styles.routineModalHandleBar} />
+            <View style={styles.routineModalTitleRow}>
+              <Text style={styles.modalTitle}>
+                {editingRoutineId ? 'Edit Routine' : 'Create Routine'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowRoutineModal(false)} activeOpacity={0.6}>
+                <X size={20} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.routineNameInput}
+              placeholder="Routine name  (e.g. Push Day)"
+              value={routineNameInput}
+              onChangeText={setRoutineNameInput}
+              placeholderTextColor={Colors.outline}
+            />
+          </View>
+
+          {/* Scrollable body — map + exercises flow together */}
+          <ScrollView
+            ref={routineModalScrollRef}
+            style={styles.routineModalScroll}
+            contentContainerStyle={styles.routineModalScrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Body map picker */}
+            <View style={styles.routinePickerCard}>
+              <Text style={styles.routinePickerTitle}>Tap a muscle to add exercises</Text>
+              <BodyMuscleMap
+                onBodyPartClick={handleBodyPartClick}
+                isInteractive={true}
+                highlightMode={highlightMode}
+                selectedMuscleId={selectedMuscleId || undefined}
+                primaryMuscleIds={primaryMuscleIds}
+                secondaryMuscleIds={secondaryMuscleIds}
+              />
+            </View>
+
+            {/* Exercise list — directly below the map, no nested scroll */}
+            <View style={styles.routineDraftSection}>
+              <View style={styles.routineDraftSectionHeader}>
+                <Text style={styles.routineDraftSectionTitle}>
+                  {routineDraftExercises.length === 0
+                    ? 'NO EXERCISES YET'
+                    : `${routineDraftExercises.length} EXERCISE${routineDraftExercises.length > 1 ? 'S' : ''}`}
+                </Text>
+                <TouchableOpacity onPress={addDraftExercise} activeOpacity={0.8}>
+                  <Text style={styles.addRowText}>+ Manual</Text>
+                </TouchableOpacity>
+              </View>
+
+              {routineDraftExercises.length === 0 ? (
+                <View style={styles.routineDraftEmpty}>
+                  <Text style={styles.routineDraftEmptyText}>
+                    Tap any muscle on the map above to browse exercises and build your routine.
+                  </Text>
+                </View>
+              ) : (
+                routineDraftExercises.map((exercise, exIdx) => (
+                  <View key={exercise.id} style={styles.routineDraftCard}>
+                    {/* Card header row */}
+                    <View style={styles.routineDraftCardHeader}>
+                      <View style={styles.routineDraftIndexBadge}>
+                        <Text style={styles.routineDraftIndexText}>{exIdx + 1}</Text>
+                      </View>
+                      <TextInput
+                        style={styles.routineDraftNameInput}
+                        placeholder="Exercise name"
+                        value={exercise.name}
+                        onChangeText={(value) => updateDraftExercise(exercise.id, { name: value })}
+                        placeholderTextColor={Colors.outline}
+                      />
+                      <TouchableOpacity
+                        style={styles.routineRemoveBtn}
+                        onPress={() => removeDraftExercise(exercise.id)}
+                        activeOpacity={0.8}
+                        hitSlop={8}
+                      >
+                        <X size={14} color={Colors.outline} />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Metrics row */}
+                    <View style={styles.routineDraftMetrics}>
+                      <View style={styles.metricCol}>
+                        <Text style={styles.metricLabel}>Sets</Text>
+                        <TextInput
+                          style={styles.metricInput}
+                          value={exercise.sets}
+                          onChangeText={(value) => updateDraftExercise(exercise.id, { sets: value })}
+                          keyboardType="number-pad"
+                          textAlign="center"
+                        />
+                      </View>
+                      <View style={styles.metricCol}>
+                        <Text style={styles.metricLabel}>Reps</Text>
+                        <TextInput
+                          style={styles.metricInput}
+                          value={exercise.reps}
+                          onChangeText={(value) => updateDraftExercise(exercise.id, { reps: value })}
+                          keyboardType="number-pad"
+                          textAlign="center"
+                        />
+                      </View>
+                      <View style={styles.metricCol}>
+                        <Text style={styles.metricLabel}>Weight</Text>
+                        <TextInput
+                          style={styles.metricInput}
+                          value={exercise.weight}
+                          onChangeText={(value) => updateDraftExercise(exercise.id, { weight: value })}
+                          keyboardType="decimal-pad"
+                          textAlign="center"
+                        />
+                      </View>
+                      <View style={styles.metricCol}>
+                        <Text style={styles.metricLabel}>Unit</Text>
+                        <View style={styles.unitToggleRowSmall}>
+                          <TouchableOpacity
+                            onPress={() => updateDraftExercise(exercise.id, { weightUnit: 'lbs' })}
+                          >
+                            <Text style={[styles.unitBtn, exercise.weightUnit === 'lbs' && styles.unitBtnActive]}>
+                              lbs
+                            </Text>
+                          </TouchableOpacity>
+                          <Text style={styles.unitSlash}>/</Text>
+                          <TouchableOpacity
+                            onPress={() => updateDraftExercise(exercise.id, { weightUnit: 'kg' })}
+                          >
+                            <Text style={[styles.unitBtn, exercise.weightUnit === 'kg' && styles.unitBtnActive]}>
+                              kg
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+
+            {/* Save / Cancel buttons at the bottom of the scroll */}
+            <TouchableOpacity
+              style={styles.modalConfirmBtn}
+              onPress={handleCreateRoutine}
+              activeOpacity={0.85}
+              disabled={isSavingRoutine}
+            >
+              <Text style={styles.modalConfirmBtnText}>
+                {isSavingRoutine ? 'Saving...' : editingRoutineId ? 'Update Routine' : 'Save Routine'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              onPress={() => {
+                resetRoutineDraft();
+                setShowRoutineModal(false);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Custom Exercise Modal */}
+      <Modal
+        visible={showCustomExerciseModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCustomExerciseModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Custom Exercise</Text>
+              <TouchableOpacity onPress={() => setShowCustomExerciseModal(false)} activeOpacity={0.6}>
+                <X size={20} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalLabel}>Exercise Name</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="e.g., Cable Chest Fly"
+              value={customExerciseName}
+              onChangeText={setCustomExerciseName}
+              placeholderTextColor={Colors.outline}
+            />
+
+            <Text style={styles.modalLabel}>Category</Text>
+            <View style={styles.categoryGrid}>
+              {(['barbell', 'dumbbell', 'cable', 'bodyweight', 'machine'] as const).map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.categoryBtn, customExerciseCategory === cat && styles.categoryBtnActive]}
+                  onPress={() => setCustomExerciseCategory(cat)}
+                >
+                  <Text
+                    style={[
+                      styles.categoryBtnText,
+                      customExerciseCategory === cat && styles.categoryBtnTextActive,
+                    ]}
+                  >
+                    {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleAddCustomExercise} activeOpacity={0.85}>
+              <Text style={styles.modalConfirmBtnText}>Add Exercise</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              onPress={() => setShowCustomExerciseModal(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* WGER Exercise Browser Modal */}
+      <WGERExerciseBrowser
+        visible={showExerciseBrowser}
+        muscleId={selectedMuscleId}
+        muscleName={selectedMuscleName}
+        onClose={() => {
+          setShowExerciseBrowser(false);
+          setExerciseBrowserTarget('workout');
+        }}
+        onSelectExercise={handleAddExerciseFromBrowser}
+        addedExerciseNames={
+          exerciseBrowserTarget === 'routine'
+            ? routineDraftExercises.map((e) => e.name)
+            : exercisesList.map((e) => e.name)
+        }
+      />
+
+      {/* Exercise Config Sheet */}
+      <Modal
+        visible={showExerciseConfigSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowExerciseConfigSheet(false);
+          setPendingExercise(null);
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.configSheet}>
+            {/* Handle bar */}
+            <View style={styles.configSheetHandle} />
+
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.configSheetLabel}>
+                  {exerciseBrowserTarget === 'routine' ? 'ADD TO ROUTINE' : 'ADD TO WORKOUT'}
+                </Text>
+                <Text style={styles.configSheetTitle} numberOfLines={2}>
+                  {pendingExercise?.name || ''}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowExerciseConfigSheet(false);
+                  setPendingExercise(null);
+                }}
+                activeOpacity={0.6}
+                hitSlop={8}
+              >
+                <X size={20} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.configRow}>
+              <View style={styles.configCol}>
+                <Text style={styles.configLabel}>Sets</Text>
+                <View style={styles.configInputWrapper}>
+                  <TouchableOpacity
+                    style={styles.configStepper}
+                    onPress={() => setConfigSets((v) => String(Math.max(1, parseInt(v) - 1)))}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.configStepperText}>−</Text>
+                  </TouchableOpacity>
+                  <TextInput
+                    style={styles.configInput}
+                    value={configSets}
+                    onChangeText={setConfigSets}
+                    keyboardType="number-pad"
+                    textAlign="center"
+                  />
+                  <TouchableOpacity
+                    style={styles.configStepper}
+                    onPress={() => setConfigSets((v) => String(parseInt(v) + 1))}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.configStepperText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.configCol}>
+                <Text style={styles.configLabel}>Reps</Text>
+                <View style={styles.configInputWrapper}>
+                  <TouchableOpacity
+                    style={styles.configStepper}
+                    onPress={() => setConfigReps((v) => String(Math.max(1, parseInt(v) - 1)))}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.configStepperText}>−</Text>
+                  </TouchableOpacity>
+                  <TextInput
+                    style={styles.configInput}
+                    value={configReps}
+                    onChangeText={setConfigReps}
+                    keyboardType="number-pad"
+                    textAlign="center"
+                  />
+                  <TouchableOpacity
+                    style={styles.configStepper}
+                    onPress={() => setConfigReps((v) => String(parseInt(v) + 1))}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.configStepperText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.configCol}>
+                <Text style={styles.configLabel}>Weight</Text>
+                <View style={[styles.configInputWrapper, { justifyContent: 'center' }]}>
+                  <TextInput
+                    style={styles.configInput}
+                    value={configWeight}
+                    onChangeText={setConfigWeight}
+                    keyboardType="decimal-pad"
+                    textAlign="center"
+                    placeholder="0"
+                    placeholderTextColor={Colors.outline}
+                  />
+                </View>
+                <View style={styles.configUnitToggle}>
+                  <TouchableOpacity onPress={() => setConfigWeightUnit('lbs')}>
+                    <Text style={[styles.unitBtn, configWeightUnit === 'lbs' && styles.unitBtnActive]}>lbs</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.unitSlash}>/</Text>
+                  <TouchableOpacity onPress={() => setConfigWeightUnit('kg')}>
+                    <Text style={[styles.unitBtn, configWeightUnit === 'kg' && styles.unitBtnActive]}>kg</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalConfirmBtn}
+              onPress={handleConfirmExerciseConfig}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalConfirmBtnText}>
+                {exerciseBrowserTarget === 'routine' ? 'Add to Routine' : 'Add to Workout'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              onPress={() => {
+                setShowExerciseConfigSheet(false);
+                setPendingExercise(null);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.modalCancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  scrollContent: {
+    padding: spacing.base,
+    paddingBottom: spacing.xxxl * 2,
+    width: '100%',
+    maxWidth: layout.modalMaxWidth,
+    alignSelf: 'center',
+  },
+  timerCard: {
+    backgroundColor: Colors.primary,
+    borderRadius: radius.lg,
+    padding: spacing.base,
+    alignItems: 'center',
+    marginBottom: spacing.base,
+  },
+  timerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  timerLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 9,
+    fontWeight: fontWeight.bold,
+    letterSpacing: 0,
+  },
+  timerActiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: radius.full,
+    backgroundColor: '#10b981',
+  },
+  timerDisplay: {
+    color: Colors.onPrimary,
+    fontSize: 42,
+    fontWeight: fontWeight.extraBold,
+    letterSpacing: 0,
+    marginVertical: spacing.xs,
+  },
+  timerActions: {
+    width: '100%',
+  },
+  timerActionStack: {
+    gap: spacing.sm,
+  },
+  timerBtn: {
+    borderRadius: radius.full,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+  },
+  btnStart: {
+    backgroundColor: Colors.primaryContainer,
+  },
+  btnPause: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  btnFinish: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  timerBtnText: {
+    color: Colors.onPrimary,
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+  },
+  card: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: radius.lg,
+    padding: spacing.base,
+    marginBottom: spacing.base,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+  },
+  cardTitle: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    letterSpacing: 0.8,
+    marginBottom: spacing.base,
+  },
+  savedWorkoutList: {
+    gap: spacing.sm,
+  },
+  savedWorkoutRow: {
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.12)',
+  },
+  savedWorkoutHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  savedWorkoutName: {
+    flex: 1,
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  savedWorkoutMeta: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+  },
+  savedWorkoutDate: {
+    fontSize: 10,
+    color: Colors.outline,
+    marginTop: 2,
+  },
+  savedWorkoutSets: {
+    fontSize: typography.xs,
+    color: Colors.onSurfaceVariant,
+    marginTop: spacing.xs,
+  },
+  exerciseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  exerciseTitleRow: {
+    flex: 1,
+  },
+  exerciseActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  tagChip: {
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    marginBottom: spacing.xs,
+  },
+  tagChipText: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.primaryContainer,
+  },
+  tagChipContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  exerciseTitle: {
+    fontSize: 24,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  unilateralToggle: {
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: Colors.primaryContainer,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  unilateralToggleActive: {
+    backgroundColor: Colors.primaryContainer,
+  },
+  unitToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  unitBtn: {
+    fontSize: 11,
+    fontWeight: fontWeight.medium,
+    color: Colors.outline,
+  },
+  unitBtnActive: {
+    color: Colors.primaryContainer,
+    fontWeight: fontWeight.bold,
+  },
+  unitSlash: {
+    fontSize: 11,
+    color: Colors.outline,
+  },
+  columnsInputRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.base,
+  },
+  inputCol: {
+    flex: 1,
+  },
+  columnLabel: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    marginBottom: 4,
+  },
+  columnInput: {
+    minHeight: layout.minTouchTarget,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+    borderRadius: radius.md,
+    backgroundColor: Colors.background,
+    paddingHorizontal: spacing.sm,
+    fontSize: typography.base,
+    color: Colors.onSurface,
+    fontWeight: fontWeight.bold,
+    textAlign: 'center',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  logSetBtn: {
+    flex: 1,
+    backgroundColor: Colors.primaryContainer,
+    borderRadius: radius.full,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+  },
+  logSetBtnText: {
+    color: Colors.onPrimary,
+    fontWeight: fontWeight.bold,
+    fontSize: typography.base,
+  },
+  logSetBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveDefaultsBtn: {
+    flex: 1,
+    borderRadius: radius.full,
+    paddingVertical: spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.primaryContainer,
+    alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+  },
+  saveDefaultsBtnText: {
+    fontSize: typography.base,
+    fontWeight: fontWeight.bold,
+    color: Colors.primaryContainer,
+  },
+  addExerciseBtn: {
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.primaryContainer,
+  },
+  addExerciseBtnContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.25)',
+  },
+  thText: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+  },
+  tableBody: {
+    marginTop: spacing.xs,
+  },
+  tableRowWrapper: {
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    marginBottom: spacing.xs,
+  },
+  tableRowContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  tdSetNum: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+  },
+  tdPrevious: {
+    fontSize: typography.xs,
+    color: Colors.outline,
+  },
+  tdLog: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  muscleToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    borderRadius: radius.md,
+    alignSelf: 'flex-start',
+    marginBottom: spacing.base,
+    borderWidth: 1,
+    borderColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
+  },
+  muscleToggleText: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+  },
+  muscleToggleTextActive: {
+    color: Colors.primaryContainer,
+  },
+  muscleMapContainer: {
+    backgroundColor: Colors.background,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.base,
+    borderWidth: 1,
+    borderColor: 'rgba(14, 165, 233, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timerBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  routineCard: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: radius.lg,
+    padding: spacing.base,
+    marginBottom: spacing.base,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+  },
+  routineHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  routineTitle: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    letterSpacing: 0.8,
+  },
+  routineAddButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    backgroundColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
+  },
+  routineAddText: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.onPrimary,
+  },
+  routineHint: {
+    fontSize: typography.xs,
+    color: Colors.outline,
+    marginBottom: spacing.sm,
+  },
+  routinePills: {
+    marginBottom: spacing.base,
+  },
+  routinePill: {
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: Colors.outline,
+    marginRight: spacing.xs,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  routinePillActive: {
+    backgroundColor: Colors.primaryContainer,
+    borderColor: Colors.primaryContainer,
+  },
+  routinePillText: {
+    fontSize: typography.xs,
+    color: Colors.outline,
+    fontWeight: fontWeight.medium,
+  },
+  routinePillTextActive: {
+    color: Colors.onPrimary,
+  },
+  routineDetails: {
+    gap: spacing.sm,
+  },
+  routineExerciseList: {
+    gap: spacing.xs,
+  },
+  routineExerciseRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.2)',
+  },
+  routineExerciseRowActive: {
+    borderColor: Colors.primaryContainer,
+  },
+  routineExerciseInfo: {
+    flex: 1,
+  },
+  routineExerciseName: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  routineExerciseMeta: {
+    fontSize: typography.xs,
+    color: Colors.outline,
+    marginTop: 2,
+  },
+  routineExerciseTag: {
+    fontSize: typography.xs,
+    color: Colors.primaryContainer,
+    fontWeight: fontWeight.bold,
+  },
+  routineEditButton: {
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+  },
+  routineEditText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.primaryContainer,
+  },
+  routineWorkoutList: {
+    gap: spacing.sm,
+  },
+  routineWorkoutRow: {
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.2)',
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    backgroundColor: Colors.surface,
+  },
+  routineWorkoutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  routineWorkoutName: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  routineWorkoutInputs: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  routineInputCol: {
+    flex: 1,
+  },
+  routineInputLabel: {
+    fontSize: typography.xs,
+    color: Colors.outline,
+    marginBottom: 4,
+  },
+  routineInput: {
+    minHeight: layout.minTouchTarget,
+    borderWidth: 1,
+    borderColor: 'rgba(14, 165, 233, 0.3)',
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(14, 165, 233, 0.06)',
+    paddingHorizontal: spacing.sm,
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    fontWeight: fontWeight.bold,
+    textAlign: 'center',
+  },
+  routineSetRow: {
+    marginTop: spacing.sm,
+  },
+  routineSetHint: {
+    fontSize: 9,
+    color: Colors.outline,
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase',
+    fontWeight: fontWeight.bold,
+    opacity: 0.7,
+  },
+  routineSetGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  routineSetCard: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: 'rgba(14, 165, 233, 0.35)',
+    backgroundColor: 'rgba(14, 165, 233, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  routineSetCardDone: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: '#10b981',
+  },
+  routineSetCardNum: {
+    fontSize: typography.lg,
+    fontWeight: fontWeight.bold,
+    color: Colors.primaryContainer,
+    lineHeight: 22,
+  },
+  routineSetCardNumDone: {
+    color: '#10b981',
+  },
+  routineSetCardMeta: {
+    fontSize: 9,
+    color: Colors.outline,
+    fontWeight: fontWeight.bold,
+  },
+  routineSetCardMetaDone: {
+    color: '#10b981',
+    opacity: 0.8,
+  },
+  routineSetCardCheck: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+  },
+  // Keep old names as aliases so nothing else breaks
+  routineSetCheckbox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: Colors.primaryContainer,
+  },
+  routineSetCheckboxDone: {
+    backgroundColor: Colors.primaryContainer,
+  },
+  routineSetLabel: {
+    fontSize: typography.xs,
+    color: Colors.onSurface,
+    fontWeight: fontWeight.bold,
+  },
+  routineEmptyState: {
+    paddingVertical: spacing.md,
+  },
+  routineStartButton: {
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    backgroundColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+  },
+  routineStartButtonActive: {
+    backgroundColor: 'rgba(14, 165, 233, 0.2)',
+  },
+  routineStartText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onPrimary,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.base,
+    paddingBottom: spacing.xl,
+  },
+  modalContentContainer: {
+    padding: spacing.base,
+    paddingBottom: spacing.xxl,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.base,
+  },
+  modalTitle: {
+    fontSize: typography.lg,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  modalLabel: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    marginBottom: spacing.xs,
+  },
+  modalInput: {
+    height: 44,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+    borderRadius: radius.md,
+    backgroundColor: Colors.background,
+    paddingHorizontal: spacing.sm,
+    fontSize: typography.base,
+    color: Colors.onSurface,
+    marginBottom: spacing.base,
+  },
+  // Routine builder modal — full-screen sheet layout
+  routineModalShell: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  routineModalHeader: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.base,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.1)',
+  },
+  routineModalHandleBar: {
+    width: 36,
+    height: 4,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(190, 200, 210, 0.35)',
+    alignSelf: 'center',
+    marginBottom: spacing.sm,
+  },
+  routineModalTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  routineNameInput: {
+    height: 44,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+    borderRadius: radius.md,
+    backgroundColor: Colors.background,
+    paddingHorizontal: spacing.sm,
+    fontSize: typography.base,
+    color: Colors.onSurface,
+  },
+  routineModalScroll: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    maxHeight: '78%',
+  },
+  routineModalScrollContent: {
+    padding: spacing.base,
+    paddingBottom: spacing.xxxl,
+  },
+  // Draft section below the map
+  routineDraftSection: {
+    marginTop: spacing.sm,
+  },
+  routineDraftSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  routineDraftSectionTitle: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    letterSpacing: 0,
+  },
+  routineDraftEmpty: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: 'rgba(14, 165, 233, 0.04)',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(14, 165, 233, 0.12)',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+  },
+  routineDraftEmptyText: {
+    fontSize: typography.xs,
+    color: Colors.outline,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  routineDraftCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  routineDraftIndexBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    backgroundColor: Colors.primaryContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  routineDraftIndexText: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+    color: Colors.onPrimary,
+  },
+  routineDraftNameInput: {
+    flex: 1,
+    minHeight: layout.minTouchTarget,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.2)',
+    borderRadius: radius.md,
+    backgroundColor: Colors.background,
+    paddingHorizontal: spacing.sm,
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    fontWeight: fontWeight.bold,
+  },
+  addRowText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.primaryContainer,
+  },
+  routinePickerCard: {
+    backgroundColor: Colors.background,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(14, 165, 233, 0.15)',
+    marginBottom: spacing.base,
+  },
+  routinePickerTitle: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    marginBottom: spacing.sm,
+  },
+  routineDraftCard: {
+    backgroundColor: Colors.background,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(14, 165, 233, 0.15)',
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.primaryContainer,
+  },
+  routineRemoveBtn: {
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  routineDraftMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  metricCol: {
+    flex: 1,
+  },
+  metricLabel: {
+    fontSize: typography.xs,
+    color: Colors.outline,
+    marginBottom: 4,
+  },
+  metricInput: {
+    minHeight: layout.minTouchTarget,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(14, 165, 233, 0.3)',
+    paddingHorizontal: spacing.sm,
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    fontWeight: fontWeight.bold,
+    backgroundColor: 'rgba(14, 165, 233, 0.06)',
+    textAlign: 'center',
+  },
+  unitToggleRowSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  categoryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.base,
+  },
+  categoryBtn: {
+    flex: 1,
+    minWidth: '28%',
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+  },
+  categoryBtnActive: {
+    backgroundColor: Colors.primaryContainer,
+    borderColor: Colors.primaryContainer,
+  },
+  categoryBtnText: {
+    fontSize: 12,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+  },
+  categoryBtnTextActive: {
+    color: Colors.onPrimary,
+  },
+  modalConfirmBtn: {
+    backgroundColor: Colors.primaryContainer,
+    borderRadius: radius.full,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+  },
+  modalConfirmBtnText: {
+    color: Colors.onPrimary,
+    fontWeight: fontWeight.bold,
+    fontSize: typography.base,
+  },
+  modalCancelBtn: {
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+    borderRadius: radius.full,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+  },
+  modalCancelBtnText: {
+    color: Colors.onSurfaceVariant,
+    fontWeight: fontWeight.bold,
+    fontSize: typography.base,
+  },
+  // Exercise Config Sheet
+  configSheet: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.base,
+    paddingBottom: spacing.xl,
+  },
+  configSheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(190, 200, 210, 0.4)',
+    alignSelf: 'center',
+    marginBottom: spacing.base,
+  },
+  configSheetLabel: {
+    fontSize: 9,
+    fontWeight: fontWeight.bold,
+    color: Colors.primaryContainer,
+    letterSpacing: 1.2,
+    marginBottom: 2,
+  },
+  configSheetTitle: {
+    fontSize: typography.lg,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    textTransform: 'capitalize',
+  },
+  configRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.base,
+    marginBottom: spacing.base,
+    alignItems: 'flex-start',
+  },
+  configCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  configLabel: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  configInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+    borderRadius: radius.md,
+    backgroundColor: Colors.background,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  configStepper: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: layout.minTouchTarget,
+    minHeight: layout.minTouchTarget,
+  },
+  configStepperText: {
+    fontSize: typography.lg,
+    color: Colors.primaryContainer,
+    fontWeight: fontWeight.bold,
+    lineHeight: 20,
+  },
+  configInput: {
+    flex: 1,
+    minHeight: layout.minTouchTarget,
+    fontSize: typography.base,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    borderWidth: 1.5,
+    borderColor: 'rgba(14, 165, 233, 0.4)',
+    borderRadius: radius.md,
+    backgroundColor: Colors.surface,
+    paddingHorizontal: spacing.xs,
+  },
+  configUnitToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 6,
+  },
+});

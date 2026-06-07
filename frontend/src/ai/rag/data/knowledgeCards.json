@@ -1,0 +1,1243 @@
+{
+  "schemaVersion": "1.0.0",
+  "name": "Fitness AI Starter Evidence Cards",
+  "description": "A manually curated starter RAG knowledge base based on six high-priority sources. Each card contains one narrow claim and practical app-safe guidance.",
+  "generatedAt": "2026-05-31",
+  "reviewPolicy": {
+    "reviewInterval": "Review every 6 to 12 months, and earlier when a major guideline is updated.",
+    "manualReviewRequired": true,
+    "importantNote": "These cards provide general educational information. They must not be used as a medical diagnosis, medical clearance, rehabilitation prescription, or substitute for a qualified professional."
+  },
+  "sources": [
+    {
+      "title": "Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults: An Overview of Reviews",
+      "organization": "American College of Sports Medicine",
+      "year": 2026,
+      "sourceType": "position_stand",
+      "doi": "10.1249/MSS.0000000000003897",
+      "pmid": "41843416",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/",
+      "scope": "Healthy adults; resistance-training prescription for strength, hypertrophy, power, muscular endurance, and physical function."
+    },
+    {
+      "title": "WHO Guidelines on Physical Activity and Sedentary Behaviour",
+      "organization": "World Health Organization",
+      "year": 2020,
+      "sourceType": "guideline",
+      "url": "https://www.who.int/publications/i/item/9789240015128",
+      "scope": "Population-level physical-activity and sedentary-behaviour guidance across age groups and selected special populations."
+    },
+    {
+      "title": "Nutrition and Athletic Performance",
+      "organization": "Academy of Nutrition and Dietetics, Dietitians of Canada, and American College of Sports Medicine",
+      "year": 2016,
+      "sourceType": "position_stand",
+      "doi": "10.1249/MSS.0000000000000852",
+      "pmid": "26920240",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/26920240/",
+      "scope": "Nutrition factors that influence athletic performance; emphasizes individualized planning and referral to a qualified dietitian for personalized plans."
+    },
+    {
+      "title": "A Systematic Review, Meta-analysis and Meta-regression of the Effect of Protein Supplementation on Resistance Training-induced Gains in Muscle Mass and Strength in Healthy Adults",
+      "organization": "British Journal of Sports Medicine",
+      "year": 2018,
+      "sourceType": "meta_analysis",
+      "doi": "10.1136/bjsports-2017-097608",
+      "pmid": "28698222",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5867436/",
+      "scope": "Healthy adults performing resistance exercise training for at least 6 weeks; protein supplementation and training adaptations."
+    },
+    {
+      "title": "Resistance Training for Children and Adolescents",
+      "organization": "American Academy of Pediatrics",
+      "year": 2020,
+      "sourceType": "clinical_report",
+      "doi": "10.1542/peds.2020-1011",
+      "url": "https://publications.aap.org/pediatrics/article/145/6/e20201011/76942/Resistance-Training-for-Children-and-Adolescents",
+      "scope": "Children and adolescents; benefits, safety, supervision, technique, progression, and conditions that require medical consultation.",
+      "note": "Clinical report reaffirmed November 2024."
+    },
+    {
+      "title": "2023 International Olympic Committee's (IOC) Consensus Statement on Relative Energy Deficiency in Sport (REDs)",
+      "organization": "International Olympic Committee",
+      "year": 2023,
+      "sourceType": "consensus_statement",
+      "doi": "10.1136/bjsports-2023-106994",
+      "url": "https://bjsm.bmj.com/content/57/17/1073",
+      "scope": "Female and male athletes; health and performance consequences associated with problematic low energy availability."
+    }
+  ],
+  "cards": [
+    {
+      "id": "rt-progressive-consistency-001",
+      "topic": "resistance training basics",
+      "tags": [
+        "resistance training",
+        "consistency",
+        "progression",
+        "adherence"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "healthy adults"
+      ],
+      "claim": "Consistent progressive resistance training improves muscular strength, muscle size, power, and physical function in healthy adults.",
+      "practicalAdvice": [
+        "Prioritize a routine the user can follow consistently.",
+        "Increase the challenge gradually over time instead of making large jumps.",
+        "Use the user's goal, experience, enjoyment, and recovery to guide the plan."
+      ],
+      "source": {
+        "title": "Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults: An Overview of Reviews",
+        "organization": "American College of Sports Medicine",
+        "year": 2026,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000003897",
+        "pmid": "41843416",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/",
+        "scope": "Healthy adults; resistance-training prescription for strength, hypertrophy, power, muscular endurance, and physical function."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "contraindications": [
+        "Do not use this card as a medical clearance tool.",
+        "Do not advise training through sharp pain or acute injury symptoms."
+      ],
+      "limitations": [
+        "The best plan depends on the user's goal and ability to recover; one fixed routine is not optimal for everyone."
+      ]
+    },
+    {
+      "id": "rt-individualization-002",
+      "topic": "individualized training",
+      "tags": [
+        "resistance training",
+        "individualization",
+        "adherence",
+        "goal setting"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "healthy adults"
+      ],
+      "claim": "Resistance-training programs should be individualized rather than treated as one-size-fits-all.",
+      "practicalAdvice": [
+        "Ask the user about their main goal: general health, strength, muscle growth, or sports performance.",
+        "Start with a realistic schedule the user can maintain.",
+        "Adjust exercises, volume, and load when the current plan is too difficult to recover from or too easy to progress with."
+      ],
+      "source": {
+        "title": "Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults: An Overview of Reviews",
+        "organization": "American College of Sports Medicine",
+        "year": 2026,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000003897",
+        "pmid": "41843416",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/",
+        "scope": "Healthy adults; resistance-training prescription for strength, hypertrophy, power, muscular endurance, and physical function."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "limitations": [
+        "General guidance should not replace individualized medical, rehabilitation, or sports-performance programming."
+      ]
+    },
+    {
+      "id": "rt-hypertrophy-volume-003",
+      "topic": "muscle hypertrophy",
+      "tags": [
+        "hypertrophy",
+        "weekly volume",
+        "sets per muscle group",
+        "resistance training"
+      ],
+      "audience": "intermediate",
+      "applicablePopulation": [
+        "healthy adults pursuing muscle growth"
+      ],
+      "claim": "For muscle growth, a higher weekly resistance-training volume can be useful; the ACSM summary gives about 10 sets per muscle group per week as a practical target.",
+      "practicalAdvice": [
+        "Treat about 10 weekly sets per muscle group as a general starting target, not a strict rule.",
+        "Spread the work across manageable sessions when helpful.",
+        "Increase or reduce volume based on training experience, performance trends, soreness, and recovery."
+      ],
+      "source": {
+        "title": "Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults: An Overview of Reviews",
+        "organization": "American College of Sports Medicine",
+        "year": 2026,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000003897",
+        "pmid": "41843416",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/",
+        "scope": "Healthy adults; resistance-training prescription for strength, hypertrophy, power, muscular endurance, and physical function."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "dosage": {
+        "setsPerWeek": "Around 10 sets per muscle group per week is a practical general target for hypertrophy; adjust individually."
+      },
+      "contraindications": [
+        "Reduce volume and review the plan if performance decreases persistently or recovery is poor."
+      ],
+      "limitations": [
+        "A weekly set target is a starting point. Exercise selection, effort, recovery, and adherence still matter."
+      ]
+    },
+    {
+      "id": "rt-strength-load-004",
+      "topic": "strength training",
+      "tags": [
+        "strength",
+        "load",
+        "one repetition maximum",
+        "sets"
+      ],
+      "audience": "intermediate",
+      "applicablePopulation": [
+        "healthy adults with appropriate technique and experience"
+      ],
+      "claim": "For maximizing strength, heavier resistance can be emphasized. The ACSM summary highlights loads around 80% of one-repetition maximum for 2 to 3 sets per exercise.",
+      "practicalAdvice": [
+        "Use heavier loads only when the user can maintain controlled technique.",
+        "Progress gradually instead of testing maximal lifts frequently.",
+        "For beginners, prioritize technique and consistent practice before advanced loading strategies."
+      ],
+      "source": {
+        "title": "Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults: An Overview of Reviews",
+        "organization": "American College of Sports Medicine",
+        "year": 2026,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000003897",
+        "pmid": "41843416",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/",
+        "scope": "Healthy adults; resistance-training prescription for strength, hypertrophy, power, muscular endurance, and physical function."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "dosage": {
+        "intensity": "Around 80% of 1RM can be emphasized for strength-oriented training.",
+        "setsPerWeek": "The ACSM summary describes 2 to 3 sets per exercise for strength-oriented work."
+      },
+      "contraindications": [
+        "Do not use near-maximal loading advice for unsupervised minors.",
+        "Do not recommend heavy lifting through pain or after an acute injury."
+      ],
+      "limitations": [
+        "This is a broad strength-focused prescription, not a personalized lifting plan."
+      ]
+    },
+    {
+      "id": "rt-power-005",
+      "topic": "muscular power",
+      "tags": [
+        "power",
+        "resistance training",
+        "load",
+        "movement speed"
+      ],
+      "audience": "advanced",
+      "applicablePopulation": [
+        "healthy adults with appropriate technique"
+      ],
+      "claim": "Power-oriented resistance training uses moderate loads and emphasizes moving the weight quickly during the lifting phase while maintaining control.",
+      "practicalAdvice": [
+        "Use power work only after the user has learned safe technique.",
+        "Keep repetitions controlled and stop when speed or form declines.",
+        "Use qualified supervision for youth, beginners, or users with medical concerns."
+      ],
+      "source": {
+        "title": "Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults: An Overview of Reviews",
+        "organization": "American College of Sports Medicine",
+        "year": 2026,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000003897",
+        "pmid": "41843416",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/",
+        "scope": "Healthy adults; resistance-training prescription for strength, hypertrophy, power, muscular endurance, and physical function."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "dosage": {
+        "intensity": "The ACSM summary highlights approximately 30% to 70% of 1RM for power training."
+      },
+      "contraindications": [
+        "Avoid unsupervised explosive training for inexperienced users.",
+        "Stop if the user reports pain, dizziness, or loss of control."
+      ],
+      "limitations": [
+        "Power training should be scaled to the user's skill level and exercise choice."
+      ]
+    },
+    {
+      "id": "rt-equipment-flexibility-006",
+      "topic": "exercise equipment",
+      "tags": [
+        "bodyweight",
+        "bands",
+        "machines",
+        "free weights",
+        "home workouts"
+      ],
+      "audience": "beginner",
+      "applicablePopulation": [
+        "healthy adults",
+        "beginners",
+        "users training at home"
+      ],
+      "claim": "Traditional gym equipment is not required for useful resistance training. Bodyweight exercises, elastic bands, and home-based routines can still improve outcomes.",
+      "practicalAdvice": [
+        "Offer home-based alternatives when the user does not have gym access.",
+        "Choose exercises that can be performed safely with available equipment.",
+        "Progress by improving technique, adding repetitions, using a harder variation, or gradually adding resistance."
+      ],
+      "source": {
+        "title": "Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults: An Overview of Reviews",
+        "organization": "American College of Sports Medicine",
+        "year": 2026,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000003897",
+        "pmid": "41843416",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/",
+        "scope": "Healthy adults; resistance-training prescription for strength, hypertrophy, power, muscular endurance, and physical function."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31"
+    },
+    {
+      "id": "rt-failure-optional-007",
+      "topic": "training effort",
+      "tags": [
+        "training to failure",
+        "fatigue",
+        "effort",
+        "resistance training"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "healthy adults"
+      ],
+      "claim": "Training to complete muscular failure is not consistently necessary for the average healthy adult to gain benefits from resistance training.",
+      "practicalAdvice": [
+        "Do not tell users to push every set until they cannot complete another repetition.",
+        "Encourage stopping a set when technique becomes unstable.",
+        "Use harder sets selectively when appropriate for the user's experience and recovery."
+      ],
+      "source": {
+        "title": "Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults: An Overview of Reviews",
+        "organization": "American College of Sports Medicine",
+        "year": 2026,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000003897",
+        "pmid": "41843416",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/",
+        "scope": "Healthy adults; resistance-training prescription for strength, hypertrophy, power, muscular endurance, and physical function."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "contraindications": [
+        "Do not recommend repeated all-out efforts when the user has poor recovery, pain, or unsafe technique."
+      ],
+      "limitations": [
+        "Advanced trainees may use effort-management strategies differently depending on their goal."
+      ]
+    },
+    {
+      "id": "rt-complexity-optional-008",
+      "topic": "program complexity",
+      "tags": [
+        "periodization",
+        "advanced techniques",
+        "beginner program",
+        "simple workouts"
+      ],
+      "audience": "beginner",
+      "applicablePopulation": [
+        "healthy adults",
+        "beginners"
+      ],
+      "claim": "Complex training techniques are often optional for general health and fitness. A simple, maintainable program can still be effective.",
+      "practicalAdvice": [
+        "Start beginners with a simple plan that is easy to follow.",
+        "Add complexity only when it solves a clear problem, such as stalled progress or a sports-specific need.",
+        "Do not overwhelm users with advanced methods when consistency is the main issue."
+      ],
+      "source": {
+        "title": "Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults: An Overview of Reviews",
+        "organization": "American College of Sports Medicine",
+        "year": 2026,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000003897",
+        "pmid": "41843416",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/",
+        "scope": "Healthy adults; resistance-training prescription for strength, hypertrophy, power, muscular endurance, and physical function."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31"
+    },
+    {
+      "id": "pa-any-movement-counts-009",
+      "topic": "physical activity basics",
+      "tags": [
+        "physical activity",
+        "sedentary behavior",
+        "health",
+        "beginner"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "general population"
+      ],
+      "claim": "Any amount of physical activity is better than none, and all physical activity counts.",
+      "practicalAdvice": [
+        "Encourage users to start with realistic increases in activity.",
+        "Avoid framing exercise as all-or-nothing.",
+        "Suggest simple activity options such as walking, cycling, active recreation, or age-appropriate exercise."
+      ],
+      "source": {
+        "title": "WHO Guidelines on Physical Activity and Sedentary Behaviour",
+        "organization": "World Health Organization",
+        "year": 2020,
+        "sourceType": "guideline",
+        "url": "https://www.who.int/publications/i/item/9789240015128",
+        "scope": "Population-level physical-activity and sedentary-behaviour guidance across age groups and selected special populations."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "limitations": [
+        "This is general public-health guidance, not a medical exercise prescription."
+      ]
+    },
+    {
+      "id": "pa-adult-aerobic-010",
+      "topic": "adult physical activity",
+      "tags": [
+        "adult",
+        "aerobic activity",
+        "moderate intensity",
+        "vigorous intensity"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "adults aged 18 to 64",
+        "older adults when appropriate"
+      ],
+      "claim": "Adults should generally aim for 150 to 300 minutes of moderate-intensity aerobic activity per week, or 75 to 150 minutes of vigorous-intensity activity, or an equivalent combination.",
+      "practicalAdvice": [
+        "Let users accumulate activity across the week.",
+        "Scale the starting amount to the user's current activity level.",
+        "Increase activity gradually when the user is inactive or returning after a break."
+      ],
+      "source": {
+        "title": "WHO Guidelines on Physical Activity and Sedentary Behaviour",
+        "organization": "World Health Organization",
+        "year": 2020,
+        "sourceType": "guideline",
+        "url": "https://www.who.int/publications/i/item/9789240015128",
+        "scope": "Population-level physical-activity and sedentary-behaviour guidance across age groups and selected special populations."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "dosage": {
+        "frequency": "Across the week.",
+        "intensity": "150–300 minutes moderate intensity, or 75–150 minutes vigorous intensity, or an equivalent combination."
+      },
+      "contraindications": [
+        "Users with symptoms, medical restrictions, or major health concerns should follow professional advice."
+      ]
+    },
+    {
+      "id": "pa-adult-strength-011",
+      "topic": "adult muscle strengthening",
+      "tags": [
+        "adult",
+        "muscle strengthening",
+        "major muscle groups",
+        "weekly frequency"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "adults"
+      ],
+      "claim": "Adults should perform muscle-strengthening activities involving major muscle groups on 2 or more days per week.",
+      "practicalAdvice": [
+        "Include major muscle groups across the weekly plan.",
+        "Use a beginner-friendly routine when the user is new to resistance training.",
+        "Treat two days per week as a practical health baseline rather than a bodybuilding requirement."
+      ],
+      "source": {
+        "title": "WHO Guidelines on Physical Activity and Sedentary Behaviour",
+        "organization": "World Health Organization",
+        "year": 2020,
+        "sourceType": "guideline",
+        "url": "https://www.who.int/publications/i/item/9789240015128",
+        "scope": "Population-level physical-activity and sedentary-behaviour guidance across age groups and selected special populations."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "dosage": {
+        "frequency": "2 or more days per week involving major muscle groups."
+      },
+      "limitations": [
+        "Training frequency for specific fitness goals may be adjusted beyond the public-health baseline."
+      ]
+    },
+    {
+      "id": "pa-youth-activity-012",
+      "topic": "youth physical activity",
+      "tags": [
+        "children",
+        "adolescents",
+        "physical activity",
+        "muscle strengthening",
+        "bone strengthening"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "children and adolescents aged 5 to 17"
+      ],
+      "claim": "Children and adolescents aged 5 to 17 should average at least 60 minutes per day of moderate-to-vigorous physical activity across the week, with vigorous aerobic activity and muscle- and bone-strengthening activity included at least 3 days per week.",
+      "practicalAdvice": [
+        "Keep youth recommendations age-appropriate, enjoyable, and varied.",
+        "Encourage movement and skill-building rather than extreme routines.",
+        "Use supervision and proper technique for structured resistance training."
+      ],
+      "source": {
+        "title": "WHO Guidelines on Physical Activity and Sedentary Behaviour",
+        "organization": "World Health Organization",
+        "year": 2020,
+        "sourceType": "guideline",
+        "url": "https://www.who.int/publications/i/item/9789240015128",
+        "scope": "Population-level physical-activity and sedentary-behaviour guidance across age groups and selected special populations."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "dosage": {
+        "frequency": "Average of at least 60 minutes per day across the week; muscle- and bone-strengthening activities at least 3 days per week."
+      },
+      "contraindications": [
+        "Do not generate aggressive weight-loss or bodybuilding-style plans for minors.",
+        "Use the AAP youth-safety cards for structured resistance training."
+      ],
+      "limitations": [
+        "This is population-level guidance. Individual sports training needs can vary."
+      ]
+    },
+    {
+      "id": "pa-older-adult-balance-013",
+      "topic": "older adult physical activity",
+      "tags": [
+        "older adults",
+        "balance",
+        "falls prevention",
+        "strength training"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "older adults"
+      ],
+      "claim": "Older adults should include multicomponent physical activity emphasizing functional balance and strength training on 3 or more days per week to support function and reduce fall risk.",
+      "practicalAdvice": [
+        "Use simple, stable movements appropriate to the user's ability.",
+        "Prioritize safe progression and balance support where needed.",
+        "Recommend professional guidance when the user has fall risk, frailty, or medical limitations."
+      ],
+      "source": {
+        "title": "WHO Guidelines on Physical Activity and Sedentary Behaviour",
+        "organization": "World Health Organization",
+        "year": 2020,
+        "sourceType": "guideline",
+        "url": "https://www.who.int/publications/i/item/9789240015128",
+        "scope": "Population-level physical-activity and sedentary-behaviour guidance across age groups and selected special populations."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "dosage": {
+        "frequency": "Functional balance and strength-focused multicomponent activity on 3 or more days per week."
+      },
+      "contraindications": [
+        "Do not provide unsupervised fall-risk exercises to users reporting instability or recent falls."
+      ]
+    },
+    {
+      "id": "pa-limit-sedentary-time-014",
+      "topic": "sedentary behaviour",
+      "tags": [
+        "sedentary behavior",
+        "sitting",
+        "movement breaks",
+        "health"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "general population"
+      ],
+      "claim": "People of all age groups should limit sedentary time and replace some of it with physical activity when possible.",
+      "practicalAdvice": [
+        "Encourage short movement breaks during long periods of sitting.",
+        "Suggest gradual changes rather than unrealistic daily targets.",
+        "Treat movement breaks as additions to, not replacements for, an overall activity plan."
+      ],
+      "source": {
+        "title": "WHO Guidelines on Physical Activity and Sedentary Behaviour",
+        "organization": "World Health Organization",
+        "year": 2020,
+        "sourceType": "guideline",
+        "url": "https://www.who.int/publications/i/item/9789240015128",
+        "scope": "Population-level physical-activity and sedentary-behaviour guidance across age groups and selected special populations."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31"
+    },
+    {
+      "id": "nutrition-individualized-015",
+      "topic": "sports nutrition planning",
+      "tags": [
+        "nutrition",
+        "individualization",
+        "dietitian",
+        "sports performance"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "physically active adults",
+        "athletes"
+      ],
+      "claim": "Sports-nutrition advice should be individualized. Personalized plans are best handled by a qualified registered dietitian nutritionist, especially when needs are complex.",
+      "practicalAdvice": [
+        "Give general educational guidance in the app.",
+        "Avoid presenting a generated meal plan as a medical or clinical prescription.",
+        "Recommend professional support for complex goals, health conditions, suspected deficiencies, or disordered-eating risk."
+      ],
+      "source": {
+        "title": "Nutrition and Athletic Performance",
+        "organization": "Academy of Nutrition and Dietetics, Dietitians of Canada, and American College of Sports Medicine",
+        "year": 2016,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000000852",
+        "pmid": "26920240",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/26920240/",
+        "scope": "Nutrition factors that influence athletic performance; emphasizes individualized planning and referral to a qualified dietitian for personalized plans."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "escalationRules": [
+        "Escalate when the user has a medical condition, persistent symptoms, suspected nutrient deficiency, pregnancy, or disordered-eating risk language."
+      ]
+    },
+    {
+      "id": "nutrition-energy-adequacy-016",
+      "topic": "energy intake",
+      "tags": [
+        "calories",
+        "energy availability",
+        "training performance",
+        "recovery"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "physically active users",
+        "athletes"
+      ],
+      "claim": "Adequate energy intake supports training, recovery, health, and performance. A nutrition plan should avoid chronic under-fueling.",
+      "practicalAdvice": [
+        "Do not recommend extreme calorie restriction.",
+        "Use small, sustainable adjustments when discussing body-composition goals.",
+        "Review training performance, energy, recovery, and hunger trends instead of focusing only on body weight."
+      ],
+      "source": {
+        "title": "Nutrition and Athletic Performance",
+        "organization": "Academy of Nutrition and Dietetics, Dietitians of Canada, and American College of Sports Medicine",
+        "year": 2016,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000000852",
+        "pmid": "26920240",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/26920240/",
+        "scope": "Nutrition factors that influence athletic performance; emphasizes individualized planning and referral to a qualified dietitian for personalized plans."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "contraindications": [
+        "Avoid aggressive calorie-deficit advice for minors.",
+        "Do not encourage skipping meals or compensatory exercise."
+      ],
+      "escalationRules": [
+        "Escalate if the user reports persistent fatigue, dizziness, frequent injuries, major performance decline, or restrictive eating patterns."
+      ],
+      "limitations": [
+        "Exact calorie needs require individualized assessment."
+      ]
+    },
+    {
+      "id": "nutrition-carbohydrate-017",
+      "topic": "carbohydrate intake",
+      "tags": [
+        "carbohydrates",
+        "training fuel",
+        "performance",
+        "recovery"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "physically active users",
+        "athletes"
+      ],
+      "claim": "Carbohydrate intake is an important part of fueling training and athletic performance, especially when activity demands are high.",
+      "practicalAdvice": [
+        "Encourage users to include carbohydrate-containing foods as part of balanced meals.",
+        "Increase attention to fueling when training volume or intensity is high.",
+        "Avoid describing carbohydrates as automatically harmful."
+      ],
+      "source": {
+        "title": "Nutrition and Athletic Performance",
+        "organization": "Academy of Nutrition and Dietetics, Dietitians of Canada, and American College of Sports Medicine",
+        "year": 2016,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000000852",
+        "pmid": "26920240",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/26920240/",
+        "scope": "Nutrition factors that influence athletic performance; emphasizes individualized planning and referral to a qualified dietitian for personalized plans."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "limitations": [
+        "The appropriate amount varies with sport, training load, body size, and overall diet."
+      ]
+    },
+    {
+      "id": "nutrition-hydration-018",
+      "topic": "hydration",
+      "tags": [
+        "hydration",
+        "fluids",
+        "training",
+        "performance"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "physically active users",
+        "athletes"
+      ],
+      "claim": "Hydration should be considered as part of training and recovery because fluid needs can affect health and performance.",
+      "practicalAdvice": [
+        "Encourage regular fluid intake across the day.",
+        "Remind users that needs vary with activity duration, sweating, heat, and individual factors.",
+        "Use caution when the user reports symptoms during exercise."
+      ],
+      "source": {
+        "title": "Nutrition and Athletic Performance",
+        "organization": "Academy of Nutrition and Dietetics, Dietitians of Canada, and American College of Sports Medicine",
+        "year": 2016,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000000852",
+        "pmid": "26920240",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/26920240/",
+        "scope": "Nutrition factors that influence athletic performance; emphasizes individualized planning and referral to a qualified dietitian for personalized plans."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "escalationRules": [
+        "Escalate when the user reports fainting, confusion, severe weakness, or concerning exercise-related symptoms."
+      ]
+    },
+    {
+      "id": "nutrition-food-first-019",
+      "topic": "balanced diet",
+      "tags": [
+        "whole foods",
+        "balanced diet",
+        "supplements",
+        "nutrition"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "physically active users",
+        "athletes"
+      ],
+      "claim": "A balanced eating pattern should be the foundation of sports nutrition. Supplements should not replace adequate food intake.",
+      "practicalAdvice": [
+        "Prioritize regular meals and nutrient-dense foods.",
+        "Treat supplements as optional and context-dependent, not as the starting point.",
+        "Avoid unsupported supplement claims."
+      ],
+      "source": {
+        "title": "Nutrition and Athletic Performance",
+        "organization": "Academy of Nutrition and Dietetics, Dietitians of Canada, and American College of Sports Medicine",
+        "year": 2016,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000000852",
+        "pmid": "26920240",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/26920240/",
+        "scope": "Nutrition factors that influence athletic performance; emphasizes individualized planning and referral to a qualified dietitian for personalized plans."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "limitations": [
+        "Specific deficiencies or clinical nutrition issues require professional assessment."
+      ]
+    },
+    {
+      "id": "protein-ret-benefit-020",
+      "topic": "protein and resistance training",
+      "tags": [
+        "protein",
+        "resistance training",
+        "muscle mass",
+        "strength"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "healthy adults performing resistance training"
+      ],
+      "claim": "In healthy adults performing prolonged resistance training, protein supplementation can modestly improve gains in muscle size and strength.",
+      "practicalAdvice": [
+        "Emphasize that resistance training remains the main stimulus.",
+        "Treat protein supplements as a convenient option, not a requirement.",
+        "Encourage food-based protein sources when practical."
+      ],
+      "source": {
+        "title": "A Systematic Review, Meta-analysis and Meta-regression of the Effect of Protein Supplementation on Resistance Training-induced Gains in Muscle Mass and Strength in Healthy Adults",
+        "organization": "British Journal of Sports Medicine",
+        "year": 2018,
+        "sourceType": "meta_analysis",
+        "doi": "10.1136/bjsports-2017-097608",
+        "pmid": "28698222",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5867436/",
+        "scope": "Healthy adults performing resistance exercise training for at least 6 weeks; protein supplementation and training adaptations."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "excludedPopulation": [
+        "children and adolescents unless reviewed separately",
+        "users with medical nutrition restrictions"
+      ],
+      "limitations": [
+        "The review studied healthy adults and supplementation during resistance training lasting at least 6 weeks."
+      ]
+    },
+    {
+      "id": "protein-total-intake-021",
+      "topic": "daily protein intake",
+      "tags": [
+        "protein",
+        "daily intake",
+        "hypertrophy",
+        "resistance training"
+      ],
+      "audience": "intermediate",
+      "applicablePopulation": [
+        "healthy adults performing resistance training"
+      ],
+      "claim": "For healthy adults performing resistance training, benefits from higher protein intake appear to level off around a total daily intake of approximately 1.6 grams per kilogram of body weight per day.",
+      "practicalAdvice": [
+        "Treat approximately 1.6 g/kg/day as a useful evidence-based reference point for healthy adults, not a mandatory target for everyone.",
+        "Avoid pushing protein intake higher without a clear reason.",
+        "Consider the user's overall diet and medical context."
+      ],
+      "source": {
+        "title": "A Systematic Review, Meta-analysis and Meta-regression of the Effect of Protein Supplementation on Resistance Training-induced Gains in Muscle Mass and Strength in Healthy Adults",
+        "organization": "British Journal of Sports Medicine",
+        "year": 2018,
+        "sourceType": "meta_analysis",
+        "doi": "10.1136/bjsports-2017-097608",
+        "pmid": "28698222",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5867436/",
+        "scope": "Healthy adults performing resistance exercise training for at least 6 weeks; protein supplementation and training adaptations."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "dosage": {
+        "protein": "Approximately 1.6 g/kg/day is a useful reference point for healthy adults doing resistance training; higher intake did not further contribute to fat-free-mass gains in the meta-regression."
+      },
+      "contraindications": [
+        "Do not provide a personalized protein prescription when the user reports a medical condition requiring dietary management."
+      ],
+      "excludedPopulation": [
+        "minors unless using age-appropriate guidance",
+        "users with kidney disease or other medical nutrition restrictions"
+      ],
+      "limitations": [
+        "This value is a population-level reference from a meta-regression, not an exact requirement for every individual."
+      ]
+    },
+    {
+      "id": "protein-supplement-optional-022",
+      "topic": "protein supplements",
+      "tags": [
+        "protein supplement",
+        "whole food",
+        "convenience",
+        "resistance training"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "healthy adults performing resistance training"
+      ],
+      "claim": "Protein supplements are optional. They can help users reach an appropriate daily intake, but they are not required when sufficient protein is obtained from food.",
+      "practicalAdvice": [
+        "Recommend food-first options when practical.",
+        "Describe supplements as a convenience rather than a shortcut.",
+        "Avoid recommending products or doses to minors without appropriate adult and professional guidance."
+      ],
+      "source": {
+        "title": "A Systematic Review, Meta-analysis and Meta-regression of the Effect of Protein Supplementation on Resistance Training-induced Gains in Muscle Mass and Strength in Healthy Adults",
+        "organization": "British Journal of Sports Medicine",
+        "year": 2018,
+        "sourceType": "meta_analysis",
+        "doi": "10.1136/bjsports-2017-097608",
+        "pmid": "28698222",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5867436/",
+        "scope": "Healthy adults performing resistance exercise training for at least 6 weeks; protein supplementation and training adaptations."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "limitations": [
+        "The review evaluated supplementation; it does not mean supplements are superior to an adequate food-based diet."
+      ]
+    },
+    {
+      "id": "youth-rt-safe-supervised-023",
+      "topic": "youth resistance training safety",
+      "tags": [
+        "youth",
+        "adolescents",
+        "children",
+        "resistance training",
+        "supervision",
+        "technique"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "children and adolescents"
+      ],
+      "claim": "Children and adolescents can gain strength with low injury rates when resistance training is well supervised and emphasizes correct technique.",
+      "practicalAdvice": [
+        "Use technique-first language for youth.",
+        "Recommend qualified supervision.",
+        "Use age-appropriate exercises and gradual progression.",
+        "Avoid unsupervised maximal-lifting advice."
+      ],
+      "source": {
+        "title": "Resistance Training for Children and Adolescents",
+        "organization": "American Academy of Pediatrics",
+        "year": 2020,
+        "sourceType": "clinical_report",
+        "doi": "10.1542/peds.2020-1011",
+        "url": "https://publications.aap.org/pediatrics/article/145/6/e20201011/76942/Resistance-Training-for-Children-and-Adolescents",
+        "scope": "Children and adolescents; benefits, safety, supervision, technique, progression, and conditions that require medical consultation.",
+        "note": "Clinical report reaffirmed November 2024."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "contraindications": [
+        "Do not generate advanced or maximal-strength testing instructions for unsupervised minors."
+      ],
+      "limitations": [
+        "Program design should account for the young person's skill competency, goals, and training experience."
+      ]
+    },
+    {
+      "id": "youth-rt-modes-024",
+      "topic": "youth exercise selection",
+      "tags": [
+        "youth",
+        "bodyweight",
+        "bands",
+        "free weights",
+        "machines"
+      ],
+      "audience": "beginner",
+      "applicablePopulation": [
+        "children and adolescents"
+      ],
+      "claim": "Youth resistance training is not limited to lifting heavy weights. It can use bodyweight movements, bands, machines, free weights, medicine balls, kettlebells, and other appropriate resistance modes.",
+      "practicalAdvice": [
+        "Choose age-appropriate exercises the user can perform with control.",
+        "Start with technique and movement quality.",
+        "Select equipment that fits the user's size and skill level."
+      ],
+      "source": {
+        "title": "Resistance Training for Children and Adolescents",
+        "organization": "American Academy of Pediatrics",
+        "year": 2020,
+        "sourceType": "clinical_report",
+        "doi": "10.1542/peds.2020-1011",
+        "url": "https://publications.aap.org/pediatrics/article/145/6/e20201011/76942/Resistance-Training-for-Children-and-Adolescents",
+        "scope": "Children and adolescents; benefits, safety, supervision, technique, progression, and conditions that require medical consultation.",
+        "note": "Clinical report reaffirmed November 2024."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "contraindications": [
+        "Do not suggest equipment the minor cannot use safely or without supervision."
+      ]
+    },
+    {
+      "id": "youth-rt-growth-myth-025",
+      "topic": "youth growth and resistance training",
+      "tags": [
+        "youth",
+        "growth",
+        "growth plates",
+        "myth",
+        "resistance training"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "children and adolescents"
+      ],
+      "claim": "Well-designed resistance-training programs have not been shown to harm growth-plate health, linear growth, or cardiovascular health in youth.",
+      "practicalAdvice": [
+        "Correct the myth that all resistance training automatically stunts growth.",
+        "Still emphasize safe supervision, correct technique, and appropriate progression.",
+        "Do not use this statement to dismiss pain, injury, or medical concerns."
+      ],
+      "source": {
+        "title": "Resistance Training for Children and Adolescents",
+        "organization": "American Academy of Pediatrics",
+        "year": 2020,
+        "sourceType": "clinical_report",
+        "doi": "10.1542/peds.2020-1011",
+        "url": "https://publications.aap.org/pediatrics/article/145/6/e20201011/76942/Resistance-Training-for-Children-and-Adolescents",
+        "scope": "Children and adolescents; benefits, safety, supervision, technique, progression, and conditions that require medical consultation.",
+        "note": "Clinical report reaffirmed November 2024."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "limitations": [
+        "This applies to well-designed programs, not unsafe lifting practices."
+      ]
+    },
+    {
+      "id": "youth-total-training-load-026",
+      "topic": "youth recovery and overuse",
+      "tags": [
+        "youth",
+        "recovery",
+        "overuse injury",
+        "training load",
+        "sports"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "children and adolescents"
+      ],
+      "claim": "Resistance training should be counted as part of a young person's total training load to reduce the risk of overuse injuries.",
+      "practicalAdvice": [
+        "Consider sports practice, physical education, games, and resistance training together.",
+        "Avoid adding a demanding gym program on top of an already heavy schedule without recovery.",
+        "Encourage rest and review the plan when soreness, fatigue, or performance decline persists."
+      ],
+      "source": {
+        "title": "Resistance Training for Children and Adolescents",
+        "organization": "American Academy of Pediatrics",
+        "year": 2020,
+        "sourceType": "clinical_report",
+        "doi": "10.1542/peds.2020-1011",
+        "url": "https://publications.aap.org/pediatrics/article/145/6/e20201011/76942/Resistance-Training-for-Children-and-Adolescents",
+        "scope": "Children and adolescents; benefits, safety, supervision, technique, progression, and conditions that require medical consultation.",
+        "note": "Clinical report reaffirmed November 2024."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "escalationRules": [
+        "Recommend consultation when the user reports persistent pain, repeated injuries, or significant performance decline."
+      ]
+    },
+    {
+      "id": "youth-medical-clearance-027",
+      "topic": "youth medical caution",
+      "tags": [
+        "youth",
+        "medical clearance",
+        "hypertension",
+        "seizure disorder",
+        "cardiac conditions"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "children and adolescents"
+      ],
+      "claim": "Some health situations require medical consultation before a young person starts or continues a resistance-training program.",
+      "practicalAdvice": [
+        "Keep the app's advice general when a minor reports a medical condition.",
+        "Recommend consultation with a qualified medical professional.",
+        "Do not attempt to clear the user for exercise."
+      ],
+      "source": {
+        "title": "Resistance Training for Children and Adolescents",
+        "organization": "American Academy of Pediatrics",
+        "year": 2020,
+        "sourceType": "clinical_report",
+        "doi": "10.1542/peds.2020-1011",
+        "url": "https://publications.aap.org/pediatrics/article/145/6/e20201011/76942/Resistance-Training-for-Children-and-Adolescents",
+        "scope": "Children and adolescents; benefits, safety, supervision, technique, progression, and conditions that require medical consultation.",
+        "note": "Clinical report reaffirmed November 2024."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "escalationRules": [
+        "Escalate when a minor reports a known medical condition, concerning symptoms, or a history of significant injury."
+      ],
+      "limitations": [
+        "The app must not diagnose conditions or decide whether a minor is medically cleared to train."
+      ]
+    },
+    {
+      "id": "reds-definition-028",
+      "topic": "relative energy deficiency in sport",
+      "tags": [
+        "REDs",
+        "low energy availability",
+        "athlete health",
+        "performance"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "female athletes",
+        "male athletes",
+        "physically active users at risk of under-fueling"
+      ],
+      "claim": "Relative Energy Deficiency in Sport, or REDs, is a syndrome of impaired physiological and/or psychological functioning associated with problematic low energy availability. It can affect female and male athletes.",
+      "practicalAdvice": [
+        "Use REDs-aware language when discussing calorie deficits with active users.",
+        "Avoid normalizing chronic under-fueling.",
+        "Explain that health and performance can be affected when training demands are not matched with adequate energy intake."
+      ],
+      "source": {
+        "title": "2023 International Olympic Committee's (IOC) Consensus Statement on Relative Energy Deficiency in Sport (REDs)",
+        "organization": "International Olympic Committee",
+        "year": 2023,
+        "sourceType": "consensus_statement",
+        "doi": "10.1136/bjsports-2023-106994",
+        "url": "https://bjsm.bmj.com/content/57/17/1073",
+        "scope": "Female and male athletes; health and performance consequences associated with problematic low energy availability."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "limitations": [
+        "The app cannot diagnose REDs."
+      ]
+    },
+    {
+      "id": "reds-risk-language-029",
+      "topic": "low energy availability risk",
+      "tags": [
+        "REDs",
+        "calorie deficit",
+        "under-fueling",
+        "restrictive eating",
+        "safety"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "athletes",
+        "physically active users"
+      ],
+      "claim": "Aggressive or prolonged energy restriction can create health and performance risks, especially for active users.",
+      "practicalAdvice": [
+        "Do not generate extreme calorie-deficit plans.",
+        "Do not encourage skipping meals, compensatory exercise, or rapid weight-loss strategies.",
+        "Prefer sustainable, cautious language for body-composition goals."
+      ],
+      "source": {
+        "title": "2023 International Olympic Committee's (IOC) Consensus Statement on Relative Energy Deficiency in Sport (REDs)",
+        "organization": "International Olympic Committee",
+        "year": 2023,
+        "sourceType": "consensus_statement",
+        "doi": "10.1136/bjsports-2023-106994",
+        "url": "https://bjsm.bmj.com/content/57/17/1073",
+        "scope": "Female and male athletes; health and performance consequences associated with problematic low energy availability."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "contraindications": [
+        "Do not provide aggressive weight-loss guidance to minors.",
+        "Do not continue detailed dieting advice when disordered-eating risk language appears."
+      ],
+      "escalationRules": [
+        "Recommend professional support when restrictive eating, persistent under-fueling, or concerning symptoms are reported."
+      ]
+    },
+    {
+      "id": "reds-warning-signs-030",
+      "topic": "REDs safety escalation",
+      "tags": [
+        "REDs",
+        "fatigue",
+        "recovery",
+        "performance decline",
+        "injury risk",
+        "safety escalation"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "athletes",
+        "physically active users"
+      ],
+      "claim": "Persistent fatigue, reduced recovery, declining performance, or repeated injuries may be reasons to stop giving routine fitness advice and recommend professional evaluation.",
+      "practicalAdvice": [
+        "Respond with a safety-focused message rather than a harder training plan.",
+        "Encourage the user to speak with a qualified healthcare professional or sports dietitian.",
+        "Avoid diagnosing the cause based only on chat messages."
+      ],
+      "source": {
+        "title": "2023 International Olympic Committee's (IOC) Consensus Statement on Relative Energy Deficiency in Sport (REDs)",
+        "organization": "International Olympic Committee",
+        "year": 2023,
+        "sourceType": "consensus_statement",
+        "doi": "10.1136/bjsports-2023-106994",
+        "url": "https://bjsm.bmj.com/content/57/17/1073",
+        "scope": "Female and male athletes; health and performance consequences associated with problematic low energy availability."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "escalationRules": [
+        "Escalate for persistent fatigue, repeated injuries, major performance decline, concerning restrictive eating patterns, or other ongoing symptoms."
+      ],
+      "limitations": [
+        "These signs can have multiple causes. The app should not diagnose REDs or any medical condition."
+      ]
+    },
+    {
+      "id": "reds-minor-protection-031",
+      "topic": "minor safety and nutrition",
+      "tags": [
+        "minors",
+        "teenagers",
+        "calorie deficit",
+        "REDs",
+        "safety"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "children and adolescents"
+      ],
+      "claim": "For minors, the app should avoid detailed calorie-cutting prescriptions and prioritize healthy fueling, safe activity, and support from a parent or qualified professional when needed.",
+      "practicalAdvice": [
+        "Use general healthy-eating guidance for minors.",
+        "Avoid numerical calorie-deficit targets for minors.",
+        "Encourage adult and professional support for significant body-composition goals or concerning symptoms."
+      ],
+      "source": {
+        "title": "2023 International Olympic Committee's (IOC) Consensus Statement on Relative Energy Deficiency in Sport (REDs)",
+        "organization": "International Olympic Committee",
+        "year": 2023,
+        "sourceType": "consensus_statement",
+        "doi": "10.1136/bjsports-2023-106994",
+        "url": "https://bjsm.bmj.com/content/57/17/1073",
+        "scope": "Female and male athletes; health and performance consequences associated with problematic low energy availability."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31",
+      "contraindications": [
+        "Do not generate restrictive diets, rapid weight-loss targets, or compensatory-exercise plans for minors."
+      ],
+      "escalationRules": [
+        "Escalate when a minor expresses restrictive eating patterns, persistent fatigue, dizziness, repeated injuries, or major body-image distress."
+      ],
+      "limitations": [
+        "This is a protective app rule informed by REDs safety principles, not a diagnosis."
+      ]
+    }
+  ]
+}
