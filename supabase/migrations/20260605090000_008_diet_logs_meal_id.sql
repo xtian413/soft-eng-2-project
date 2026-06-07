@@ -2,11 +2,11 @@ alter table public.diet_logs
   add column if not exists meal_id text;
 
 update public.diet_logs
-set meal_id = 'snack'
+set meal_id = 'breakfast'
 where meal_id is null;
 
 alter table public.diet_logs
-  alter column meal_id set default 'snack';
+  alter column meal_id set default 'breakfast';
 
 alter table public.diet_logs
   alter column meal_id set not null;

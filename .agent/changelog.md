@@ -4,6 +4,18 @@
 
 ---
 ---
+### [2026-06-07 14:38 +0800] FIX: Compile backend and fix local SQLite default meal_id
+- **Branch**: `jb-branch`
+- **Files Modified**:
+  - `frontend/src/local/migrations.ts`
+  - `backend/dist/services/diet.service.js` (Compiled output)
+  - `.agent/errors.md`
+  - `.agent/changelog.md`
+- **Changes**:
+  - ✅ **Backend Compilation**: Ran `npm run build` in the backend directory to compile the updated `diet.service.ts` typescript logic containing the `meal_id` fallback fix. The previous `dist/` build completely omitted `meal_id` from the Supabase insert query, forcing Supabase to incorrectly apply its `'snack'` default.
+  - ✅ **Local SQLite Default**: Replaced `DEFAULT 'snack'` with `DEFAULT 'breakfast'` for the `meal_id` column in the local SQLite schema creation script (`frontend/src/local/migrations.ts`) to completely eradicate the "Snack Default Bias" (ERR-009).
+  - **Build**: ✅ Checked with `npm run build` in backend yielding successful compilation.
+
 ### [2026-06-07 14:15 +0800] FIX: Resolve mealId defaults, reorder Daily Targets, and fix Android 403/colors
 - **Branch**: `jb-branch`
 - **Files Modified**:

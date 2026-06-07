@@ -88,7 +88,7 @@ const MIGRATIONS: Migration[] = [
       `CREATE TABLE IF NOT EXISTS ${LOCAL_TABLES.dietLogs} (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
-        meal_id TEXT NOT NULL DEFAULT 'snack',
+        meal_id TEXT NOT NULL DEFAULT 'breakfast',
         meal_name TEXT NOT NULL,
         calories REAL,
         protein_g REAL,
@@ -286,7 +286,7 @@ const MIGRATIONS: Migration[] = [
 
       if (!hasMealId) {
         await db.execAsync(
-          `ALTER TABLE ${LOCAL_TABLES.dietLogs} ADD COLUMN meal_id TEXT NOT NULL DEFAULT 'snack'`
+          `ALTER TABLE ${LOCAL_TABLES.dietLogs} ADD COLUMN meal_id TEXT NOT NULL DEFAULT 'breakfast'`
         );
       }
     },

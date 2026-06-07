@@ -174,15 +174,24 @@
 
   4. **Minor race condition**: `LoggedItemDetailsModal` initializes `editMealId` to `'snack'` before the `useEffect` syncs it from the actual entry's `mealId` (`frontend/src/screens/dashboard/Food/LoggedItemDetailsModal.tsx:50`).
 
+  5. **Backend Not Recompiled**: After modifying `diet.service.ts` to fallback to `'breakfast'`, the backend was not recompiled using `npm run build`. The Express server continued running the old `dist/` Javascript, which completely omitted `meal_id` from the Supabase insert query, forcing Supabase to use its column default (`'snack'`).
+
+  6. **Local SQLite Default**: The local SQLite schema creation script (`frontend/src/local/migrations.ts`) also had `DEFAULT 'snack'` for `meal_id`. While local offline creation properly supplied the value, any programmatic insert omitting it locally would trigger this default.
+
 - **Fix**:
   - **P0**: Change Quick Log default to `'breakfast'` (`FoodTab.tsx:273`): `useState<MealId>('breakfast')`
   - **P1**: Add warning logs in `normalizeMealId()` when receiving unexpected values instead of silently defaulting to `'snack'`
   - **P2**: Verify Supabase migration `008` has been applied to the remote instance
   - **P2**: Initialize `editMealId` from `viewingLoggedItem.mealId` directly instead of defaulting to `'snack'` in `LoggedItemDetailsModal`
+  - **P0**: Change fallback `input.meal_id ?? 'snack'` to `input.meal_id ?? 'breakfast'` in `backend/src/services/diet.service.ts`
+  - **P0**: Change fallback `DEFAULT 'snack'` to `DEFAULT 'breakfast'` in `supabase/migrations/20260605090000_008_diet_logs_meal_id.sql`
+  - **P0**: Change fallback `DEFAULT 'snack'` to `DEFAULT 'breakfast'` in `frontend/src/local/migrations.ts`
+  - **P0**: Run `npm run build` in the backend directory to compile the updated typescript logic.
 - **Files**:
   - `frontend/src/screens/dashboard/Food/FoodTab.tsx`
   - `frontend/src/local/dietLogsMapper.ts`
   - `frontend/src/local/repositories/dietLogsRepository.ts`
+  - `frontend/src/local/migrations.ts`
   - `frontend/src/screens/dashboard/Food/LoggedItemDetailsModal.tsx`
   - `backend/src/services/diet.service.ts`
   - `supabase/migrations/20260605090000_008_diet_logs_meal_id.sql`
