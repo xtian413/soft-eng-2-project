@@ -106,6 +106,13 @@ On mobile (< 768px): `grid-template-columns: repeat(2, 1fr)`
 On desktop (≥ 768px): `grid-template-columns: repeat(4, 1fr)`
 - All macro cards: `grid-column: span 1`
 
+### TrainingCalendar Expansion Behavior (2026-06-07)
+The `TrainingCalendar` component in `ProfileTab` now manages its own expanded/collapsed state internally:
+- **Compact mode**: Horizontal week scroll (Sun–Sat) with day cards showing workout type badges
+- **Expanded mode**: Full month grid with prev/next month navigation, activity dots on tracked days, and a detail panel showing meals, workouts, sleep, and water for the selected date
+- **Toggle**: "View All" switches to expanded, "Weekly View" collapses back; month offset resets on reopen
+- **Data flow**: `ProfileTab` fetches history data eagerly on mount and passes `historyWorkouts`, `historyDietLogs`, `historyLoading`, `historyError` as props to TrainingCalendar
+
 ### React Router Navigation Flow
 ```
 /login → (register link) → /register → (submit) → /success → (launch) → /dashboard

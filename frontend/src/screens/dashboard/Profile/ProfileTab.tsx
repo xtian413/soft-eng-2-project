@@ -1,18 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Platform, KeyboardAvoidingView } from 'react-native';
+import { Alert, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Platform, KeyboardAvoidingView } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { useAuthStore } from '@/store/authStore';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import { type GoalKey, type MacroTargets, type ActivityLevel, GOAL_LABELS, MACRO_PRESETS, type MacroRatios } from '@/screens/dashboard/types';
 import { calculateMacros, calculateTDEE } from '@/utils/macroCalculator';
-import { Dumbbell, TrendingDown, Activity, ShieldCheck, LogOut, Lock, ChevronRight, ChevronLeft } from 'lucide-react-native';
+import { Dumbbell, TrendingDown, Activity, ShieldCheck, LogOut, Lock } from 'lucide-react-native';
 import { useProfileStats } from './hooks/useProfileStats';
 import { StatsRow } from './subcomponents/StatsRow';
 import { WeightTrendCard } from './subcomponents/WeightTrendCard';
 import { TrainingCalendar } from './subcomponents/TrainingCalendar';
 import { fetchWorkouts, type Workout } from '@/api/workoutApi';
 import { fetchDietLogs, type DietLog } from '@/api/dietApi';
-import { addMonths, format, getDay, getDaysInMonth, parseISO, startOfMonth } from 'date-fns';
+import { DateDetailSheet } from './subcomponents/DateDetailSheet';
 
 interface ProfileTabProps {
   fullName: string;
@@ -22,7 +22,6 @@ interface ProfileTabProps {
   weightKg: number;
   targets: MacroTargets;
   onSignOut: () => void;
-  setActiveTab: (tab: 'dashboard' | 'food' | 'insights' | 'lift' | 'profile') => void;
 }
 
 function getDefaultMacroPercentages(
@@ -50,7 +49,7 @@ function getDefaultMacroPercentages(
   return { proteinPct: pPct, carbsPct: cPct, fatsPct: fPct };
 }
 
-export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets, onSignOut, setActiveTab }: ProfileTabProps) {
+export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets, onSignOut }: ProfileTabProps) {
   const initials = fullName
     .split(' ')
     .map((n) => n[0])
@@ -78,13 +77,12 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
   const [editFatsPct, setEditFatsPct] = useState(30);
 
   const [isSaving, setIsSaving] = useState(false);
-  const [isHistoryOpen, setHistoryOpen] = useState(false);
-  const [historyMonthOffset, setHistoryMonthOffset] = useState(0);
   const [historyWorkouts, setHistoryWorkouts] = useState<Workout[]>([]);
   const [historyDietLogs, setHistoryDietLogs] = useState<DietLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const [selectedHistoryDate, setSelectedHistoryDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [isDateSheetVisible, setIsDateSheetVisible] = useState(false);
 
   const { totalVolumeKg, weekStreak, weightEntries, calendarDays, loading, error, refetch } = useProfileStats();
 
@@ -280,73 +278,6 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
     };
   }, []);
 
-  useEffect(() => {
-    const monthDate = addMonths(startOfMonth(new Date()), historyMonthOffset);
-    setSelectedHistoryDate(format(monthDate, 'yyyy-MM-dd'));
-  }, [historyMonthOffset]);
-
-  const historyMonthDate = useMemo(
-    () => addMonths(startOfMonth(new Date()), historyMonthOffset),
-    [historyMonthOffset],
-  );
-
-  const historyDays = useMemo(() => {
-    const monthStart = startOfMonth(historyMonthDate);
-    const totalDays = getDaysInMonth(historyMonthDate);
-    const workoutDates = new Set(historyWorkouts.map((workout) => workout.performed_at.split('T')[0]));
-    const dietDates = new Set(historyDietLogs.map((diet) => diet.logged_at.split('T')[0]));
-
-    return Array.from({ length: totalDays }, (_, index) => {
-      const day = new Date(monthStart);
-      day.setDate(monthStart.getDate() + index);
-      const dateStr = format(day, 'yyyy-MM-dd');
-      return {
-        dateStr,
-        dayNumber: index + 1,
-        weekday: getDay(day),
-        hasActivity: workoutDates.has(dateStr) || dietDates.has(dateStr),
-      };
-    });
-  }, [historyMonthDate, historyWorkouts, historyDietLogs]);
-
-  const selectedHistorySummary = useMemo(() => {
-    const workouts = historyWorkouts.filter((workout) => workout.performed_at.startsWith(selectedHistoryDate));
-    const meals = historyDietLogs.filter((diet) => diet.logged_at.startsWith(selectedHistoryDate));
-    return {
-      workouts,
-      meals,
-      sleep: null as null,
-      water: null as null,
-    };
-  }, [historyDietLogs, historyWorkouts, selectedHistoryDate]);
-
-  const handleOpenHistory = () => {
-    setHistoryOpen(true);
-  };
-
-  const handleSelectHistoryMonth = (direction: 'previous' | 'next') => {
-    setHistoryMonthOffset((current) => current + (direction === 'previous' ? -1 : 1));
-  };
-
-  const handleSelectHistoryDate = (dateStr: string) => {
-    setSelectedHistoryDate(dateStr);
-  };
-
-  const historyMonthLabel = format(historyMonthDate, 'MMMM yyyy');
-
-  const historyWeekdayOffset = getDay(historyMonthDate);
-
-  const historyHasAnyActivity = historyDays.some((day) => day.hasActivity);
-
-  const historySelectedDateLabel = format(parseISO(selectedHistoryDate), 'EEEE, MMM d');
-
-  const historySummaryEmpty =
-    selectedHistorySummary.workouts.length === 0 && selectedHistorySummary.meals.length === 0;
-
-  const handleViewAll = () => {
-    setHistoryOpen(true);
-  };
-
   const renderGoalIcon = (goalKey: GoalKey) => {
     switch (goalKey) {
       case 'lean_bulk':
@@ -399,117 +330,20 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
         loading={loading}
       />
 
-      {/* Training Calendar */}
+      {/* Training Calendar — expands in-place to full month grid */}
       <TrainingCalendar
         days={calendarDays}
         loading={loading}
-        setActiveTab={setActiveTab}
-        onViewAll={handleViewAll}
+        historyWorkouts={historyWorkouts}
+        historyDietLogs={historyDietLogs}
+        historyLoading={historyLoading}
+        historyError={historyError}
+        onDateSelect={(dateStr) => {
+          setSelectedDate(dateStr);
+          setIsDateSheetVisible(true);
+        }}
       />
 
-      {isHistoryOpen && (
-        <View style={styles.historyCard}>
-          <View style={styles.historyHeader}>
-            <Text style={styles.historyTitle}>Full Activity History</Text>
-            <View style={styles.historyNavRow}>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => handleSelectHistoryMonth('previous')}
-                style={styles.historyNavButton}
-              >
-                <ChevronLeft size={16} color={Colors.primary} />
-              </TouchableOpacity>
-              <Text style={styles.historyMonthLabel}>{historyMonthLabel}</Text>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => handleSelectHistoryMonth('next')}
-                style={styles.historyNavButton}
-              >
-                <ChevronRight size={16} color={Colors.primary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {historyLoading ? (
-            <ActivityIndicator color={Colors.primary} style={{ marginVertical: spacing.base }} />
-          ) : historyError ? (
-            <View style={styles.errorBanner}>
-              <Text style={styles.errorText}>{historyError}</Text>
-            </View>
-          ) : (
-            <>
-              <View style={styles.historyGrid}>
-                {Array.from({ length: historyWeekdayOffset }).map((_, index) => (
-                  <View key={`blank-${index}`} style={styles.historyDayPlaceholder} />
-                ))}
-                {historyDays.map((day) => (
-                  <TouchableOpacity
-                    key={day.dateStr}
-                    style={[
-                      styles.historyDayCard,
-                      day.dateStr === selectedHistoryDate && styles.historyDayCardActive,
-                    ]}
-                    onPress={() => handleSelectHistoryDate(day.dateStr)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[
-                      styles.historyDayNumber,
-                      day.dateStr === selectedHistoryDate && styles.historyDayNumberActive,
-                    ]}
-                    >
-                      {day.dayNumber}
-                    </Text>
-                    {day.hasActivity && <View style={styles.historyDot} />}
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <View style={styles.historySummaryCard}>
-                <Text style={styles.historySummaryTitle}>{historySelectedDateLabel}</Text>
-                {historySummaryEmpty ? (
-                  <Text style={styles.historyEmptyText}>No recorded activity for this date.</Text>
-                ) : (
-                  <>
-                    <View style={styles.historySection}>
-                      <Text style={styles.historySectionTitle}>Food Intake</Text>
-                      {selectedHistorySummary.meals.length > 0 ? (
-                        selectedHistorySummary.meals.map((meal) => (
-                          <Text key={meal.id} style={styles.historyLineItem}>• {meal.meal_name}</Text>
-                        ))
-                      ) : (
-                        <Text style={styles.historyMissingText}>No meals recorded</Text>
-                      )}
-                    </View>
-                    <View style={styles.historySection}>
-                      <Text style={styles.historySectionTitle}>Workout Sessions</Text>
-                      {selectedHistorySummary.workouts.length > 0 ? (
-                        selectedHistorySummary.workouts.map((workout) => (
-                          <Text key={workout.id} style={styles.historyLineItem}>• {workout.name}</Text>
-                        ))
-                      ) : (
-                        <Text style={styles.historyMissingText}>No workouts recorded</Text>
-                      )}
-                    </View>
-                    <View style={styles.historySection}>
-                      <Text style={styles.historySectionTitle}>Sleep Data</Text>
-                      <Text style={styles.historyMissingText}>Not tracked for this date</Text>
-                    </View>
-                    <View style={styles.historySection}>
-                      <Text style={styles.historySectionTitle}>Water Intake</Text>
-                      <Text style={styles.historyMissingText}>Not tracked for this date</Text>
-                    </View>
-                  </>
-                )}
-                {!historyHasAnyActivity && (
-                  <View style={styles.historyMonthEmpty}>
-                    <Text style={styles.historyEmptyText}>No recorded activity in this month yet.</Text>
-                  </View>
-                )}
-              </View>
-            </>
-          )}
-        </View>
-      )}
 
       {/* Physical Stats Card */}
       <View style={styles.card}>
@@ -952,6 +786,18 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* Date Detail Sheet — rich food/lift history for a selected date */}
+      <DateDetailSheet
+        visible={isDateSheetVisible}
+        date={selectedDate ?? new Date().toISOString().split('T')[0]}
+        userId={useAuthStore.getState().user?.id ?? null}
+        targets={targets}
+        onClose={() => {
+          setIsDateSheetVisible(false);
+          setSelectedDate(null);
+        }}
+      />
+
       {/* Sign Out Confirmation Modal */}
       <Modal visible={isSignOutModalVisible} transparent animationType="fade">
         <View style={styles.confirmOverlay}>
@@ -1348,123 +1194,6 @@ const styles = StyleSheet.create({
     fontSize: typography.xs,
     fontWeight: fontWeight.regular,
     color: Colors.onSurfaceVariant,
-  },
-  historyCard: {
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderRadius: radius.lg,
-    padding: spacing.base,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.15)',
-  },
-  historyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  historyTitle: {
-    fontSize: typography.sm,
-    fontWeight: fontWeight.bold,
-    color: Colors.onSurface,
-  },
-  historyNavRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  historyNavButton: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.full,
-    backgroundColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  historyMonthLabel: {
-    fontSize: typography.sm,
-    color: Colors.onSurface,
-    fontWeight: fontWeight.medium,
-  },
-  historyGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  historyDayPlaceholder: {
-    width: 44,
-    height: 44,
-  },
-  historyDayCard: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  historyDayCardActive: {
-    backgroundColor: 'rgba(14, 165, 233, 0.1)',
-    borderColor: Colors.primary,
-  },
-  historyDayNumber: {
-    fontSize: typography.sm,
-    color: Colors.onSurface,
-    fontWeight: fontWeight.bold,
-  },
-  historyDayNumberActive: {
-    color: Colors.primary,
-  },
-  historyDot: {
-    width: 6,
-    height: 6,
-    borderRadius: radius.full,
-    backgroundColor: Colors.primary,
-    marginTop: spacing.xs,
-  },
-  historySummaryCard: {
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: radius.md,
-    padding: spacing.base,
-  },
-  historySummaryTitle: {
-    fontSize: typography.sm,
-    fontWeight: fontWeight.bold,
-    color: Colors.onSurface,
-    marginBottom: spacing.sm,
-  },
-  historySection: {
-    marginTop: spacing.sm,
-  },
-  historySectionTitle: {
-    fontSize: typography.xs,
-    color: Colors.outline,
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase',
-  },
-  historyLineItem: {
-    fontSize: typography.sm,
-    color: Colors.onSurface,
-    marginBottom: spacing.xs,
-  },
-  historyMissingText: {
-    fontSize: typography.sm,
-    color: Colors.outline,
-  },
-  historyEmptyText: {
-    fontSize: typography.sm,
-    color: Colors.outline,
-    textAlign: 'center',
-  },
-  historyMonthEmpty: {
-    marginTop: spacing.md,
-    padding: spacing.sm,
-    backgroundColor: Colors.surface,
-    borderRadius: radius.md,
-    alignItems: 'center',
   },
   statsGrid: {
     flexDirection: 'column',

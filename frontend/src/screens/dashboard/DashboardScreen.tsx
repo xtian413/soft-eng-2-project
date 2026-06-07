@@ -637,7 +637,6 @@ export default function DashboardScreen() {
             weightKg={weightKg}
             targets={targets}
             onSignOut={signOut}
-            setActiveTab={setActiveTab}
           />
         );
     }

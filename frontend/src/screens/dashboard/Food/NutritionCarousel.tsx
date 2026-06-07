@@ -13,6 +13,7 @@ interface NutritionCarouselProps {
   visibleMicros: string[];
   setVisibleMicros: React.Dispatch<React.SetStateAction<string[]>>;
   triggerToast: (msg: string) => void;
+  readOnly?: boolean;
 }
 
 type NutrientSlideType = 'energy' | 'macros' | 'micros';
@@ -23,6 +24,7 @@ export function NutritionCarousel({
   visibleMicros,
   setVisibleMicros,
   triggerToast,
+  readOnly = false,
 }: NutritionCarouselProps) {
   const [nutrientSlide, setNutrientSlide] = useState<NutrientSlideType>('energy');
   const [isMicrosModalOpen, setIsMicrosModalOpen] = useState(false);
@@ -201,16 +203,18 @@ export function NutritionCarousel({
         <View style={styles.microsProgressContainer}>
           <View style={styles.microsProgressHeader}>
             <Text style={styles.microsSectionTitle}>Active Micronutrients</Text>
-            <TouchableOpacity
-              style={styles.customizeMicrosBtn}
-              onPress={() => setIsMicrosModalOpen(true)}
-              activeOpacity={0.75}
-              accessibilityRole="button"
-              accessibilityLabel="Configure micronutrients"
-            >
-              <Settings size={14} color={Colors.primary} style={styles.settingsIcon} />
-              <Text style={styles.customizeMicrosBtnText}>Configure</Text>
-            </TouchableOpacity>
+            {!readOnly && (
+              <TouchableOpacity
+                style={styles.customizeMicrosBtn}
+                onPress={() => setIsMicrosModalOpen(true)}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="Configure micronutrients"
+              >
+                <Settings size={14} color={Colors.primary} style={styles.settingsIcon} />
+                <Text style={styles.customizeMicrosBtnText}>Configure</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           <View style={styles.microsBarsList}>
@@ -247,13 +251,15 @@ export function NutritionCarousel({
         </View>
       )}
 
-      <MicrosConfigModal
-        isOpen={isMicrosModalOpen}
-        onClose={() => setIsMicrosModalOpen(false)}
-        visibleMicros={visibleMicros}
-        setVisibleMicros={setVisibleMicros}
-        triggerToast={triggerToast}
-      />
+      {!readOnly && (
+        <MicrosConfigModal
+          isOpen={isMicrosModalOpen}
+          onClose={() => setIsMicrosModalOpen(false)}
+          visibleMicros={visibleMicros}
+          setVisibleMicros={setVisibleMicros}
+          triggerToast={triggerToast}
+        />
+      )}
     </View>
   );
 }

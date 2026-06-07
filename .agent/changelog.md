@@ -3,6 +3,19 @@
 **Format**: `[YYYY-MM-DD HH:MM +TZ] TYPE: description`
 
 ---
+---
+### [2026-06-07 16:30 +0800] REFACTOR: History feature — TrainingCalendar now expands in-place instead of appending separate card
+- **Branch**: `jb-branch`
+- **Files Modified**:
+  - `frontend/src/screens/dashboard/Profile/subcomponents/TrainingCalendar.tsx`
+  - `frontend/src/screens/dashboard/Profile/ProfileTab.tsx`
+- **Changes**:
+  - ✅ **In-place expansion**: TrainingCalendar now manages its own expanded/collapsed state internally. "View All" swaps the compact week scroll for a full month grid within the same component — no separate card appended below.
+  - ✅ **Month navigation**: Prev/next arrows, day grid with activity dots, and date detail panel (meals, workouts, sleep, water) moved into TrainingCalendar.
+  - ✅ **Dead code removed**: Deleted ~160 lines of duplicated historyCard JSX + styles from ProfileTab. Removed stale history state (`isHistoryOpen`, `historyMonthOffset`, `selectedHistoryDate`, all derived values and handlers).
+  - ✅ **Props passed down**: `historyWorkouts`, `historyDietLogs`, `historyLoading`, `historyError` passed from ProfileTab to TrainingCalendar.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors
+
 ### [2026-06-07 11:30 +0800] REFACTOR: Phase 2 TDEE & Macro Engine code review fixes + goal consolidation
 - **Branch**: `jb-branch`
 - **Files Modified**:

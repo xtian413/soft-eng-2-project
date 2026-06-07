@@ -10,6 +10,7 @@ interface MealDiarySectionProps {
   onOpenSearch: (mealId: MealId) => void;
   onItemPress: (entry: FoodLogEntry) => void;
   onDeleteEntry: (id: string) => void;
+  readOnly?: boolean;
 }
 
 const mealDefs: { id: MealId; name: string }[] = [
@@ -106,7 +107,7 @@ function SwipeableRow({ children, onDelete }: SwipeableRowProps) {
   );
 }
 
-export function MealDiarySection({ foodLogs, onOpenSearch, onItemPress, onDeleteEntry }: MealDiarySectionProps) {
+export function MealDiarySection({ foodLogs, onOpenSearch, onItemPress, onDeleteEntry, readOnly = false }: MealDiarySectionProps) {
   const renderMealIcon = (mealId: MealId) => {
     switch (mealId) {
       case 'breakfast':
@@ -138,22 +139,24 @@ export function MealDiarySection({ foodLogs, onOpenSearch, onItemPress, onDelete
                   </Text>
                 </View>
               </View>
-              <TouchableOpacity
-                style={styles.mealAddCircleBtn}
-                onPress={() => onOpenSearch(meal.id)}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={`Add food to ${meal.name}`}
-                hitSlop={8}
-              >
-                <Plus size={14} color={Colors.primaryContainer} strokeWidth={3} />
-              </TouchableOpacity>
+              {!readOnly && (
+                <TouchableOpacity
+                  style={styles.mealAddCircleBtn}
+                  onPress={() => onOpenSearch(meal.id)}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add food to ${meal.name}`}
+                  hitSlop={8}
+                >
+                  <Plus size={14} color={Colors.primaryContainer} strokeWidth={3} />
+                </TouchableOpacity>
+              )}
             </View>
 
             {logged.length > 0 && (
               <View style={styles.loggedRowsList}>
-                {logged.map((entry) => (
-                  <SwipeableRow key={entry.id} onDelete={() => onDeleteEntry(entry.id)}>
+                {logged.map((entry) => {
+                  const rowContent = (
                     <TouchableOpacity
                       style={styles.loggedRow}
                       onPress={() => onItemPress(entry)}
@@ -179,8 +182,16 @@ export function MealDiarySection({ foodLogs, onOpenSearch, onItemPress, onDelete
                         <Text style={styles.loggedRowCaloriesLabel}>kcal</Text>
                       </View>
                     </TouchableOpacity>
-                  </SwipeableRow>
-                ))}
+                  );
+
+                  return readOnly ? (
+                    <View key={entry.id}>{rowContent}</View>
+                  ) : (
+                    <SwipeableRow key={entry.id} onDelete={() => onDeleteEntry(entry.id)}>
+                      {rowContent}
+                    </SwipeableRow>
+                  );
+                })}
               </View>
             )}
           </View>

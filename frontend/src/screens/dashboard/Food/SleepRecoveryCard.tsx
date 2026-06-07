@@ -10,9 +10,10 @@ interface SleepRecoveryCardProps {
   waketime: string;
   setWaketime: (val: string) => void;
   triggerToast: (msg: string) => void;
+  readOnly?: boolean;
 }
 
-export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, triggerToast }: SleepRecoveryCardProps) {
+export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, triggerToast, readOnly = false }: SleepRecoveryCardProps) {
   const [activeTimePicker, setActiveTimePicker] = useState<'bed' | 'wake' | null>(null);
   const [pickerHour, setPickerHour] = useState(12);
   const [pickerMinute, setPickerMinute] = useState(0);
@@ -120,39 +121,55 @@ export function SleepRecoveryCard({ bedtime, setBedtime, waketime, setWaketime, 
         {sleepMetrics.cyclesFeedback} · Target: 8.0 hrs
       </Text>
 
-      <View style={styles.sleepSteppersContainer}>
-        <View style={styles.sleepStepperCol}>
-          <Text style={styles.sleepStepperLabel}>Bedtime</Text>
-          <TouchableOpacity style={styles.sleepTimeDisplayRowPressable} onPress={() => openTimePicker('bed')} activeOpacity={0.75}>
-            <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(bedtime)}</Text>
-            <Edit2 size={14} color="#0ea5e9" style={styles.sleepTimeEditIcon} />
-          </TouchableOpacity>
-          <View style={styles.stepperActionRow}>
-            <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('bed', -30)} activeOpacity={0.75}>
-              <Text style={styles.stepperBtnText}>-30m</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('bed', 30)} activeOpacity={0.75}>
-              <Text style={styles.stepperBtnText}>+30m</Text>
-            </TouchableOpacity>
+      {readOnly ? (
+        <View style={styles.sleepSteppersContainer}>
+          <View style={styles.sleepStepperCol}>
+            <Text style={styles.sleepStepperLabel}>Bedtime</Text>
+            <View style={styles.sleepTimeDisplayRowPressable}>
+              <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(bedtime)}</Text>
+            </View>
+          </View>
+          <View style={styles.sleepStepperCol}>
+            <Text style={styles.sleepStepperLabel}>Wakeup</Text>
+            <View style={styles.sleepTimeDisplayRowPressable}>
+              <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(waketime)}</Text>
+            </View>
           </View>
         </View>
-
-        <View style={styles.sleepStepperCol}>
-          <Text style={styles.sleepStepperLabel}>Wakeup</Text>
-          <TouchableOpacity style={styles.sleepTimeDisplayRowPressable} onPress={() => openTimePicker('wake')} activeOpacity={0.75}>
-            <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(waketime)}</Text>
-            <Edit2 size={14} color="#0ea5e9" style={styles.sleepTimeEditIcon} />
-          </TouchableOpacity>
-          <View style={styles.stepperActionRow}>
-            <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('wake', -30)} activeOpacity={0.75}>
-              <Text style={styles.stepperBtnText}>-30m</Text>
+      ) : (
+        <View style={styles.sleepSteppersContainer}>
+          <View style={styles.sleepStepperCol}>
+            <Text style={styles.sleepStepperLabel}>Bedtime</Text>
+            <TouchableOpacity style={styles.sleepTimeDisplayRowPressable} onPress={() => openTimePicker('bed')} activeOpacity={0.75}>
+              <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(bedtime)}</Text>
+              <Edit2 size={14} color="#0ea5e9" style={styles.sleepTimeEditIcon} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('wake', 30)} activeOpacity={0.75}>
-              <Text style={styles.stepperBtnText}>+30m</Text>
+            <View style={styles.stepperActionRow}>
+              <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('bed', -30)} activeOpacity={0.75}>
+                <Text style={styles.stepperBtnText}>-30m</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('bed', 30)} activeOpacity={0.75}>
+                <Text style={styles.stepperBtnText}>+30m</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <View style={styles.sleepStepperCol}>
+            <Text style={styles.sleepStepperLabel}>Wakeup</Text>
+            <TouchableOpacity style={styles.sleepTimeDisplayRowPressable} onPress={() => openTimePicker('wake')} activeOpacity={0.75}>
+              <Text style={styles.sleepTimeDisplayText}>{formatTo12Hour(waketime)}</Text>
+              <Edit2 size={14} color="#0ea5e9" style={styles.sleepTimeEditIcon} />
             </TouchableOpacity>
+            <View style={styles.stepperActionRow}>
+              <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('wake', -30)} activeOpacity={0.75}>
+                <Text style={styles.stepperBtnText}>-30m</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.stepperBtn} onPress={() => adjustTime('wake', 30)} activeOpacity={0.75}>
+                <Text style={styles.stepperBtnText}>+30m</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
+      )}
 
       <View style={styles.sleepBarRow}>
         <View style={styles.sleepProgressBg}>

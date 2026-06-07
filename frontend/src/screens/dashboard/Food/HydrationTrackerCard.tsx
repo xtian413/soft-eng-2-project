@@ -10,6 +10,7 @@ interface HydrationTrackerCardProps {
   waterGlassStates: boolean[];
   setWaterGlassStates: React.Dispatch<React.SetStateAction<boolean[]>>;
   triggerToast: (msg: string) => void;
+  readOnly?: boolean;
 }
 
 export function HydrationTrackerCard({
@@ -18,6 +19,7 @@ export function HydrationTrackerCard({
   waterGlassStates,
   setWaterGlassStates,
   triggerToast,
+  readOnly = false,
 }: HydrationTrackerCardProps) {
   const [isEditingHydration, setIsEditingHydration] = useState(false);
   const [hydrationGoalInput, setHydrationGoalInput] = useState(String(hydrationGoal));
@@ -72,17 +74,19 @@ export function HydrationTrackerCard({
         </View>
         <View style={styles.goalRow}>
           <Text style={styles.hydrationGoalLabel}>Goal: {(hydrationGoal / 1000).toFixed(2)}L</Text>
-          <TouchableOpacity
-            onPress={() => {
-              setIsEditingHydration(true);
-              setHydrationGoalInput(String(hydrationGoal));
-            }}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Edit hydration goal"
-          >
-            <Edit2 size={14} color={Colors.outline} />
-          </TouchableOpacity>
+          {!readOnly && (
+            <TouchableOpacity
+              onPress={() => {
+                setIsEditingHydration(true);
+                setHydrationGoalInput(String(hydrationGoal));
+              }}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Edit hydration goal"
+            >
+              <Edit2 size={14} color={Colors.outline} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -145,18 +149,22 @@ export function HydrationTrackerCard({
       <View style={styles.glassRow}>
         {Array.from({ length: waterGlassCount }).map((_, idx) => {
           const filled = waterGlassStates[idx] === true;
-          const isNextToFill = idx === nextUnfilledIdx;
-          const isLastToEmpty = idx === lastFilledIdx;
+          const isNextToFill = !readOnly && idx === nextUnfilledIdx;
+          const isLastToEmpty = !readOnly && idx === lastFilledIdx;
 
           return (
             <TouchableOpacity
               key={idx}
-              style={[styles.glassBtn, filled && styles.glassBtnFilled, isNextToFill && styles.glassBtnNext]}
-              onPress={() => handleWaterGlassToggle(idx)}
-              activeOpacity={0.75}
-              accessibilityRole="button"
-              accessibilityLabel={`${filled ? 'Remove' : 'Add'} water glass ${idx + 1}`}
-              accessibilityState={{ checked: filled }}
+              style={[
+                styles.glassBtn,
+                filled && styles.glassBtnFilled,
+                isNextToFill && styles.glassBtnNext,
+              ]}
+              onPress={readOnly ? undefined : () => handleWaterGlassToggle(idx)}
+              activeOpacity={readOnly ? 1 : 0.75}
+              accessibilityRole={readOnly ? 'none' : 'button'}
+              accessibilityLabel={readOnly ? undefined : `${filled ? 'Remove' : 'Add'} water glass ${idx + 1}`}
+              accessibilityState={readOnly ? undefined : { checked: filled }}
             >
               <Droplet size={18} color={filled ? '#0ea5e9' : 'rgba(110, 120, 129, 0.4)'} fill={filled ? '#0ea5e9' : 'transparent'} />
               {isNextToFill && (
