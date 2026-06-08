@@ -2059,7 +2059,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         onRequestClose={() => setShowRoutineModal(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.routineModalShell}
         >
           {/* Fixed header — always visible */}
@@ -2240,7 +2240,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         onRequestClose={() => setShowCustomExerciseModal(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
         >
           <View style={styles.modalContent}>
@@ -2323,7 +2323,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         }}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
         >
           <View style={styles.configSheet}>
