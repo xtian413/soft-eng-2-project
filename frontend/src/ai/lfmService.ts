@@ -12,7 +12,7 @@ const DIET_STORAGE_KEY = 'gemi:dietLogs';
 // All inference is handled by the laptop-hosted Ollama server.
 // The Android emulator reaches the host machine via the special 10.0.2.2 gateway.
 const DEFAULT_INSIGHT_MAX_TOKENS = 96;
-const DEFAULT_FITNESS_INSIGHT_MAX_TOKENS = 150;
+const DEFAULT_FITNESS_INSIGHT_MAX_TOKENS = 300;
 const DEFAULT_FITNESS_INSIGHT_TIMEOUT_MS = 90_000;
 const DEFAULT_INSIGHT_CHAT_MAX_TOKENS = 128;
 const DEFAULT_INSIGHT_CHAT_TIMEOUT_MS = 90_000;
@@ -170,12 +170,14 @@ async function generateResponseWithTimeout(
         model: 'qwen2.5:3b-instruct',
         prompt,
         stream: false,
+        keep_alive: '20m', // Keep model in memory for 20 minutes to avoid reload latency
         options: {
           temperature,
           top_p: topP,
           top_k: topK,
           repeat_penalty: repeatPenalty,
           num_predict: maxTokens,
+          num_ctx: 2048, // Limit context window allocation to speed up processing
         },
       }),
     });

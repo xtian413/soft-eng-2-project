@@ -47,6 +47,13 @@ export function buildFitnessInsightSignature(input: FitnessInsightInput) {
           durationSeconds: set.durationSeconds,
         })),
       })),
+    dailyLogs: (input.dailyLogs ?? [])
+      .slice(0, 7)
+      .map((l) => ({
+        date: l.date,
+        sleepHrs: Math.round((l.sleep_hours ?? 0) * 4) / 4,
+        waterMl: Math.round((l.water_ml ?? 0) / 250) * 250,
+      })),
   });
 }
 

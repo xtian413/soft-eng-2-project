@@ -3,6 +3,7 @@ import { retrieveEvidence } from '@/ai/rag/retrieveEvidence';
 import type { EvidenceCard } from '@/ai/rag/evidenceTypes';
 import type { RoutedCoachIntent } from '@/ai/router/intentTypes';
 import type { WorkoutLog } from '@/ai/prompts';
+import type { LocalDailyLog } from '@/local/schema';
 
 export type FitnessInsightInput = {
   userName: string;
@@ -12,6 +13,7 @@ export type FitnessInsightInput = {
   targets: MacroTargets;
   foodLogs: FoodLogEntry[];
   workouts: WorkoutLog[];
+  dailyLogs?: LocalDailyLog[];
 };
 
 export type FitnessInsight = {
@@ -133,6 +135,58 @@ function buildMealSummary(foodLogs: FoodLogEntry[], limit = 3) {
     .join('\n');
 }
 
+function buildRecoverySignals(
+  dailyLogs: LocalDailyLog[],
+  workouts: WorkoutLog[],
+): string | null {
+  const last7 = dailyLogs
+    .filter((l) => l.date && (l.sleep_hours !== null || l.water_ml !== null))
+    .slice(0, 7);
+
+  if (last7.length === 0) return null;
+
+  const sleepEntries = last7.filter((l) => typeof l.sleep_hours === 'number' && l.sleep_hours > 0);
+  const waterEntries = last7.filter((l) => typeof l.water_ml === 'number' && l.water_ml > 0);
+
+  const avgSleep = sleepEntries.length > 0
+    ? sleepEntries.reduce((s, l) => s + (l.sleep_hours ?? 0), 0) / sleepEntries.length
+    : null;
+  const avgWater = waterEntries.length > 0
+    ? waterEntries.reduce((s, l) => s + (l.water_ml ?? 0), 0) / waterEntries.length
+    : null;
+  const lowSleepCount = sleepEntries.filter((l) => (l.sleep_hours ?? 0) < 7).length;
+
+  // Detect low-sleep days followed the next day by a low-volume workout
+  let lowSleepLowVolumeCorrelation = false;
+  for (const log of sleepEntries) {
+    if ((log.sleep_hours ?? 0) >= 7) continue;
+    const nextDay = new Date(log.date);
+    nextDay.setDate(nextDay.getDate() + 1);
+    const nextDayStr = nextDay.toISOString().split('T')[0];
+    const nextWorkout = workouts.find((w) => w.performedAt.startsWith(nextDayStr));
+    const avgWorkoutVolume = workouts.length > 0
+      ? workouts.reduce((s, w) => s + workoutVolume(w), 0) / workouts.length
+      : 0;
+    if (nextWorkout && workoutVolume(nextWorkout) < avgWorkoutVolume * 0.85) {
+      lowSleepLowVolumeCorrelation = true;
+      break;
+    }
+  }
+
+  const lines: string[] = [];
+  if (avgSleep !== null) {
+    lines.push(`Sleep signal: avg ${avgSleep.toFixed(1)} hrs over ${sleepEntries.length} logged nights (${lowSleepCount} night${lowSleepCount !== 1 ? 's' : ''} below 7 hrs).`);
+  }
+  if (avgWater !== null) {
+    lines.push(`Hydration signal: avg ${Math.round(avgWater)} ml per logged day over ${waterEntries.length} days.`);
+  }
+  if (lowSleepLowVolumeCorrelation) {
+    lines.push('Recovery-performance link detected: at least one low-sleep night preceded a lower-volume workout the following day.');
+  }
+
+  return lines.length > 0 ? lines.join('\n') : null;
+}
+
 function buildRankedSignals(input: FitnessInsightInput) {
   const totals = sumFood(input.foodLogs);
   const macroGaps = [
@@ -171,7 +225,7 @@ function buildRankedSignals(input: FitnessInsightInput) {
     ...new Set(recentWorkouts.flatMap((workout) => workout.sets.map((set) => set.exercise).filter(Boolean))),
   ].slice(0, 5);
 
-  return [
+  const signalLines = [
     `Nutrition signal: ${input.foodLogs.length} meals logged, ${roundNumber(totals.calories)} of ${input.targets.calories} kcal (${percentOfTarget(totals.calories, input.targets.calories)}%).`,
     `Largest macro gap: ${lowestMacro.label} is ${lowestMacro.current}${lowestMacro.unit} of ${lowestMacro.target}${lowestMacro.unit} (${lowestMacro.percent}%, ${lowestMacro.delta}${lowestMacro.unit}).`,
     lastWorkout
@@ -180,7 +234,14 @@ function buildRankedSignals(input: FitnessInsightInput) {
     recentExercises.length > 0
       ? `Recent exercises: ${recentExercises.join(', ')}.`
       : 'Recent exercises: none logged.',
-  ].join('\n');
+  ];
+
+  const recoverySignals = buildRecoverySignals(input.dailyLogs ?? [], input.workouts);
+  if (recoverySignals) {
+    signalLines.push(recoverySignals);
+  }
+
+  return signalLines.join('\n');
 }
 
 function buildCompactEvidence(cards: EvidenceCard[]) {
@@ -256,11 +317,12 @@ function buildEvidenceBlock(input: FitnessInsightInput) {
 }
 
 const INSIGHT_SYSTEM_PROMPT = [
-  'You are Gemi, an on-device fitness analyst.',
-  'Use DATA first. RAG is only a small hint.',
-  'Do not invent unlogged meals, workouts, sleep, or body-weight trends.',
-  'SUMMARY, NUTRITION, TRAINING, and NEXT must each include at least one DATA number.',
-  'Avoid generic advice. Do not summarize RAG as the main insight.',
+  'You are Gemi, a warm, encouraging, and personal fitness coach.',
+  'Always address the user in the second person (use "you", "your" — never use their name or say "he/she/they").',
+  'Use DATA and SIGNALS first. RAG is only a small hint. Do not invent unlogged meals, workouts, sleep, or body weight.',
+  'If SIGNALS includes a recovery-performance link or sleep/hydration signal, mention it in TRAINING or SUMMARY using the specific numbers given.',
+  'SUMMARY, NUTRITION, TRAINING, and NEXT must each include at least one number from DATA or SIGNALS.',
+  'Your tone should be motivating and supportive. Celebrate logged progress.',
   'Return exactly: TITLE=... SUMMARY=... NUTRITION=... TRAINING=... NEXT=... CONFIDENCE=...',
 ].join(' ');
 
@@ -307,11 +369,13 @@ export function buildFitnessInsightRepairPrompt(
 }
 
 const INSIGHT_CHAT_SYSTEM_PROMPT = [
-  'You are Gemi, an on-device fitness chat coach.',
-  'Answer only from DATA, CURRENT_INSIGHT, and RAG.',
-  'If a meal, workout, metric, or trend is missing, say it is not logged.',
-  'Do not invent medical diagnoses, exact body changes, or unlogged sessions.',
-  'Give a practical answer in 2 to 4 short sentences.',
+  'You are Gemi, a warm, friendly, and motivating fitness chat coach.',
+  'Always speak directly to the user in the second person ("you", "your").',
+  'Answer only from DATA, CURRENT_INSIGHT, and RAG. If data is missing, say so kindly.',
+  'Do not invent medical diagnoses, body changes, or unlogged sessions.',
+  'Keep your answer under 4 short, actionable sentences.',
+  'Do not include any headers, labels (like "DATA:", "CURRENT_INSIGHT:"), or markdown in your response.',
+  'When suggesting food to close a protein or carb gap, check the remaining fat budget first — suggest low-fat options (egg whites, chicken breast, whey shake) when remaining fat is under 20g.',
 ].join(' ');
 
 export function buildFitnessInsightChatPrompt(
@@ -362,11 +426,12 @@ function parseLabeledSections(output: string) {
     const label = match[1].toUpperCase();
     const valueStart = (match.index ?? 0) + match[0].length;
     const valueEnd = index + 1 < matches.length ? matches[index + 1].index ?? output.length : output.length;
-    const value = output
+    const rawValue = output
       .slice(valueStart, valueEnd)
       .trim()
-      .replace(/\s+CONFID(?:ENCE)?\s*$/i, '')
-      .replace(/^["']|["']$/g, '');
+      .replace(/\s+CONFID(?:ENCE)?\s*$/i, '');
+    
+    const value = cleanLine(rawValue);
     if (value) {
       fields.set(label, value);
     }
@@ -381,13 +446,13 @@ function extractLine(sections: Map<string, string>, label: string) {
   if (/\b(\d+\s+to\s+\d+|under\s+\d+|one specific|clear words|high,\s*medium|no markdown|no bullets)\b/i.test(value)) {
     return null;
   }
-  return value;
+  return cleanLine(value);
 }
 
 function cleanLine(value: string) {
   return value
     .replace(/^(title|summary|nutrition|training|next|confidence)\s*[:=\-]\s*/i, '')
-    .replace(/^["']|["']$/g, '')
+    .replace(/^[\s*"'`•#-]+|[\s*"'`•#-]+$/g, '')
     .trim();
 }
 
@@ -482,7 +547,10 @@ export function parseFitnessInsight(output: string): FitnessInsight {
   };
 }
 
-export function assessFitnessInsightQuality(insight: FitnessInsight): FitnessInsightQuality {
+export function assessFitnessInsightQuality(
+  insight: FitnessInsight,
+  input?: FitnessInsightInput,
+): FitnessInsightQuality {
   const reasons: string[] = [];
   const genericFields: string[] = [];
   const fields = [
@@ -514,6 +582,15 @@ export function assessFitnessInsightQuality(insight: FitnessInsight): FitnessIns
 
   if (anchoredFields.length < 2) {
     reasons.push('insight is not anchored enough to logged user data');
+  }
+
+  if (input?.dailyLogs && input.dailyLogs.some((l) => l.sleep_hours || l.water_ml)) {
+    const hasRecoveryMention = [insight.training, insight.summary].some(
+      (field) => /\b(sleep|water|hydration|hrs?|ml)\b/i.test(field)
+    );
+    if (!hasRecoveryMention) {
+      reasons.push('recovery data is available but not referenced in insight');
+    }
   }
 
   const normalized = fields.map(([field, value]) => [field, normalizeInsightText(value)] as const);
