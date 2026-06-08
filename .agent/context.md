@@ -1,6 +1,6 @@
 # context.md — Project-Wide Context & Notes
 ## Gemi
-**Last Updated**: 2026-06-07T15:10:00+08:00
+**Last Updated**: 2026-06-08T23:25:00+08:00
 
 ---
 
@@ -12,7 +12,7 @@
 | Course | CCS 308-CS33S1 |
 | Author | Christian Gamos (`chris.gamos.13@gmail.com`) |
 | Repo | `soft-eng-2-project` |
-| Active Branch | `jb-branch` |
+| Active Branch | `ai-optimization` |
 | Base Branch | `master` |
 | Web App URL (dev) | N/A — web/ subproject deleted; project is now pure Expo React Native |
 
@@ -116,6 +116,15 @@ The `TrainingCalendar` component in `ProfileTab` manages its own expanded/collap
 - **Toggle**: "View All" / "Weekly View" text link; month/week offsets reset on toggle.
 - **Data flow**: `ProfileTab` fetches history data (workouts, diet logs, and local daily logs via `getDailyLogsByUser`) eagerly on mount and passes `historyWorkouts`, `historyDietLogs`, `historyDailyLogs`, `historyLoading`, `historyError` as props. Compact mode falls back to `days` prop when history data is empty.
 - **Title**: Renamed from "Training Calendar" to "Fitness Journey".
+
+### 🚀 Local LLM Developer Host-Bridge Mode (2026-06-08)
+- **Problem**: Emulator CPU limits result in slow local LLM generation (~85s per prompt) and high risk of OOM app crashes when loading 2GB+ model files.
+- **Solution**: Implemented `USE_HOST_LLM_BRIDGE = true` inside `frontend/src/ai/lfmService.ts`.
+- **Mechanism**:
+  - The app skips loading the massive model file into the Android emulator's RAM.
+  - All inference requests are proxied via `10.0.2.2:11434/api/generate` to Ollama or llama.cpp server running on the host laptop, leveraging the native CPU/GPU hardware.
+  - Unlocks sub-second response times for development and testing.
+- **Reference**: Detailed troubleshooting steps (such as the SD card `tee` permissions workaround and Expanded Emulator Partition setups) are detailed in `frontend/LFM_OPTIMIZATION_GUIDE.md`.
 
 ### React Router Navigation Flow
 ```

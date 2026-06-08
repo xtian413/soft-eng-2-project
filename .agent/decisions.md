@@ -161,6 +161,16 @@
   3. Keeps all inference offline with full control over model lifecycle and caching.
 - **Implications**: Add native llama.cpp build, JNI bridge, GGUF asset handling, and prompt/template alignment with LFM2.5.
 
+### [DEC-015] Host-Bridge Developer Mode for Local LLM Testing
+- **Date**: 2026-06-08
+- **Status**: Active
+- **Decision**: Implement a configurable host-bridge routing mechanism (`USE_HOST_LLM_BRIDGE = true`) that routes LFM inference prompts directly to the host development machine running an Ollama or llama-server instance (exposing GPU inference) via `http://10.0.2.2:11434`.
+- **Rationale**:
+  1. **Latency**: Emulated CPU inference on Android takes ~85s per response; GPU-enabled host-bridge inference delivers sub-second responses.
+  2. **Memory Overheads**: Loading the 2GB model weights directly into the emulator RAM often triggers low-memory system crashes (OOMs).
+  3. **Faster Iteration**: Allows testing prompt engineering, fallback logic, and JSON parsing rates without waiting on virtualized CPU execution loops.
+- **Implications**: The host machine must be running Ollama or llama-server, and be plugged in (gaming laptop power management profiles throttle GPU speeds when running on battery).
+
 ---
 
 *Append new decisions using the `[DEC-NNN]` format with full context.*

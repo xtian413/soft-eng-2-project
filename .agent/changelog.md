@@ -3,6 +3,22 @@
 **Format**: `[YYYY-MM-DD HH:MM +TZ] TYPE: description`
 
 ---
+### [2026-06-08 23:25 +0800] FEAT: Host-Bridge Local LLM Acceleration & Git Rebase Integration
+- **Branch**: `ai-optimization`
+- **Commit**: `e0a0150`
+- **Files Created**:
+  - `frontend/LFM_OPTIMIZATION_GUIDE.md`
+- **Files Modified**:
+  - `frontend/android/llama/build.gradle`
+  - `frontend/src/ai/lfmInit.ts`
+  - `frontend/src/ai/lfmService.ts`
+- **Changes**:
+  - ✅ **NDK Build Mismatch Fix**: Resolved `[CXX1101]` native library build failure by binding `android/llama/build.gradle`'s `ndkVersion` directly to the project's root NDK configuration (`rootProject.ext.ndkVersion`).
+  - ✅ **Host-Bridge LLM Acceleration**: Implemented a developer mode flag `USE_HOST_LLM_BRIDGE` in `lfmService.ts` to redirect inference calls to `10.0.2.2:11434` (Ollama/llama.cpp server running on the host laptop). This resolves latency constraints (~85s emulator CPU inference reduced to sub-second responses using RTX GPU) and bypasses emulator OOM limits.
+  - ✅ **Setup & Optimization Guide**: Authored `LFM_OPTIMIZATION_GUIDE.md` with instructions on bypassing APK limits via shell pipes (`tee` workaround), resolving SD card permission errors (`cp: Permission denied`), and booting with expanded partitions.
+  - ✅ **Clean Git Rebase**: Rebased `ai-optimization` onto `master` safely by restoring the 4 emptied Supabase migration files and preserving master's diet sync schema/redesigned UI components.
+  - **Build**: ✅ Verified `npx tsc --noEmit` on frontend is clean.
+
 ### [2026-06-07 15:10 +0800] FIX: Supabase Profiles Schema Mismatch and Registration Sync Trigger
 - **Branch**: `jb-branch`
 - **Files Created**:
