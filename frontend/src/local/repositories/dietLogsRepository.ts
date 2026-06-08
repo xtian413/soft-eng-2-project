@@ -15,6 +15,16 @@ export interface RemoteDietLogInput {
   protein_g: number | null;
   carbs_g: number | null;
   fat_g: number | null;
+  fiber_g?: number | null;
+  sodium_mg?: number | null;
+  potassium_mg?: number | null;
+  calcium_mg?: number | null;
+  iron_mg?: number | null;
+  vitamin_c_mg?: number | null;
+  folate_mcg?: number | null;
+  serving_size?: number | null;
+  serving_unit?: string | null;
+  source_food_id?: string | null;
   logged_at: string;
   created_at?: string;
 }
@@ -551,6 +561,8 @@ export async function upsertRemoteDietLogForUser(
         return existing;
       }
 
+      // Preserve local logged_at — only use remote value as fallback
+      const resolvedLoggedAt = existing.logged_at != null ? existing.logged_at : remoteLog.logged_at;
       const now = new Date().toISOString();
       await db.runAsync(
         `UPDATE ${LOCAL_TABLES.dietLogs}
@@ -560,6 +572,16 @@ export async function upsertRemoteDietLogForUser(
              protein_g = ?,
              carbs_g = ?,
              fat_g = ?,
+             fiber_g = ?,
+             sodium_mg = ?,
+             potassium_mg = ?,
+             calcium_mg = ?,
+             iron_mg = ?,
+             vitamin_c_mg = ?,
+             folate_mcg = ?,
+             serving_size = ?,
+             serving_unit = ?,
+             source_food_id = ?,
              logged_at = ?,
              updated_at = ?,
              sync_status = 'synced',
@@ -571,7 +593,17 @@ export async function upsertRemoteDietLogForUser(
         normalizeNullableNumber(remoteLog.protein_g),
         normalizeNullableNumber(remoteLog.carbs_g),
         normalizeNullableNumber(remoteLog.fat_g),
-        remoteLog.logged_at,
+        normalizeNullableNumber(remoteLog.fiber_g ?? null),
+        normalizeNullableNumber(remoteLog.sodium_mg ?? null),
+        normalizeNullableNumber(remoteLog.potassium_mg ?? null),
+        normalizeNullableNumber(remoteLog.calcium_mg ?? null),
+        normalizeNullableNumber(remoteLog.iron_mg ?? null),
+        normalizeNullableNumber(remoteLog.vitamin_c_mg ?? null),
+        normalizeNullableNumber(remoteLog.folate_mcg ?? null),
+        normalizeNullableNumber(remoteLog.serving_size ?? null),
+        remoteLog.serving_unit ?? 'serving',
+        remoteLog.source_food_id ?? null,
+        resolvedLoggedAt,
         now,
         now,
         existing.id,
@@ -618,7 +650,7 @@ export async function upsertRemoteDietLogForUser(
         deleted_at,
         sync_status,
         last_synced_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1, 'serving', NULL, ?, ?, ?, NULL, 'synced', ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?)`,
       id,
       userId,
       remoteLog.id,
@@ -628,6 +660,16 @@ export async function upsertRemoteDietLogForUser(
       normalizeNullableNumber(remoteLog.protein_g),
       normalizeNullableNumber(remoteLog.carbs_g),
       normalizeNullableNumber(remoteLog.fat_g),
+      normalizeNullableNumber(remoteLog.fiber_g ?? null),
+      normalizeNullableNumber(remoteLog.sodium_mg ?? null),
+      normalizeNullableNumber(remoteLog.potassium_mg ?? null),
+      normalizeNullableNumber(remoteLog.calcium_mg ?? null),
+      normalizeNullableNumber(remoteLog.iron_mg ?? null),
+      normalizeNullableNumber(remoteLog.vitamin_c_mg ?? null),
+      normalizeNullableNumber(remoteLog.folate_mcg ?? null),
+      normalizeNullableNumber(remoteLog.serving_size ?? null),
+      remoteLog.serving_unit ?? "serving",
+      remoteLog.source_food_id ?? null,
       remoteLog.logged_at,
       createdAt,
       now,
