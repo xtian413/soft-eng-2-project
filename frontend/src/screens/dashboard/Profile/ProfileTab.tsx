@@ -15,6 +15,7 @@ import { fetchDietLogs, type DietLog } from '@/api/dietApi';
 import { DateDetailSheet } from './subcomponents/DateDetailSheet';
 import { getDailyLogsByUser } from '@/local/repositories/dailyLogsRepository';
 import type { LocalDailyLog } from '@/local/schema';
+import { format } from 'date-fns';
 
 
 interface ProfileTabProps {
@@ -771,7 +772,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
       {/* Date Detail Sheet — rich food/lift history for a selected date */}
       <DateDetailSheet
         visible={isDateSheetVisible}
-        date={selectedDate ?? new Date().toISOString().split('T')[0]}
+        date={selectedDate ?? format(new Date(), 'yyyy-MM-dd')}
         userId={useAuthStore.getState().user?.id ?? null}
         targets={targets}
         onClose={() => {

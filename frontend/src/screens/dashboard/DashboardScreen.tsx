@@ -52,6 +52,7 @@ import {
 } from '@/ai/insights/fitnessInsight';
 import { buildFitnessInsightSignature } from '@/ai/insights/fitnessInsightCache';
 import type { LocalAiInsight } from '@/local/schema';
+import { format } from 'date-fns';
 
 type TabType = 'dashboard' | 'food' | 'insights' | 'lift' | 'profile';
 
@@ -86,7 +87,7 @@ function mapLocalAiInsightToFitnessInsight(row: LocalAiInsight): FitnessInsight 
 }
 
 function isSameIsoDay(left: Date, right: Date) {
-  return left.toISOString().split('T')[0] === right.toISOString().split('T')[0];
+  return format(left, 'yyyy-MM-dd') === format(right, 'yyyy-MM-dd');
 }
 
 export default function DashboardScreen() {
@@ -165,9 +166,11 @@ export default function DashboardScreen() {
     }
 
     setIsLoadingLogs(true);
-    const today = new Date().toISOString().split('T')[0];
-    const startOfToday = `${today}T00:00:00.000Z`;
-    const endOfToday = `${today}T23:59:59.999Z`;
+    // Use the user's local date to determine "today" boundaries,
+    // then convert to UTC ISO strings for the SQLite query.
+    const localDateStr = format(new Date(), 'yyyy-MM-dd');
+    const startOfToday = new Date(`${localDateStr}T00:00:00`).toISOString();
+    const endOfToday = new Date(`${localDateStr}T23:59:59.999`).toISOString();
 
     try {
       const localLogs = await getDietLogsByUserAndDateRange(user.id, startOfToday, endOfToday);
@@ -179,7 +182,7 @@ export default function DashboardScreen() {
     }
 
     try {
-      const remoteLogs = await fetchDietLogs(today);
+      const remoteLogs = await fetchDietLogs(localDateStr);
       await Promise.all(
         remoteLogs.map((log) => upsertRemoteDietLogForUser(user.id, remoteDietLogToLocalRemoteInput(log)))
       );

@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { FitnessInsight, FitnessInsightInput } from '@/ai/insights/fitnessInsight';
 
+import { format } from 'date-fns';
+
 const FITNESS_INSIGHT_CACHE_KEY = 'gemi:fitnessInsight:v8';
 
 type CachedFitnessInsight = {
@@ -15,7 +17,7 @@ function compactNumber(value: number) {
 
 export function buildFitnessInsightSignature(input: FitnessInsightInput) {
   return JSON.stringify({
-    date: new Date().toISOString().split('T')[0],
+    date: format(new Date(), 'yyyy-MM-dd'),
     userName: input.userName,
     goal: input.goal,
     body: [compactNumber(input.weightKg), compactNumber(input.heightCm)],
