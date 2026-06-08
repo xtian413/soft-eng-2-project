@@ -3,7 +3,18 @@
 **Format**: `[YYYY-MM-DD HH:MM +TZ] TYPE: description`
 
 ---
+### [2026-06-09 01:00 +0800] FIX: Web compatibility for API Base URL and Host LLM Bridge (ERR-014, ERR-015)
+- **Branch**: `ai-optimization`
+- **Commit**: N/A (uncommitted)
+- **Files Modified**:
+  - `frontend/src/ai/lfmService.ts`
+  - `frontend/src/lib/api.ts`
+- **Changes**:
+  - ✅ **Web LLM Bridge CORS/Warning Bypass**: Configured `HOST_LLM_API` to dynamically route to `http://localhost:11434` instead of ngrok when the app runs in the Web browser (`Platform.OS === 'web'`). Since the browser is running on the host machine where Ollama lives, it bypasses ngrok's browser warning block and preflight OPTIONS request CORS failures.
+  - ✅ **Web API URL Route Fix**: Updated `getBaseUrl()` in `api.ts` to substitute the emulator gateway IP (`10.0.2.2`) with `localhost` when executing in the browser (`Platform.OS === 'web'`), resolving backend network request timeouts.
+
 ### [2026-06-08 23:25 +0800] FEAT: Host-Bridge Local LLM Acceleration & Git Rebase Integration
+
 - **Branch**: `ai-optimization`
 - **Commit**: `e0a0150`
 - **Files Created**:

@@ -17,11 +17,35 @@ const DEFAULT_FITNESS_INSIGHT_TIMEOUT_MS = 90_000;
 const DEFAULT_INSIGHT_CHAT_MAX_TOKENS = 128;
 const DEFAULT_INSIGHT_CHAT_TIMEOUT_MS = 90_000;
 const DEFAULT_TEMPERATURE = 0.7;
+import { Platform } from 'react-native';
+
 const DEFAULT_TOP_P = 0.9;
 const DEFAULT_TOP_K = 40;
 const DEFAULT_REPEAT_PENALTY = 1.05;
 
-const HOST_LLM_API = 'http://10.0.2.2:11434/api/generate';
+const getHostLlmUrl = () => {
+  if (Platform.OS === 'web') {
+    // Web app runs on the host laptop itself, so it can connect to local Ollama directly.
+    // This bypasses ngrok's browser warning block and CORS preflight header limitations.
+    return 'http://localhost:11434/api/generate';
+  }
+  return 'https://surfacing-imposing-scrooge.ngrok-free.dev/api/generate';
+};
+
+const getHostLlmHeaders = () => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (Platform.OS !== 'web') {
+    // ngrok requires this header to skip its browser-warning interstitial page.
+    // Without it, ngrok returns an HTML page instead of the Ollama JSON response.
+    headers['ngrok-skip-browser-warning'] = 'true';
+  }
+  return headers;
+};
+
+const HOST_LLM_API = getHostLlmUrl();
+const HOST_LLM_HEADERS = getHostLlmHeaders();
 
 async function loadJsonArray<T>(storageKey: string): Promise<T[]> {
   const raw = await AsyncStorage.getItem(storageKey);
@@ -136,7 +160,7 @@ async function generateResponseWithTimeout(
     console.log(`[Gemi] Routing inference to host bridge: ${HOST_LLM_API}`);
     const response = await fetch(HOST_LLM_API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: HOST_LLM_HEADERS,
       signal: controller.signal,
       body: JSON.stringify({
         model: 'qwen2.5:3b-instruct',

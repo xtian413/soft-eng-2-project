@@ -289,3 +289,43 @@
 ---
 
 *Append new errors below using the `[ERR-NNN]` format.*
+
+---
+
+### [ERR-014] Web App LLM request fails with `Failed to fetch` on ngrok tunnel
+- **Date**: 2026-06-09
+- **Severity**: Runtime — LLM features fail on Web build (`npm run start` -> web)
+- **Symptom**: Triggering AI insights in a web browser logs:
+  ```
+  Web  ERROR  [Gemi] Host bridge request failed: Failed to fetch
+  ```
+- **Root Cause**: Two issues combined:
+  1. The free-tier ngrok tunnel shows a browser interstitial warning page when a standard Web browser user agent requests it.
+  2. The custom `ngrok-skip-browser-warning` header solves it for direct requests, but fails on Web due to CORS preflight options requests (browsers do not send custom headers on preflight `OPTIONS` requests, causing the preflight to fail CORS check).
+- **Fix**: Dynamically check the platform. If `Platform.OS === 'web'`, bypass the ngrok tunnel completely and connect to `http://localhost:11434` directly, since the Web app runs on the same machine where Ollama is running. For native app builds, continue routing through the ngrok tunnel.
+- **Files**: `frontend/src/ai/lfmService.ts`
+- **Status**: ✅ Resolved
+
+---
+
+### [ERR-015] Web App Backend unreachable due to `10.0.2.2` API Base URL
+- **Date**: 2026-06-09
+- **Severity**: Runtime — all network requests fail on Web build with timeout
+- **Symptom**: Opening the Web dashboard logs:
+  ```
+  Web  ERROR  [Gemi] Network error — no response received. ... Current baseURL: http://10.0.2.2:3000 timeout of 15000ms exceeded
+  ```
+- **Root Cause**: While `10.0.2.2` is correct for routing from an Android emulator to the host machine, it is an invalid IP address for a browser running on the host machine itself.
+- **Fix**: Update the `getBaseUrl()` utility to check the platform:
+  ```typescript
+  if (Platform.OS === 'web' && envUrl?.includes('10.0.2.2')) {
+    envUrl = envUrl.replace('10.0.2.2', 'localhost');
+  }
+  ```
+- **Files**: `frontend/src/lib/api.ts`
+- **Status**: ✅ Resolved
+
+---
+
+*Append new errors below using the `[ERR-NNN]` format.*
+
