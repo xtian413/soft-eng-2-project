@@ -6,6 +6,7 @@ import {
   View,
   Animated,
   Platform,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
@@ -52,6 +53,7 @@ import {
 } from '@/ai/insights/fitnessInsight';
 import { buildFitnessInsightSignature } from '@/ai/insights/fitnessInsightCache';
 import type { LocalAiInsight } from '@/local/schema';
+import { format } from 'date-fns';
 
 type TabType = 'dashboard' | 'food' | 'insights' | 'lift' | 'profile';
 
@@ -86,7 +88,7 @@ function mapLocalAiInsightToFitnessInsight(row: LocalAiInsight): FitnessInsight 
 }
 
 function isSameIsoDay(left: Date, right: Date) {
-  return left.toISOString().split('T')[0] === right.toISOString().split('T')[0];
+  return format(left, 'yyyy-MM-dd') === format(right, 'yyyy-MM-dd');
 }
 
 export default function DashboardScreen() {
@@ -111,6 +113,7 @@ export default function DashboardScreen() {
   const latestFitnessInsightSignatureRef = React.useRef<string | null>(null);
   const insightDisplayVersionRef = React.useRef(0);
   const activeChatRunRef = React.useRef(false);
+  const displayDateRef = React.useRef(format(new Date(), 'yyyy-MM-dd'));
 
   const goal: GoalKey = profile?.goal || (user?.user_metadata?.goal as GoalKey) || 'maintain';
   const gender = profile?.gender || 'male';
@@ -165,9 +168,11 @@ export default function DashboardScreen() {
     }
 
     setIsLoadingLogs(true);
-    const today = new Date().toISOString().split('T')[0];
-    const startOfToday = `${today}T00:00:00.000Z`;
-    const endOfToday = `${today}T23:59:59.999Z`;
+    // Use the user's local date to determine "today" boundaries,
+    // then convert to UTC ISO strings for the SQLite query.
+    const localDateStr = format(new Date(), 'yyyy-MM-dd');
+    const startOfToday = new Date(`${localDateStr}T00:00:00`).toISOString();
+    const endOfToday = new Date(`${localDateStr}T23:59:59.999`).toISOString();
 
     try {
       const localLogs = await getDietLogsByUserAndDateRange(user.id, startOfToday, endOfToday);
@@ -179,7 +184,7 @@ export default function DashboardScreen() {
     }
 
     try {
-      const remoteLogs = await fetchDietLogs(today);
+      const remoteLogs = await fetchDietLogs(localDateStr);
       await Promise.all(
         remoteLogs.map((log) => upsertRemoteDietLogForUser(user.id, remoteDietLogToLocalRemoteInput(log)))
       );
@@ -193,6 +198,32 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     loadTodayLogs();
+  }, [loadTodayLogs]);
+
+  // Midnight refresh: check every 60s if the date has changed
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = format(new Date(), 'yyyy-MM-dd');
+      if (displayDateRef.current !== now) {
+        displayDateRef.current = now;
+        loadTodayLogs();
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [loadTodayLogs]);
+
+  // Midnight refresh: also check when app returns to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        const now = format(new Date(), 'yyyy-MM-dd');
+        if (displayDateRef.current !== now) {
+          displayDateRef.current = now;
+          loadTodayLogs();
+        }
+      }
+    });
+    return () => subscription.remove();
   }, [loadTodayLogs]);
 
   const loadWorkoutLogs = useCallback(async () => {

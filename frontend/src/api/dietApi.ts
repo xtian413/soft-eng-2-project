@@ -10,6 +10,16 @@ export interface DietLog {
   protein_g: number | null;
   carbs_g: number | null;
   fat_g: number | null;
+  fiber_g?: number | null;
+  sodium_mg?: number | null;
+  potassium_mg?: number | null;
+  calcium_mg?: number | null;
+  iron_mg?: number | null;
+  vitamin_c_mg?: number | null;
+  folate_mcg?: number | null;
+  serving_size?: number | null;
+  serving_unit?: string | null;
+  source_food_id?: string | null;
   logged_at: string;
   created_at: string;
 }
@@ -21,6 +31,16 @@ export interface DietLogCreateInput {
   protein_g?: number | null;
   carbs_g?: number | null;
   fat_g?: number | null;
+  fiber_g?: number | null;
+  sodium_mg?: number | null;
+  potassium_mg?: number | null;
+  calcium_mg?: number | null;
+  iron_mg?: number | null;
+  vitamin_c_mg?: number | null;
+  folate_mcg?: number | null;
+  serving_size?: number | null;
+  serving_unit?: string | null;
+  source_food_id?: string | null;
   logged_at: string;
 }
 

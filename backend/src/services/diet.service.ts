@@ -9,6 +9,16 @@ export interface DietLogCreateInput {
   protein_g?: number;
   carbs_g?: number;
   fat_g?: number;
+  fiber_g?: number | null;
+  sodium_mg?: number | null;
+  potassium_mg?: number | null;
+  calcium_mg?: number | null;
+  iron_mg?: number | null;
+  vitamin_c_mg?: number | null;
+  folate_mcg?: number | null;
+  serving_size?: number | null;
+  serving_unit?: string | null;
+  source_food_id?: string | null;
   logged_at: string;
 }
 
@@ -19,6 +29,16 @@ export interface DietLogUpdateInput {
   protein_g?: number;
   carbs_g?: number;
   fat_g?: number;
+  fiber_g?: number | null;
+  sodium_mg?: number | null;
+  potassium_mg?: number | null;
+  calcium_mg?: number | null;
+  iron_mg?: number | null;
+  vitamin_c_mg?: number | null;
+  folate_mcg?: number | null;
+  serving_size?: number | null;
+  serving_unit?: string | null;
+  source_food_id?: string | null;
   logged_at?: string;
 }
 
@@ -73,6 +93,16 @@ export async function createDietLog(userId: string, input: DietLogCreateInput) {
       protein_g: input.protein_g ?? null,
       carbs_g: input.carbs_g ?? null,
       fat_g: input.fat_g ?? null,
+      fiber_g: input.fiber_g ?? null,
+      sodium_mg: input.sodium_mg ?? null,
+      potassium_mg: input.potassium_mg ?? null,
+      calcium_mg: input.calcium_mg ?? null,
+      iron_mg: input.iron_mg ?? null,
+      vitamin_c_mg: input.vitamin_c_mg ?? null,
+      folate_mcg: input.folate_mcg ?? null,
+      serving_size: input.serving_size ?? null,
+      serving_unit: input.serving_unit ?? null,
+      source_food_id: input.source_food_id ?? null,
       logged_at: input.logged_at,
     })
     .select('*')
@@ -98,6 +128,16 @@ export async function updateDietLog(
   if (input.protein_g !== undefined) updatePayload.protein_g = input.protein_g;
   if (input.carbs_g !== undefined) updatePayload.carbs_g = input.carbs_g;
   if (input.fat_g !== undefined) updatePayload.fat_g = input.fat_g;
+  if (input.fiber_g !== undefined) updatePayload.fiber_g = input.fiber_g;
+  if (input.sodium_mg !== undefined) updatePayload.sodium_mg = input.sodium_mg;
+  if (input.potassium_mg !== undefined) updatePayload.potassium_mg = input.potassium_mg;
+  if (input.calcium_mg !== undefined) updatePayload.calcium_mg = input.calcium_mg;
+  if (input.iron_mg !== undefined) updatePayload.iron_mg = input.iron_mg;
+  if (input.vitamin_c_mg !== undefined) updatePayload.vitamin_c_mg = input.vitamin_c_mg;
+  if (input.folate_mcg !== undefined) updatePayload.folate_mcg = input.folate_mcg;
+  if (input.serving_size !== undefined) updatePayload.serving_size = input.serving_size;
+  if (input.serving_unit !== undefined) updatePayload.serving_unit = input.serving_unit;
+  if (input.source_food_id !== undefined) updatePayload.source_food_id = input.source_food_id;
   if (input.logged_at !== undefined) updatePayload.logged_at = input.logged_at;
 
   const { data, error } = await supabaseAdmin
