@@ -62,6 +62,7 @@ import {
   updateRoutineWithExercisesLocal,
   updateRoutineRemoteIds,
   upsertRemoteRoutineForUser,
+  softDeleteRoutine,
 } from '@/local/repositories/routinesRepository';
 
 interface LiftTabProps {
@@ -108,6 +109,20 @@ const formatWeight = (value: number): string => {
   if (!Number.isFinite(value) || value <= 0) return '';
   const rounded = Math.round(value * 10) / 10;
   return Number.isInteger(rounded) ? String(Math.round(rounded)) : String(rounded);
+};
+
+const getWorkoutDurationLabel = (notes: string | null | undefined): string | null => {
+  if (!notes) return null;
+  const match = notes.match(/duration:(\d+)/);
+  if (!match) return null;
+  const secs = parseInt(match[1], 10);
+  if (isNaN(secs) || secs <= 0) return null;
+  const mins = Math.round(secs / 60);
+  if (mins < 1) return '< 1m';
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  const remainingMins = mins % 60;
+  return remainingMins > 0 ? `${hrs}h ${remainingMins}m` : `${hrs}h`;
 };
 
 export function LiftTab({ triggerToast }: LiftTabProps) {
@@ -330,7 +345,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     return {
       name: activeRoutine.name,
       performedAt: new Date().toISOString(),
-      notes: 'routine_session',
+      notes: `routine_session|duration:${elapsedSecs}`,
       sets,
     };
   };
@@ -349,6 +364,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     return {
       name: workoutName,
       performedAt: new Date().toISOString(),
+      notes: `duration:${elapsedSecs}`,
       sets: checkedSets.map((set) => {
         const weightKg = convertInputWeightToKg(set.weight);
         return {
@@ -709,6 +725,70 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setRoutineDraftExercises([]);
     setEditingRoutineId(null);
     setEditingWorkoutId(null);
+  };
+
+  const handleDeleteRoutine = async (routine: Routine) => {
+    Alert.alert(
+      'Delete Routine',
+      `Are you sure you want to delete ${routine.name}? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const authUser = user ?? (await supabase.auth.getUser()).data.user;
+              if (!authUser) {
+                triggerToast('Authentication error.');
+                return;
+              }
+              // 1. Soft delete locally
+              await softDeleteRoutine(authUser.id, routine.id);
+
+              // 2. Reset active training session if this routine is running
+              if (activeRoutineId === routine.id) {
+                resetFinishedSessionState();
+              }
+
+              // 3. Remove from UI state list
+              setRoutines((prev) => prev.filter((r) => r.id !== routine.id));
+
+              // 4. Clear selection state
+              if (selectedRoutineId === routine.id) {
+                setSelectedRoutineId(null);
+              }
+
+              triggerToast('Routine deleted successfully.');
+
+              // 5. Remote delete sync to Supabase
+              if (routine.remote_id) {
+                const { error: routineErr } = await supabase
+                  .from('routines')
+                  .delete()
+                  .eq('id', routine.remote_id);
+                if (routineErr) {
+                  console.error('[LiftTab] Remote routine delete failed:', routineErr);
+                }
+              }
+              if (routine.routines_id) {
+                const { error: workoutErr } = await supabase
+                  .from('workouts')
+                  .delete()
+                  .eq('id', routine.routines_id);
+                if (workoutErr) {
+                  console.error('[LiftTab] Remote workout delete failed:', workoutErr);
+                }
+              }
+            } catch (error) {
+              console.error('[LiftTab] Error deleting routine:', error);
+              triggerToast('Failed to delete routine.');
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const startEditRoutine = (routine: Routine) => {
@@ -1722,13 +1802,23 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.routineEditButton}
-                onPress={() => startEditRoutine(selectedRoutine)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.routineEditText}>Edit Routine</Text>
-              </TouchableOpacity>
+              <View style={styles.routineActionRow}>
+                <TouchableOpacity
+                  style={styles.routineEditButton}
+                  onPress={() => startEditRoutine(selectedRoutine)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.routineEditText}>Edit Routine</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.routineDeleteButton}
+                  onPress={() => handleDeleteRoutine(selectedRoutine)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.routineDeleteText}>Delete Routine</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>
@@ -1940,6 +2030,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                         </View>
                         <Text style={styles.savedWorkoutDate}>
                           {workout.performed_at.split('T')[0]}
+                          {getWorkoutDurationLabel(workout.notes) ? ` · ${getWorkoutDurationLabel(workout.notes)}` : ''}
                         </Text>
                         <Text style={styles.savedWorkoutSetsText} numberOfLines={1}>
                           {[...new Set(workout.sets.map((s) => s.exercise_name))]
@@ -3084,7 +3175,14 @@ const styles = StyleSheet.create({
   routineStartTextActive: {
     color: '#10b981',
   },
+  routineActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
   routineEditButton: {
+    flex: 1,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
     alignItems: 'center',
@@ -3098,6 +3196,22 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
     fontWeight: fontWeight.bold,
     color: Colors.primary,
+  },
+  routineDeleteButton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+  },
+  routineDeleteText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#ef4444',
   },
   routineWorkoutList: {
     gap: spacing.sm,
