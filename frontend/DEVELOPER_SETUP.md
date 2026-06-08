@@ -133,3 +133,26 @@ npm run start
 | **Local Ollama** | `http://localhost:11434` | Text completion & AI insights generation |
 | **ngrok Tunnel** | `https://*.ngrok-free.dev` | Forwards external/emulator requests to Ollama |
 | **Metro Bundler** | `http://localhost:8081` | Serves JavaScript bundles to Expo client |
+
+---
+
+## 🐳 Why is Setup Complex & Should We Dockerize?
+
+### Why is setup complex?
+Gemi orchestrates four distinct services: **Database**, **Backend API**, **AI Engine (Ollama)**, and the **Frontend App (Expo/Gradle)**. Because they are decoupled, setting up the environment requires installing correct toolchains, starting services in order, and mapping ports correctly.
+
+### Should we Dockerize the project?
+We recommend a **hybrid Dockerization approach**:
+
+1. **Backend & Database (Yes)**:
+   * Wrapping PostgreSQL and the Express backend in a `docker-compose.yml` is highly recommended. It reduces database setup and table migration to a single command: `docker compose up`.
+2. **AI Ollama Server (No)**:
+   * Dockerizing Ollama requires installing the native GPU Container Toolkit (NVIDIA CUDA / AMD ROCm ROC) inside the container. This setup varies widely across Windows, macOS, and Linux hardware and is significantly more complex than installing the Ollama desktop application.
+3. **Expo / Android Build (No)**:
+   * Compiling React Native/Expo and running Android emulators inside Docker requires nested KVM virtualization and USB device routing, which is extremely slow and prone to build failure.
+
+### Planned Onboarding Improvements
+* **Mock AI Fallback**: If a developer does not have Ollama or ngrok running, the app should gracefully degrade and return mock responses instead of crashing. This allows developers focused only on UI or simple sync features to run the app without local AI setup.
+* **Docker Compose for DB/Backend**: Bundle PostgreSQL and Express backend containers.
+* **Automated `setup.sh` Script**: Copy `.env.example` templates, install node packages automatically, and run permission repairs (like `chmod +x android/gradlew`).
+
