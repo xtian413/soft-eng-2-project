@@ -158,6 +158,68 @@ export async function getBodyProgressByUser(userId: string): Promise<LocalBodyPr
   }
 }
 
+export async function updateBodyProgressLocal(
+  userId: string,
+  id: string,
+  input: { weight_kg?: number; body_fat_pct?: number | null; recorded_at?: string }
+): Promise<LocalBodyProgress> {
+  try {
+    assertUserId(userId);
+
+    const db = await initializeLocalDatabase();
+    const now = new Date().toISOString();
+
+    const fields: string[] = [];
+    const params: any[] = [];
+
+    if (typeof input.weight_kg === 'number') {
+      fields.push('weight_kg = ?');
+      params.push(normalizeWeightKg(input.weight_kg));
+    }
+
+    if (input.body_fat_pct !== undefined) {
+      fields.push('body_fat_pct = ?');
+      params.push(normalizeNullableNumber(input.body_fat_pct ?? null));
+    }
+
+    if (input.recorded_at) {
+      fields.push('recorded_at = ?');
+      params.push(input.recorded_at);
+    }
+
+    if (fields.length === 0) {
+      throw new Error('No updatable fields provided for body-progress update.');
+    }
+
+    // mark as pending so sync will pick it up
+    fields.push("sync_status = 'pending'");
+    fields.push('updated_at = ?');
+    params.push(now);
+
+    params.push(id, userId);
+
+    const result = await db.runAsync(
+      `UPDATE ${LOCAL_TABLES.bodyProgress}
+       SET ${fields.join(', ')}
+       WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
+      ...params
+    );
+
+    if (result.changes === 0) {
+      throw new Error('Body-progress row was not found for the supplied user.');
+    }
+
+    const updated = await getBodyProgressByUserAndId(userId, id);
+    if (!updated) {
+      throw new Error('Updated body-progress row could not be read back.');
+    }
+
+    return updated;
+  } catch (error) {
+    wrapBodyProgressError('update', error);
+  }
+}
+
 export async function getUnsyncedNewBodyProgressByUser(
   userId: string
 ): Promise<LocalBodyProgress[]> {
