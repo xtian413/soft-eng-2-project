@@ -155,7 +155,7 @@ async function insertRoutineExercises(
       userId,
       normalizeNullableText(exercise.remoteId),
       routineId,
-      exercise.exerciseName.trim(),
+      (exercise.exerciseName || '').trim(),
       normalizeNullableText(exercise.muscleGroup),
       Math.max(0, Math.trunc(exercise.sortOrder)),
       normalizeNullableInteger(exercise.sets),
@@ -584,11 +584,11 @@ export async function upsertRemoteRoutineForUser(
       const existingExercises = await getExercisesForRoutine(userId, existing.id);
       const usedExistingExerciseIds = new Set<string>();
       const exercisesWithStableIds = exercises.map((exercise) => {
+        const exerciseNameLower = (exercise.exerciseName || '').trim().toLowerCase();
         const matchingExisting = existingExercises.find(
           (existingExercise) =>
             !usedExistingExerciseIds.has(existingExercise.id) &&
-            existingExercise.exercise_name.trim().toLowerCase() ===
-              exercise.exerciseName.trim().toLowerCase()
+            (existingExercise.exercise_name || '').trim().toLowerCase() === exerciseNameLower
         );
 
         if (matchingExisting) {

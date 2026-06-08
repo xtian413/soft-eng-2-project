@@ -32,7 +32,7 @@ struct LfmModel {
 static std::mutex g_mutex;
 static bool g_backend_initialized = false;
 static std::string g_last_error;
-static constexpr int64_t kMaxGenerationElapsedMs = 85000;
+static constexpr int64_t kMaxGenerationElapsedMs = 175000;
 
 static void set_last_error(const std::string &message) {
   g_last_error = message;

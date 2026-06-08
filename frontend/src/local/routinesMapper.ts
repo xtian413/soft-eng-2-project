@@ -150,30 +150,33 @@ export function remoteRoutineToLocalInput(
   >();
 
   setRows
-    .filter((row) => row.workout_id === routine.routines_id)
+    .filter((row) => row && row.workout_id && routine && row.workout_id === routine.routines_id)
     .forEach((row) => {
-      const key = `${row.workout_id}:${row.exercise_name.trim().toLowerCase()}`;
+      const exerciseName = (row.exercise_name || '').trim();
+      if (!exerciseName) return;
+
+      const key = `${row.workout_id}:${exerciseName.toLowerCase()}`;
       const existing = grouped.get(key);
 
       if (existing) {
         existing.sets += 1;
-        existing.firstSetNumber = Math.min(existing.firstSetNumber, row.set_number);
+        existing.firstSetNumber = Math.min(existing.firstSetNumber, row.set_number || 1);
         return;
       }
 
       grouped.set(key, {
         remoteId: row.id ?? null,
-        exerciseName: row.exercise_name.trim(),
+        exerciseName,
         muscleGroup: row.muscle_group ?? null,
         sets: 1,
         reps: row.reps,
         weightKg: row.weight_kg,
-        firstSetNumber: row.set_number,
+        firstSetNumber: row.set_number || 1,
       });
     });
 
   return {
-    routineName: routine.routine_name,
+    routineName: routine.routine_name || 'Unnamed Routine',
     remoteId: routine.id,
     remoteTemplateWorkoutId: routine.routines_id ?? '',
     exercises: [...grouped.values()]
