@@ -2,7 +2,7 @@ import type { MealId, GoalKey, ActivityLevel } from '@/screens/dashboard/types';
 
 export const GEMI_USER_DATABASE_NAME = 'gemi_user.db';
 
-export const LOCAL_SCHEMA_VERSION = 9;
+export const LOCAL_SCHEMA_VERSION = 10;
 
 export const LOCAL_TABLES = {
   schemaMigrations: 'schema_migrations',
@@ -36,6 +36,8 @@ export interface LocalProfile extends LocalBaseRecord {
   full_name: string | null;
   height_cm: number | null;
   weight_kg: number | null;
+  starting_weight_kg: number | null;
+  current_weight_kg: number | null;
   gender: 'male' | 'female' | null;
   goal: GoalKey | null;
   age: number | null;

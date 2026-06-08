@@ -133,6 +133,8 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
   const weightDiffKg = Math.abs(currentWeight - targetWeight);
   const weightDiffLbs = weightDiffKg * 2.20462;
 
+  const lostKg = ((profile?.startingWeightKg ?? weightKg) - (profile?.currentWeightKg ?? weightKg));
+
   let timeToTargetWeeks: number | null = null;
   if (weeklyWeightChangeLbs > 0.01 && weightDiffKg > 0.1) {
     const expectsToLose = currentWeight > targetWeight;
@@ -334,6 +336,22 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
         loading={loading}
       />
 
+      {/* Current Weight Card */}
+      <View style={styles.currentWeightCard}>
+        <Text style={styles.currentWeightLabel}>CURRENT WEIGHT</Text>
+        <Text style={styles.currentWeightValue}>{(profile?.currentWeightKg ?? weightKg).toFixed(1)} kg</Text>
+        <Text style={styles.currentWeightSub}>
+          {(() => {
+            const start = profile?.startingWeightKg ?? weightKg;
+            const current = profile?.currentWeightKg ?? weightKg;
+            const diff = start - current;
+            if (diff > 0.05) return `↓ ${diff.toFixed(1)} kg lost`;
+            if (diff < -0.05) return `↑ ${Math.abs(diff).toFixed(1)} kg gained`;
+            return `Started at ${start} kg`;
+          })()}
+        </Text>
+      </View>
+
       {/* Weight Trend Chart */}
       <WeightTrendCard
         entries={weightEntries}
@@ -386,8 +404,8 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
               <Text style={styles.statValue}>{heightCm} cm</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statLabel}>Weight</Text>
-              <Text style={styles.statValue}>{weightKg} kg</Text>
+              <Text style={styles.statLabel}>Starting Weight</Text>
+              <Text style={styles.statValue}>{profile?.startingWeightKg ?? weightKg} kg</Text>
             </View>
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>Age</Text>
@@ -948,6 +966,42 @@ const styles = StyleSheet.create({
     elevation: 2,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.15)',
+  },
+
+  currentWeightCard: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: radius.lg,
+    padding: spacing.base,
+    marginBottom: spacing.md,
+
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+  },
+
+  currentWeightLabel: {
+    fontSize: 10,
+    color: Colors.outline,
+    letterSpacing: 1,
+    fontWeight: fontWeight.bold,
+  },
+
+  currentWeightValue: {
+    fontSize: 30,
+    fontWeight: fontWeight.extraBold,
+    color: Colors.primary,
+    marginTop: 4,
+  },
+
+  currentWeightSub: {
+    marginTop: 4,
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
   },
   cardTitle: {
     fontSize: typography.xs,

@@ -114,7 +114,7 @@ export default function DashboardScreen() {
 
   const goal: GoalKey = profile?.goal || (user?.user_metadata?.goal as GoalKey) || 'maintain';
   const gender = profile?.gender || 'male';
-  const weightKg = profile?.weightKg || 75;
+  const weightKg = profile?.currentWeightKg || profile?.weightKg || 75;
   const heightCm = profile?.heightCm || 180;
   const age = profile?.age || 22;
   const activityLevel = profile?.activityLevel || 'lightly_active';

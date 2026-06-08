@@ -18,6 +18,7 @@ import {
   createBodyProgressLocal,
   updateBodyProgressLocal,
 } from '@/local/repositories/bodyProgressRepository';
+import { upsertLocalProfile } from '@/local/repositories/profilesRepository';
 import type { FitnessInsight } from '@/ai/insights/fitnessInsight';
 
 interface HomeTabProps {
@@ -49,6 +50,8 @@ export function HomeTab({
 
   const [weightModalVisible, setWeightModalVisible] = useState(false);
   const [weightText, setWeightText] = useState('');
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
+
   const [isSavingWeight, setIsSavingWeight] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -78,7 +81,14 @@ export function HomeTab({
     ? 'Reading your latest food and training data once. This insight will stay cached until your data changes.'
     : fitnessInsight.summary;
 
-  const currentWeight = useAuthStore((s) => s.profile?.weightKg ?? null);
+  const currentWeight = useAuthStore((s) => s.profile?.currentWeightKg ?? s.profile?.weightKg ?? null);
+
+  const displayWeight =
+    currentWeight == null
+      ? '--'
+      : weightUnit === 'lbs'
+      ? (currentWeight * 2.20462).toFixed(1)
+      : currentWeight.toFixed(1);
 
   return (
     <ScrollView
@@ -266,8 +276,8 @@ export function HomeTab({
       </View>
 
       <View style={styles.weightValueRow}>
-        <Text style={styles.weightValue}>{currentWeight ? `${currentWeight.toFixed(1)}` : '--'}</Text>
-        <Text style={styles.weightUnit}>kg</Text>
+        <Text style={styles.weightValue}>{displayWeight}</Text>
+        <Text style={styles.weightUnit}>{weightUnit}</Text>
       </View>
 
       
@@ -294,9 +304,37 @@ export function HomeTab({
         <Text style={styles.modalTitle}>Update Weight</Text>
 
         <Text style={styles.currentLabel}>Current weight</Text>
-        <Text style={styles.currentValue}>{currentWeight ? `${currentWeight.toFixed(1)} kg` : '—'}</Text>
+        <Text style={styles.currentValue}>
+          {currentWeight
+            ? `${(
+                weightUnit === 'lbs' ? currentWeight * 2.20462 : currentWeight
+              ).toFixed(1)} ${weightUnit}`
+            : '—'}
+        </Text>
 
         <Text style={styles.newLabel}>New weight</Text>
+        
+        <View style={styles.unitRow}>
+          <TouchableOpacity
+            style={[
+              styles.unitButton,
+              weightUnit === 'kg' && styles.unitButtonActive,
+            ]}
+            onPress={() => setWeightUnit('kg')}
+          >
+          <Text>kg</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.unitButton,
+            weightUnit === 'lbs' && styles.unitButtonActive,
+          ]}
+          onPress={() => setWeightUnit('lbs')}
+  >
+    <Text>lbs</Text>
+  </TouchableOpacity>
+</View>
         <TextInput
           style={styles.modalInput}
           value={weightText}
@@ -319,10 +357,22 @@ export function HomeTab({
               setIsSavingWeight(true);
               try {
                 const recordedAt = new Date().toISOString();
+                let weightKg = parsed;
+
+                if (weightUnit === 'lbs') {
+                  weightKg = parsed * 0.453592;
+                }
+
                 if (editingEntryId) {
-                  await updateBodyProgressLocal(userId, editingEntryId, { weight_kg: parsed, recorded_at: recordedAt });
+                  await updateBodyProgressLocal(userId, editingEntryId, { weight_kg: weightKg, recorded_at: recordedAt });
                 } else {
-                  await createBodyProgressLocal({ user_id: userId, weight_kg: parsed, recorded_at: recordedAt });
+                  await createBodyProgressLocal({ user_id: userId, weight_kg: weightKg, recorded_at: recordedAt });
+                }
+                // Update profile current weight locally without touching starting weight
+                try {
+                  await upsertLocalProfile({ user_id: userId, current_weight_kg: weightKg });
+                } catch (err) {
+                  console.warn('[HomeTab] failed to upsert local profile current weight', err);
                 }
                 // refresh profile so UI updates
                 void useAuthStore.getState().fetchProfile();
@@ -756,6 +806,23 @@ fatsDot: {
     fontSize: 12,
     color: Colors.onSurfaceVariant,
     marginBottom: 6,
+  },
+  unitRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  unitButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+  },
+
+  unitButtonActive: {
+    backgroundColor: Colors.primary,
   },
   successToast: {
     marginTop: spacing.sm,

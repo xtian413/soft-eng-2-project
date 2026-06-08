@@ -13,6 +13,8 @@ export interface UpsertLocalProfileInput {
   full_name?: string | null;
   height_cm?: number | null;
   weight_kg?: number | null;
+  starting_weight_kg?: number | null;
+  current_weight_kg?: number | null;
   gender?: ProfileGender;
   goal?: ProfileGoal;
   age?: number | null;
@@ -27,6 +29,8 @@ export interface RemoteProfileInput {
   full_name?: string | null;
   height_cm?: number | null;
   weight_kg?: number | null;
+  starting_weight_kg?: number | null;
+  current_weight_kg?: number | null;
   gender?: ProfileGender;
   goal?: ProfileGoal;
   age?: number | null;
@@ -44,6 +48,8 @@ const PROFILE_COLUMNS = [
   'full_name',
   'height_cm',
   'weight_kg',
+  'starting_weight_kg',
+  'current_weight_kg',
   'gender',
   'goal',
   'age',
@@ -160,6 +166,8 @@ export async function upsertLocalProfile(input: UpsertLocalProfileInput): Promis
          SET full_name = ?,
              height_cm = ?,
              weight_kg = ?,
+             starting_weight_kg = ?,
+             current_weight_kg = ?,
              gender = ?,
              goal = ?,
              age = ?,
@@ -176,6 +184,8 @@ export async function upsertLocalProfile(input: UpsertLocalProfileInput): Promis
         resolveText(input.full_name, existing.full_name),
         resolveNumber(input.height_cm, existing.height_cm),
         resolveNumber(input.weight_kg, existing.weight_kg),
+        resolveNumber(input.starting_weight_kg, (existing as any).starting_weight_kg ?? existing.weight_kg),
+        resolveNumber(input.current_weight_kg, (existing as any).current_weight_kg ?? existing.weight_kg),
         resolveGender(input.gender, existing.gender),
         resolveGoal(input.goal, existing.goal),
         resolveNumber(input.age, existing.age),
@@ -199,6 +209,8 @@ export async function upsertLocalProfile(input: UpsertLocalProfileInput): Promis
           full_name,
           height_cm,
           weight_kg,
+          starting_weight_kg,
+          current_weight_kg,
           gender,
           goal,
           age,
@@ -212,12 +224,14 @@ export async function upsertLocalProfile(input: UpsertLocalProfileInput): Promis
           deleted_at,
           sync_status,
           last_synced_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL)`,
         createLocalUuid(),
         input.user_id,
         resolveText(input.full_name, null),
         resolveNumber(input.height_cm, null),
         resolveNumber(input.weight_kg, null),
+        resolveNumber(input.starting_weight_kg, input.weight_kg ?? null),
+        resolveNumber(input.current_weight_kg, input.weight_kg ?? null),
         resolveGender(input.gender, null),
         resolveGoal(input.goal, null),
         resolveNumber(input.age, null),
@@ -338,6 +352,8 @@ export async function upsertRemoteProfileForUser(
          SET full_name = ?,
              height_cm = ?,
              weight_kg = ?,
+             starting_weight_kg = ?,
+             current_weight_kg = ?,
              gender = ?,
              goal = ?,
              age = ?,
@@ -352,7 +368,9 @@ export async function upsertRemoteProfileForUser(
          WHERE user_id = ? AND deleted_at IS NULL AND sync_status = 'synced'`,
         resolveText(remoteProfile.full_name, existing.full_name),
         resolveNumber(remoteProfile.height_cm, existing.height_cm),
-        resolveNumber(remoteProfile.weight_kg, existing.weight_kg),
+        resolveNumber(remoteProfile.current_weight_kg ?? remoteProfile.weight_kg, existing.current_weight_kg ?? existing.weight_kg),
+        resolveNumber(remoteProfile.starting_weight_kg, (existing as any).starting_weight_kg ?? existing.weight_kg),
+        resolveNumber(remoteProfile.current_weight_kg ?? remoteProfile.weight_kg, (existing as any).current_weight_kg ?? existing.weight_kg),
         resolveGender(remoteProfile.gender, existing.gender),
         resolveGoal(remoteProfile.goal, existing.goal),
         resolveNumber(remoteProfile.age, existing.age),
@@ -386,6 +404,8 @@ export async function upsertRemoteProfileForUser(
         full_name,
         height_cm,
         weight_kg,
+        starting_weight_kg,
+        current_weight_kg,
         gender,
         goal,
         age,
@@ -399,12 +419,14 @@ export async function upsertRemoteProfileForUser(
         deleted_at,
         sync_status,
         last_synced_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?)`,
       createLocalUuid(),
       userId,
       resolveText(remoteProfile.full_name, null),
       resolveNumber(remoteProfile.height_cm, null),
-      resolveNumber(remoteProfile.weight_kg, null),
+      resolveNumber(remoteProfile.current_weight_kg ?? remoteProfile.weight_kg, null),
+      resolveNumber(remoteProfile.starting_weight_kg, resolveNumber(remoteProfile.weight_kg, null)),
+      resolveNumber(remoteProfile.current_weight_kg ?? remoteProfile.weight_kg, resolveNumber(remoteProfile.weight_kg, null)),
       resolveGender(remoteProfile.gender, null),
       resolveGoal(remoteProfile.goal, null),
       resolveNumber(remoteProfile.age, null),

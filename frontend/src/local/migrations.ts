@@ -380,6 +380,29 @@ const MIGRATIONS: Migration[] = [
       await db.execAsync(`UPDATE ${LOCAL_TABLES.profiles} SET goal = 'lean_bulk' WHERE goal = 'build_muscle'`);
     },
   },
+  {
+    version: 10,
+    name: 'add_starting_and_current_weight_to_profiles',
+    apply: async (db) => {
+      const columns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${LOCAL_TABLES.profiles})`
+      );
+      const ensureColumn = async (columnName: string, definition: string) => {
+        const hasColumn = columns.some((column) => column.name === columnName);
+        if (!hasColumn) {
+          await db.execAsync(`ALTER TABLE ${LOCAL_TABLES.profiles} ADD COLUMN ${columnName} ${definition}`);
+        }
+      };
+
+      await ensureColumn('starting_weight_kg', 'REAL');
+      await ensureColumn('current_weight_kg', 'REAL');
+
+      // Initialize starting_weight_kg with existing weight_kg when present
+      await db.execAsync(`UPDATE ${LOCAL_TABLES.profiles} SET starting_weight_kg = weight_kg WHERE starting_weight_kg IS NULL`);
+      // Initialize current_weight_kg with existing weight_kg when present
+      await db.execAsync(`UPDATE ${LOCAL_TABLES.profiles} SET current_weight_kg = weight_kg WHERE current_weight_kg IS NULL`);
+    },
+  },
 ];
 
 type SchemaMigrationRow = {

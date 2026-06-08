@@ -21,6 +21,8 @@ interface ProfileState {
   fullName: string | null;
   heightCm: number | null;
   weightKg: number | null;
+  startingWeightKg: number | null;
+  currentWeightKg: number | null;
   gender: 'male' | 'female' | null;
   goal: GoalKey | null;
   age: number | null;
@@ -83,6 +85,8 @@ function localProfileToState(
     fullName: profile.full_name,
     heightCm: profile.height_cm,
     weightKg,
+    startingWeightKg: (profile as any).starting_weight_kg ?? profile.weight_kg ?? null,
+    currentWeightKg: weightKg,
     gender: profile.gender,
     goal: profile.goal,
     age: profile.age,
@@ -260,12 +264,33 @@ export const useAuthStore = create<AuthState>()(
               console.warn('[Gemi] Failed to save initial weight:', weightError.message);
             }
 
+            // Persist initial profile locally with starting/current weights
+            try {
+              await upsertLocalProfile({
+                user_id: userId,
+                full_name: metadata.fullName,
+                height_cm: metadata.height,
+                weight_kg: metadata.weight,
+                starting_weight_kg: metadata.weight,
+                current_weight_kg: metadata.weight,
+                gender: metadata.gender,
+                goal: metadata.goal,
+                age: metadata.age ?? null,
+                activity_level: metadata.activityLevel ?? null,
+                target_weight_kg: metadata.targetWeightKg ?? metadata.weight,
+              });
+            } catch (localErr) {
+              console.warn('[Gemi] Failed to persist local profile on signup:', localErr);
+            }
+
             // Expose updated profile immediately in Zustand
             set({
               profile: {
                 fullName: metadata.fullName,
                 heightCm: metadata.height,
                 weightKg: metadata.weight,
+                startingWeightKg: metadata.weight,
+                currentWeightKg: metadata.weight,
                 gender: metadata.gender,
                 goal: metadata.goal,
                 age: metadata.age ?? null,
@@ -315,6 +340,7 @@ export const useAuthStore = create<AuthState>()(
             full_name: currentProfile?.fullName || get().user?.user_metadata?.full_name || null,
             height_cm: heightCm,
             weight_kg: weightKg,
+            current_weight_kg: weightKg,
             gender: gender !== undefined ? gender : (currentProfile?.gender || 'male'),
             goal,
             age: age !== undefined ? age : (currentProfile?.age || 22),
@@ -398,7 +424,7 @@ export const useAuthStore = create<AuthState>()(
           const safeProfile = await upsertRemoteProfileForUser(userId, {
             full_name: typeof data.full_name === 'string' ? data.full_name : null,
             height_cm: normalizeNumber(data.height_cm),
-            weight_kg: remoteWeightKg,
+            current_weight_kg: remoteWeightKg,
             gender: normalizeGender(data.gender),
             goal: normalizeGoal(data.goal),
             age: normalizeNumber(data.age),
