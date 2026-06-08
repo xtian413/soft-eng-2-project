@@ -126,6 +126,10 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   // Timer state
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedSecs, setElapsedSecs] = useState(0);
+  const isRunningRef = useRef(isRunning);
+  useEffect(() => {
+    isRunningRef.current = isRunning;
+  }, [isRunning]);
   const [isLbs, setIsLbs] = useState(true);
 
   // Routine state
@@ -203,7 +207,9 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   useEffect(() => {
     if (isRunning) {
       intervalRef.current = setInterval(() => {
-        setElapsedSecs((s) => s + 1);
+        if (isRunningRef.current) {
+          setElapsedSecs((s) => s + 1);
+        }
       }, 1000);
 
       Animated.loop(
@@ -503,6 +509,10 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setIsRunning(false);
     setElapsedSecs(0);
     scaleAnim.setValue(1);
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
     if (activeRoutineId) {
       setActiveRoutineId(null);
       setRoutineProgress({});
@@ -1528,7 +1538,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                   </Text>
                   <Text style={styles.activeProgressText}>
                     {totalSetsCount > 0
-                      ? `✓ ${completedSetsCount} of ${totalSetsCount} sets completed`
+                      ? `${completedSetsCount} of ${totalSetsCount} sets completed`
                       : 'No sets logged yet'
                     }
                   </Text>
@@ -1575,7 +1585,6 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                   onPress={handleFinishSession}
                   activeOpacity={0.8}
                 >
-                  <Check size={14} color={Colors.onPrimary} strokeWidth={2.5} style={{ marginRight: 6 }} />
                   <Text style={styles.btnFinishText}>Finish Session</Text>
                 </TouchableOpacity>
               </View>
@@ -1709,7 +1718,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                     activeRoutineId === selectedRoutine.id && styles.routineStartTextActive,
                   ]}
                 >
-                  {activeRoutineId === selectedRoutine.id ? '✓ Routine Active' : 'Start Routine'}
+                  {activeRoutineId === selectedRoutine.id ? 'Routine Active' : 'Start Routine'}
                 </Text>
               </TouchableOpacity>
 
