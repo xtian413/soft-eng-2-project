@@ -1,27 +1,23 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  PanResponder,
-  type PanResponderInstance,
-  Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
+  TouchableOpacity,
+  TextInput,
+  Animated,
+  PanResponder,
+  PanResponderInstance,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
   AppState,
   type AppStateStatus,
-  Alert,
 } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
-import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle, Sparkles } from 'lucide-react-native';
+import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle } from 'lucide-react-native';
 import { getMuscleDataForExercise } from './exerciseMuscles';
 import { BodyMuscleMap } from './BodyMuscleMap';
 import { WGERExerciseBrowser } from './WGERExerciseBrowser';
@@ -112,16 +108,6 @@ const formatWeight = (value: number): string => {
 
 export function LiftTab({ triggerToast }: LiftTabProps) {
   const user = useAuthStore((state) => state.user);
-  const profile = useAuthStore((state) => state.profile);
-
-  const fullName = profile?.fullName || user?.user_metadata?.fullName || user?.user_metadata?.full_name || 'User';
-
-  const getGreeting = () => {
-    const hours = new Date().getHours();
-    if (hours < 12) return 'Good morning';
-    if (hours < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
 
   // Timer state
   const [isRunning, setIsRunning] = useState(false);
@@ -1455,30 +1441,6 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setPendingExercise(null);
   };
 
-  const completedSetsCount = useMemo(() => {
-    return Object.values(routineProgress).reduce((acc, progress) => {
-      return acc + progress.doneSets.filter((done) => done).length;
-    }, 0);
-  }, [routineProgress]);
-
-  const totalSetsCount = useMemo(() => {
-    return Object.values(routineProgress).reduce((acc, progress) => {
-      return acc + progress.doneSets.length;
-    }, 0);
-  }, [routineProgress]);
-
-  const handleDiscardSession = () => {
-    Alert.alert(
-      'Discard Workout',
-      'Are you sure you want to discard this training session? Progress will not be saved.',
-      [
-        { text: 'Keep Training', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: () => resetFinishedSessionState() },
-      ],
-      { cancelable: true }
-    );
-  };
-
   return (
     <>
       <ScrollView
@@ -1486,126 +1448,54 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Dynamic Header Greeting */}
-        <View style={styles.welcomeSection}>
-          <View style={styles.welcomeGreetingRow}>
-            <Text style={styles.welcomeTitle}>
-              {getGreeting()}, {fullName.split(' ')[0]}!
-            </Text>
-            <Sparkles size={18} color="#eab308" fill="#eab308" style={styles.greetingSparkle} />
-          </View>
-          <Text style={styles.welcomeSubtitle}>
-            Track your routines and daily training sessions.
-          </Text>
-        </View>
-
         {/* Session Timer Card */}
-        <View style={[styles.timerCard, (activeRoutineId || elapsedSecs > 0) && styles.timerCardActive]}>
-          {activeRoutineId || elapsedSecs > 0 ? (
-            // Active Session State
-            <View style={styles.activeSessionContainer}>
-              <View style={styles.timerHeaderRow}>
-                <View style={[styles.statusBadge, isRunning ? styles.statusBadgeActive : styles.statusBadgePaused]}>
-                  <View style={[styles.statusDot, isRunning ? styles.statusDotActive : styles.statusDotPaused]} />
-                  <Text style={[styles.statusText, isRunning ? styles.statusTextActive : styles.statusTextPaused]}>
-                    {isRunning ? 'TRAINING ACTIVE' : 'SESSION PAUSED'}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.discardTextButton}
-                  onPress={handleDiscardSession}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.discardText}>Discard</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.activeSessionMain}>
-                <View style={styles.activeSessionDetails}>
-                  <Text style={styles.activeRoutineName} numberOfLines={1}>
-                    {activeRoutine ? activeRoutine.name : 'Freestyle Workout'}
-                  </Text>
-                  <Text style={styles.activeProgressText}>
-                    {totalSetsCount > 0
-                      ? `✓ ${completedSetsCount} of ${totalSetsCount} sets completed`
-                      : 'No sets logged yet'
-                    }
-                  </Text>
-                </View>
-                <Animated.Text style={[styles.timerDisplay, { transform: [{ scale: scaleAnim }] }]}>
-                  {formatTime(elapsedSecs)}
-                </Animated.Text>
-              </View>
-
-              {totalSetsCount > 0 && (
-                <View style={styles.activeProgressBarContainer}>
-                  <View
-                    style={[
-                      styles.activeProgressBarFill,
-                      { width: `${(completedSetsCount / totalSetsCount) * 100}%` }
-                    ]}
-                  />
-                </View>
-              )}
-
-              <View style={styles.activeActionsRow}>
-                {isRunning ? (
-                  <TouchableOpacity
-                    style={[styles.timerBtn, styles.btnPause]}
-                    onPress={() => setIsRunning(false)}
-                    activeOpacity={0.8}
-                  >
-                    <Pause size={14} color={Colors.primary} style={{ marginRight: 6 }} />
-                    <Text style={styles.btnPauseText}>Pause</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={[styles.timerBtn, styles.btnResume]}
-                    onPress={() => setIsRunning(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Play size={14} color={Colors.onPrimary} fill={Colors.onPrimary} style={{ marginRight: 6 }} />
-                    <Text style={styles.btnResumeText}>Resume</Text>
-                  </TouchableOpacity>
-                )}
-
-                <TouchableOpacity
-                  style={[styles.timerBtn, styles.btnFinishActive]}
-                  onPress={handleFinishSession}
-                  activeOpacity={0.8}
-                >
-                  <Check size={14} color={Colors.onPrimary} strokeWidth={2.5} style={{ marginRight: 6 }} />
-                  <Text style={styles.btnFinishText}>Finish Session</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            // Idle / No Active Session State
-            <View style={styles.idleSessionContainer}>
-              <View style={styles.idleSessionHeader}>
-                <Dumbbell size={20} color={Colors.primary} />
-                <Text style={styles.idleSessionTitle}>START A NEW WORKOUT</Text>
-              </View>
-              <Text style={styles.idleSessionSubtitle}>
-                Select a routine template below to begin tracking, or start a freestyle session to log sets manually.
-              </Text>
+        <View style={styles.timerCard}>
+          <View style={styles.timerHeaderRow}>
+            <Text style={styles.timerLabel}>ACTIVE TRAINING SESSION</Text>
+            <View style={styles.timerActiveDot} />
+          </View>
+          <Animated.Text style={[styles.timerDisplay, { transform: [{ scale: scaleAnim }] }]}>
+            {formatTime(elapsedSecs)}
+          </Animated.Text>
+          <View style={styles.timerActions}>
+            {isRunning ? (
               <TouchableOpacity
-                style={styles.btnFreestyle}
-                onPress={() => {
-                  setSetsList([]);
-                  setExercisesList([]);
-                  setCurrentExerciseId('');
-                  setRoutineProgress({});
-                  setIsRunning(true);
-                }}
+                style={[styles.timerBtn, styles.btnPause]}
+                onPress={() => setIsRunning(false)}
                 activeOpacity={0.8}
               >
-                <Play size={14} color={Colors.onPrimary} fill={Colors.onPrimary} style={{ marginRight: 6 }} />
-                <Text style={styles.btnFreestyleText}>Start Freestyle Session</Text>
+                <View style={styles.timerBtnContent}>
+                  <Pause size={14} color={Colors.onPrimary} style={{ marginRight: 6 }} />
+                  <Text style={styles.timerBtnText}>Pause Workout</Text>
+                </View>
               </TouchableOpacity>
-            </View>
-          )}
+            ) : (
+              <View style={styles.timerActionStack}>
+                <TouchableOpacity
+                  style={[styles.timerBtn, styles.btnStart]}
+                  onPress={() => setIsRunning(true)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.timerBtnContent}>
+                    <Play size={14} color={Colors.onPrimary} fill={Colors.onPrimary} style={{ marginRight: 6 }} />
+                    <Text style={styles.timerBtnText}>
+                      {elapsedSecs > 0 ? 'Resume Session' : 'Start Session'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {elapsedSecs > 0 && (
+                  <TouchableOpacity
+                    style={[styles.timerBtn, styles.btnFinish]}
+                    onPress={handleFinishSession}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.timerBtnText}>Finish Session</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Routine Section */}
@@ -1620,7 +1510,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
               }}
               activeOpacity={0.8}
             >
-              <Plus size={12} color={Colors.primary} strokeWidth={3} />
+              <Plus size={14} color={Colors.onPrimary} strokeWidth={2.5} />
               <Text style={styles.routineAddText}>Create</Text>
             </TouchableOpacity>
           </View>
@@ -1703,13 +1593,8 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                 onPress={() => handleStartRoutine(selectedRoutine)}
                 activeOpacity={0.85}
               >
-                <Text
-                  style={[
-                    styles.routineStartText,
-                    activeRoutineId === selectedRoutine.id && styles.routineStartTextActive,
-                  ]}
-                >
-                  {activeRoutineId === selectedRoutine.id ? '✓ Routine Active' : 'Start Routine'}
+                <Text style={styles.routineStartText}>
+                  {activeRoutineId === selectedRoutine.id ? 'Routine Active' : 'Start Routine'}
                 </Text>
               </TouchableOpacity>
 
@@ -1824,7 +1709,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                             </Text>
                             {isDone && (
                               <View style={styles.routineSetCardCheck}>
-                                <Check size={10} color="#ffffff" strokeWidth={3} />
+                                <Check size={10} color="#10b981" strokeWidth={3} />
                               </View>
                             )}
                           </TouchableOpacity>
@@ -1869,7 +1754,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                         transform: [{ translateX: animValue }],
                         backgroundColor: animValue.interpolate({
                           inputRange: [0, 100],
-                          outputRange: [set.isChecked ? 'rgba(16, 185, 129, 0.15)' : 'transparent', '#10b981'],
+                          outputRange: [set.isChecked ? '#10b98144' : 'transparent', '#10b981'],
                         }),
                       },
                     ]}
@@ -1906,46 +1791,22 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>RECENT SAVED WORKOUTS</Text>
             <View style={styles.savedWorkoutList}>
-              {completedWorkouts.map((workout, index) => {
-                const syncStatus = workout.sync_status || 'pending';
-                return (
-                  <View
-                    key={workout.id}
-                    style={[
-                      styles.savedWorkoutRow,
-                      index > 0 && styles.savedWorkoutRowBorder
-                    ]}
-                  >
-                    <View style={styles.savedWorkoutLeft}>
-                      <View style={styles.savedWorkoutIconWrapper}>
-                        <Dumbbell size={18} color={Colors.primary} />
-                      </View>
-                      <View style={styles.savedWorkoutInfo}>
-                        <View style={styles.savedWorkoutNameRow}>
-                          <Text style={styles.savedWorkoutName} numberOfLines={1}>
-                            {workout.name}
-                          </Text>
-                          <Text style={[styles.syncStatusPill, styles[`syncStatus_${syncStatus}`]]}>
-                            {syncStatus}
-                          </Text>
-                        </View>
-                        <Text style={styles.savedWorkoutDate}>
-                          {workout.performed_at.split('T')[0]}
-                        </Text>
-                        <Text style={styles.savedWorkoutSetsText} numberOfLines={1}>
-                          {[...new Set(workout.sets.map((s) => s.exercise_name))]
-                            .slice(0, 3)
-                            .join(', ') || 'No exercises'}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.savedWorkoutStats}>
-                      <Text style={styles.savedWorkoutSetsNumber}>{workout.sets.length}</Text>
-                      <Text style={styles.savedWorkoutSetsLabel}>sets</Text>
-                    </View>
+              {completedWorkouts.map((workout) => (
+                <View key={workout.id} style={styles.savedWorkoutRow}>
+                  <View style={styles.savedWorkoutHeader}>
+                    <Text style={styles.savedWorkoutName}>{workout.name}</Text>
+                    <Text style={styles.savedWorkoutMeta}>
+                      {workout.sets.length} sets · {workout.sync_status}
+                    </Text>
                   </View>
-                );
-              })}
+                  <Text style={styles.savedWorkoutDate}>{workout.performed_at.split('T')[0]}</Text>
+                  <Text style={styles.savedWorkoutSets}>
+                    {[...new Set(workout.sets.map((set) => set.exercise_name))]
+                      .slice(0, 3)
+                      .join(', ') || 'No sets'}
+                  </Text>
+                </View>
+              ))}
             </View>
           </View>
         )}
@@ -2370,204 +2231,67 @@ const styles = StyleSheet.create({
     maxWidth: layout.modalMaxWidth,
     alignSelf: 'center',
   },
-
   timerCard: {
-    backgroundColor: Colors.surfaceContainerLowest,
+    backgroundColor: Colors.primary,
     borderRadius: radius.lg,
     padding: spacing.base,
+    alignItems: 'center',
     marginBottom: spacing.base,
-    borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.15)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  timerCardActive: {
-    borderColor: 'rgba(0, 101, 145, 0.25)',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  activeSessionContainer: {
-    width: '100%',
   },
   timerHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
   },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.full,
-  },
-  statusBadgeActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-  },
-  statusBadgePaused: {
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusDotActive: {
-    backgroundColor: '#10b981',
-  },
-  statusDotPaused: {
-    backgroundColor: '#f59e0b',
-  },
-  statusText: {
+  timerLabel: {
+    color: 'rgba(255,255,255,0.7)',
     fontSize: 9,
     fontWeight: fontWeight.bold,
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
-  statusTextActive: {
-    color: '#10b981',
-  },
-  statusTextPaused: {
-    color: '#f59e0b',
-  },
-  discardTextButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-  },
-  discardText: {
-    fontSize: typography.xs,
-    color: Colors.error,
-    fontWeight: fontWeight.bold,
-  },
-  activeSessionMain: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  activeSessionDetails: {
-    flex: 1,
-    marginRight: spacing.base,
-  },
-  activeRoutineName: {
-    fontSize: typography.base + 1,
-    fontWeight: fontWeight.bold,
-    color: Colors.onSurface,
-  },
-  activeProgressText: {
-    fontSize: typography.xs,
-    color: Colors.onSurfaceVariant,
-    marginTop: 4,
-    fontWeight: fontWeight.medium,
+  timerActiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: radius.full,
+    backgroundColor: '#10b981',
   },
   timerDisplay: {
-    color: Colors.primary,
-    fontSize: typography.xxl,
+    color: Colors.onPrimary,
+    fontSize: 42,
     fontWeight: fontWeight.extraBold,
-    fontVariant: ['tabular-nums'],
+    letterSpacing: 0,
+    marginVertical: spacing.xs,
   },
-  activeProgressBarContainer: {
-    height: 4,
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: radius.full,
-    overflow: 'hidden',
-    marginBottom: spacing.lg,
+  timerActions: {
+    width: '100%',
   },
-  activeProgressBarFill: {
-    height: '100%',
-    backgroundColor: Colors.primary,
-    borderRadius: radius.full,
-  },
-  activeActionsRow: {
-    flexDirection: 'row',
+  timerActionStack: {
     gap: spacing.sm,
   },
   timerBtn: {
-    flex: 1,
-    flexDirection: 'row',
     borderRadius: radius.full,
     paddingVertical: spacing.sm,
     alignItems: 'center',
     minHeight: layout.minTouchTarget,
     justifyContent: 'center',
   },
+  btnStart: {
+    backgroundColor: Colors.primaryContainer,
+  },
   btnPause: {
-    backgroundColor: Colors.surfaceContainerLowest,
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(0, 101, 145, 0.25)',
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  btnPauseText: {
-    color: Colors.primary,
-    fontSize: typography.sm,
-    fontWeight: fontWeight.bold,
+  btnFinish: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
-  btnResume: {
-    backgroundColor: Colors.primary,
-  },
-  btnResumeText: {
+  timerBtnText: {
     color: Colors.onPrimary,
     fontSize: typography.sm,
-    fontWeight: fontWeight.bold,
-  },
-  btnFinishActive: {
-    backgroundColor: '#10b981',
-    flex: 1.3,
-  },
-  btnFinishText: {
-    color: Colors.onPrimary,
-    fontSize: typography.sm,
-    fontWeight: fontWeight.bold,
-  },
-  idleSessionContainer: {
-    width: '100%',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-  },
-  idleSessionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  idleSessionTitle: {
-    fontSize: typography.xs,
-    fontWeight: fontWeight.bold,
-    color: Colors.outline,
-    letterSpacing: 0.8,
-  },
-  idleSessionSubtitle: {
-    fontSize: typography.xs,
-    color: Colors.onSurfaceVariant,
-    textAlign: 'center',
-    lineHeight: 16,
-    marginBottom: spacing.base,
-    paddingHorizontal: spacing.base,
-  },
-  btnFreestyle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    minHeight: 40,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  btnFreestyleText: {
-    color: Colors.onPrimary,
-    fontSize: typography.xs + 1,
     fontWeight: fontWeight.bold,
   },
   card: {
@@ -2586,97 +2310,41 @@ const styles = StyleSheet.create({
     marginBottom: spacing.base,
   },
   savedWorkoutList: {
-    marginTop: spacing.xs,
+    gap: spacing.sm,
   },
   savedWorkoutRow: {
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.12)',
+  },
+  savedWorkoutHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    backgroundColor: Colors.surfaceContainerLowest,
-  },
-  savedWorkoutRowBorder: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(190, 200, 210, 0.15)',
-  },
-  savedWorkoutLeft: {
-    flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    flex: 1,
-    paddingRight: spacing.sm,
-  },
-  savedWorkoutIconWrapper: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 101, 145, 0.08)',
-  },
-  savedWorkoutInfo: {
-    flex: 1,
-  },
-  savedWorkoutNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
   },
   savedWorkoutName: {
-    flexShrink: 1,
+    flex: 1,
     fontSize: typography.sm,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,
+  },
+  savedWorkoutMeta: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
   },
   savedWorkoutDate: {
     fontSize: 10,
     color: Colors.outline,
     marginTop: 2,
-    fontWeight: fontWeight.medium,
   },
-  savedWorkoutSetsText: {
+  savedWorkoutSets: {
     fontSize: typography.xs,
     color: Colors.onSurfaceVariant,
-    marginTop: 4,
-  },
-  savedWorkoutStats: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 40,
-  },
-  savedWorkoutSetsNumber: {
-    fontSize: typography.sm + 1,
-    fontWeight: fontWeight.bold,
-    color: Colors.onSurface,
-    textAlign: 'center',
-  },
-  savedWorkoutSetsLabel: {
-    fontSize: 8,
-    fontWeight: fontWeight.medium,
-    color: Colors.outline,
-    textAlign: 'center',
-    marginTop: -2,
-  },
-  syncStatusPill: {
-    overflow: 'hidden',
-    borderRadius: radius.full,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    fontSize: 9,
-    fontWeight: fontWeight.bold,
-    textTransform: 'lowercase',
-  },
-  syncStatus_synced: {
-    color: Colors.outline,
-    backgroundColor: 'rgba(110, 120, 129, 0.08)',
-  },
-  syncStatus_pending: {
-    color: Colors.primary,
-    backgroundColor: 'rgba(14, 165, 233, 0.08)',
-  },
-  syncStatus_failed: {
-    color: Colors.error,
-    backgroundColor: 'rgba(186, 26, 26, 0.08)',
+    marginTop: spacing.xs,
   },
   exerciseHeader: {
     flexDirection: 'row',
@@ -2827,16 +2495,13 @@ const styles = StyleSheet.create({
   tableHeader: {
     flexDirection: 'row',
     paddingBottom: spacing.sm,
-    paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(190, 200, 210, 0.15)',
+    borderBottomColor: 'rgba(190, 200, 210, 0.25)',
   },
   thText: {
     fontSize: 10,
     fontWeight: fontWeight.bold,
     color: Colors.outline,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
   tableBody: {
     marginTop: spacing.xs,
@@ -2845,25 +2510,21 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     overflow: 'hidden',
     marginBottom: spacing.xs,
-    borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.1)',
-    backgroundColor: Colors.surfaceContainerLow,
   },
   tableRowContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,
   },
   tdSetNum: {
     fontSize: typography.sm,
     fontWeight: fontWeight.bold,
-    color: Colors.primary,
+    color: Colors.outline,
   },
   tdPrevious: {
     fontSize: typography.xs,
     color: Colors.outline,
-    fontWeight: fontWeight.medium,
   },
   tdLog: {
     fontSize: typography.sm,
@@ -2906,28 +2567,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  welcomeSection: {
-    marginBottom: spacing.base,
-    marginTop: spacing.xs,
-  },
-  welcomeGreetingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  greetingSparkle: {
-    marginTop: -2,
-  },
-  welcomeTitle: {
-    fontSize: typography.xl,
-    fontWeight: fontWeight.bold,
-    color: Colors.onSurface,
-  },
-  welcomeSubtitle: {
-    fontSize: typography.sm,
-    color: Colors.onSurfaceVariant,
-    marginTop: 2,
-  },
   routineCard: {
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: radius.lg,
@@ -2935,17 +2574,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.base,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.15)',
-    shadowColor: Colors.onSurface,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
   },
   routineHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   routineTitle: {
     fontSize: typography.xs,
@@ -2956,18 +2590,17 @@ const styles = StyleSheet.create({
   routineAddButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs + 2,
+    paddingVertical: spacing.xs,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(0, 101, 145, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 101, 145, 0.15)',
+    backgroundColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
   },
   routineAddText: {
     fontSize: typography.xs,
     fontWeight: fontWeight.bold,
-    color: Colors.primary,
+    color: Colors.onPrimary,
   },
   routineHint: {
     fontSize: typography.xs,
@@ -2975,130 +2608,90 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   routinePills: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.base,
   },
   routinePill: {
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: 'rgba(0, 101, 145, 0.12)',
-    backgroundColor: Colors.surfaceContainerLow,
+    borderColor: Colors.outline,
     marginRight: spacing.xs,
-    minHeight: 32,
+    minHeight: 36,
     justifyContent: 'center',
-    alignItems: 'center',
   },
   routinePillActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryContainer,
+    borderColor: Colors.primaryContainer,
   },
   routinePillText: {
     fontSize: typography.xs,
-    color: Colors.primary,
-    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    fontWeight: fontWeight.medium,
   },
   routinePillTextActive: {
     color: Colors.onPrimary,
   },
   routineDetails: {
-    gap: spacing.base,
-    marginTop: spacing.xs,
+    gap: spacing.sm,
   },
   routineExerciseList: {
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   routineExerciseRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.base,
-    borderRadius: radius.lg,
-    backgroundColor: Colors.surfaceContainerLow,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.15)',
+    borderColor: 'rgba(190, 200, 210, 0.2)',
   },
   routineExerciseRowActive: {
-    borderColor: Colors.primary,
-    backgroundColor: 'rgba(0, 101, 145, 0.04)',
+    borderColor: Colors.primaryContainer,
   },
   routineExerciseInfo: {
     flex: 1,
   },
   routineExerciseName: {
-    fontSize: typography.base,
+    fontSize: typography.sm,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,
   },
   routineExerciseMeta: {
     fontSize: typography.xs,
-    color: Colors.onSurfaceVariant,
-    marginTop: 4,
-    fontWeight: fontWeight.medium,
+    color: Colors.outline,
+    marginTop: 2,
   },
   routineExerciseTag: {
-    fontSize: typography.xs - 1,
-    color: Colors.primary,
-    backgroundColor: 'rgba(0, 101, 145, 0.12)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.full,
+    fontSize: typography.xs,
+    color: Colors.primaryContainer,
     fontWeight: fontWeight.bold,
-    textTransform: 'uppercase',
-  },
-  routineStartButton: {
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    backgroundColor: Colors.primary,
-    minHeight: layout.minTouchTarget,
-    justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
-    marginTop: spacing.xs,
-  },
-  routineStartButtonActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-    elevation: 0,
-    shadowOpacity: 0,
-  },
-  routineStartText: {
-    fontSize: typography.sm,
-    fontWeight: fontWeight.bold,
-    color: Colors.onPrimary,
-  },
-  routineStartTextActive: {
-    color: '#10b981',
   },
   routineEditButton: {
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
     alignItems: 'center',
-    backgroundColor: Colors.surfaceContainerLowest,
     borderWidth: 1,
-    borderColor: 'rgba(0, 101, 145, 0.25)',
+    borderColor: Colors.primaryContainer,
     minHeight: layout.minTouchTarget,
     justifyContent: 'center',
   },
   routineEditText: {
     fontSize: typography.sm,
     fontWeight: fontWeight.bold,
-    color: Colors.primary,
+    color: Colors.primaryContainer,
   },
   routineWorkoutList: {
     gap: spacing.sm,
   },
   routineWorkoutRow: {
     borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.15)',
-    borderRadius: radius.lg,
-    padding: spacing.base,
-    backgroundColor: Colors.surfaceContainerLowest,
+    borderColor: 'rgba(190, 200, 210, 0.2)',
+    borderRadius: radius.md,
+    padding: spacing.sm,
+    backgroundColor: Colors.surface,
   },
   routineWorkoutHeader: {
     flexDirection: 'row',
@@ -3107,7 +2700,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   routineWorkoutName: {
-    fontSize: typography.sm + 1,
+    fontSize: typography.sm,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,
   },
@@ -3119,28 +2712,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   routineInputLabel: {
-    fontSize: typography.xs - 1,
+    fontSize: typography.xs,
     color: Colors.outline,
     marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    fontWeight: fontWeight.bold,
-    textAlign: 'center',
   },
   routineInput: {
-    minHeight: 40,
+    minHeight: layout.minTouchTarget,
     borderWidth: 1,
-    borderColor: 'rgba(190, 200, 210, 0.3)',
+    borderColor: 'rgba(14, 165, 233, 0.3)',
     borderRadius: radius.md,
-    backgroundColor: Colors.surfaceContainerLow,
+    backgroundColor: 'rgba(14, 165, 233, 0.06)',
     paddingHorizontal: spacing.sm,
-    fontSize: typography.sm + 1,
+    fontSize: typography.sm,
     color: Colors.onSurface,
     fontWeight: fontWeight.bold,
     textAlign: 'center',
   },
   routineSetRow: {
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   routineSetHint: {
     fontSize: 9,
@@ -3157,46 +2746,37 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   routineSetCard: {
-    width: 60,
-    height: 60,
-    borderRadius: radius.lg,
+    width: 56,
+    height: 56,
+    borderRadius: radius.md,
     borderWidth: 1.5,
-    borderColor: 'rgba(190, 200, 210, 0.4)',
-    backgroundColor: Colors.surfaceContainerLowest,
+    borderColor: 'rgba(14, 165, 233, 0.35)',
+    backgroundColor: 'rgba(14, 165, 233, 0.05)',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.01,
-    shadowRadius: 2,
-    elevation: 1,
   },
   routineSetCardDone: {
-    backgroundColor: '#10b981',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
     borderColor: '#10b981',
-    shadowColor: '#10b981',
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
   },
   routineSetCardNum: {
-    fontSize: typography.base + 1,
+    fontSize: typography.lg,
     fontWeight: fontWeight.bold,
-    color: Colors.onSurface,
-    lineHeight: 20,
+    color: Colors.primaryContainer,
+    lineHeight: 22,
   },
   routineSetCardNumDone: {
-    color: '#ffffff',
+    color: '#10b981',
   },
   routineSetCardMeta: {
     fontSize: 9,
     color: Colors.outline,
     fontWeight: fontWeight.bold,
-    marginTop: 2,
   },
   routineSetCardMetaDone: {
-    color: 'rgba(255, 255, 255, 0.85)',
+    color: '#10b981',
+    opacity: 0.8,
   },
   routineSetCardCheck: {
     position: 'absolute',
@@ -3225,7 +2805,22 @@ const styles = StyleSheet.create({
   routineEmptyState: {
     paddingVertical: spacing.md,
   },
-
+  routineStartButton: {
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    backgroundColor: Colors.primaryContainer,
+    minHeight: layout.minTouchTarget,
+    justifyContent: 'center',
+  },
+  routineStartButtonActive: {
+    backgroundColor: 'rgba(14, 165, 233, 0.2)',
+  },
+  routineStartText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onPrimary,
+  },
   // Modal styles
   modalOverlay: {
     flex: 1,

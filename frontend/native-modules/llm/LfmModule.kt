@@ -5,10 +5,8 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
-import com.facebook.react.module.annotations.ReactModule
 import java.util.concurrent.Executors
 
-@ReactModule(name = LfmModule.NAME)
 class LfmModule(reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
 
