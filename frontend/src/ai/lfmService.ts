@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NativeModules } from 'react-native';
 import {
   buildWorkoutInsightPrompt,
   type DietLog,
@@ -10,9 +9,8 @@ import { scanModelOutput } from './safety/safetyClassifier';
 const WORKOUT_STORAGE_KEY = 'gemi:workouts';
 const DIET_STORAGE_KEY = 'gemi:dietLogs';
 
-const DEFAULT_CONTEXT_TOKENS = 1024;
-const DEFAULT_THREADS = 4;
-const DEFAULT_BATCH = 32;
+// All inference is handled by the laptop-hosted Ollama server.
+// The Android emulator reaches the host machine via the special 10.0.2.2 gateway.
 const DEFAULT_INSIGHT_MAX_TOKENS = 96;
 const DEFAULT_FITNESS_INSIGHT_MAX_TOKENS = 150;
 const DEFAULT_FITNESS_INSIGHT_TIMEOUT_MS = 90_000;
@@ -22,41 +20,8 @@ const DEFAULT_TEMPERATURE = 0.7;
 const DEFAULT_TOP_P = 0.9;
 const DEFAULT_TOP_K = 40;
 const DEFAULT_REPEAT_PENALTY = 1.05;
-const LFM_BUSY_MESSAGE = 'AI is currently busy. Please try again in a moment.';
 
-// Developer flag: set to true to run LLM inference on your host laptop CPU/GPU.
-// This requires Ollama (running qwen2.5:3b-instruct) or llama-server on port 11434.
-const USE_HOST_LLM_BRIDGE = true;
 const HOST_LLM_API = 'http://10.0.2.2:11434/api/generate';
-
-export function isHostLfmBridgeEnabled(): boolean {
-  return USE_HOST_LLM_BRIDGE;
-}
-
-let activeGenerationPromise: Promise<string> | null = null;
-
-type LfmNativeModule = {
-  initModel: (modelPath: string, nCtx: number, nThreads: number, nBatch: number) => Promise<void>;
-  generateResponse: (
-    prompt: string,
-    maxTokens: number,
-    temperature: number,
-    topP: number,
-    topK: number,
-    repeatPenalty: number
-  ) => Promise<string>;
-  copyAsset: (assetName: string) => Promise<string>;
-  cancelGeneration: () => Promise<string>;
-  closeModel: () => Promise<string>;
-};
-
-export function getLfmModule(): LfmNativeModule {
-  const module = NativeModules.LfmModule as LfmNativeModule | undefined;
-  if (!module) {
-    throw new Error('LfmModule is not registered. Did you run prebuild and add LfmPackage?');
-  }
-  return module;
-}
 
 async function loadJsonArray<T>(storageKey: string): Promise<T[]> {
   const raw = await AsyncStorage.getItem(storageKey);
@@ -133,16 +98,7 @@ export function sanitizeCoachResponse(response: string) {
     .trim();
 }
 
-export async function initLfmModel(
-  modelPath: string,
-  options?: { nCtx?: number; nThreads?: number; nBatch?: number }
-) {
-  const module = getLfmModule();
-  const nCtx = options?.nCtx ?? DEFAULT_CONTEXT_TOKENS;
-  const nThreads = options?.nThreads ?? DEFAULT_THREADS;
-  const nBatch = options?.nBatch ?? DEFAULT_BATCH;
-  await module.initModel(modelPath, nCtx, nThreads, nBatch);
-}
+
 
 export async function generateWorkoutInsight(userName: string) {
   const [workouts, dietLogs] = await Promise.all([
@@ -172,85 +128,43 @@ async function generateResponseWithTimeout(
   repeatPenalty: number,
   timeoutMs: number,
 ) {
-  if (USE_HOST_LLM_BRIDGE) {
-    const startedAt = Date.now();
-    try {
-      console.log(`[Gemi] Routing inference to host bridge: ${HOST_LLM_API}`);
-      const response = await fetch(HOST_LLM_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'qwen2.5:3b-instruct',
-          prompt: prompt,
-          stream: false,
-          n_predict: maxTokens,
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    console.log(`[Gemi] Routing inference to host bridge: ${HOST_LLM_API}`);
+    const response = await fetch(HOST_LLM_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: 'qwen2.5:3b-instruct',
+        prompt,
+        stream: false,
+        options: {
           temperature,
           top_p: topP,
           top_k: topK,
           repeat_penalty: repeatPenalty,
-          options: {
-            temperature,
-            top_p: topP,
-            top_k: topK,
-            repeat_penalty: repeatPenalty,
-            num_predict: maxTokens
-          }
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Host LLM API returned status ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log(`[Gemi] Host bridge response received in ${Date.now() - startedAt} ms`);
-      const text = data.response || data.content || '';
-      return text;
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      console.error(`[Gemi] Host bridge request failed: ${msg}`);
-      throw new Error(`Host LLM bridge failed: ${msg}`);
-    }
-  }
-
-  if (activeGenerationPromise) {
-    throw new Error(LFM_BUSY_MESSAGE);
-  }
-
-  const module = getLfmModule();
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  const startedAt = Date.now();
-  const generationLock = Promise.resolve('');
-  activeGenerationPromise = generationLock;
-
-  try {
-    const generationPromise = module.generateResponse(
-      prompt,
-      maxTokens,
-      temperature,
-      topP,
-      topK,
-      repeatPenalty,
-    );
-
-    const timeoutPromise = new Promise<string>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        module.cancelGeneration().catch((error) => {
-          console.warn('[Gemi] Failed to cancel timed-out generation:', error);
-        });
-        reject(new Error(`On-device generation exceeded ${Math.round(timeoutMs / 1000)} seconds.`));
-      }, timeoutMs);
+          num_predict: maxTokens,
+        },
+      }),
     });
 
-    return await Promise.race([generationPromise, timeoutPromise]);
+    if (!response.ok) {
+      throw new Error(`Host LLM API returned HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log(`[Gemi] Host bridge response in ${Date.now() - startedAt} ms`);
+    return (data.response || data.content || '') as string;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`[Gemi] Host bridge request failed: ${msg}`);
+    throw new Error(`Host LLM bridge failed: ${msg}`);
   } finally {
-    if (activeGenerationPromise === generationLock) {
-      activeGenerationPromise = null;
-    }
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-    console.log('[Gemi] On-device generation elapsed ms:', Date.now() - startedAt);
+    clearTimeout(timeoutId);
   }
 }
 
@@ -282,8 +196,9 @@ export async function generateInsightChatResponse(prompt: string) {
   return cleanLfmResponse(response);
 }
 
-export async function cancelLfmGeneration() {
-  return getLfmModule().cancelGeneration();
+/** No-op: host bridge requests are cancelled via AbortController timeout. */
+export async function cancelLfmGeneration(): Promise<void> {
+  // nothing to cancel — the fetch AbortController handles timeouts
 }
 
 export async function saveWorkoutLogs(workouts: WorkoutLog[]) {
