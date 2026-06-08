@@ -5,6 +5,8 @@ import {
   Text,
   View,
   TouchableOpacity,
+  StyleProp,
+  TextStyle,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Colors } from '@/theme/colors';
@@ -31,6 +33,29 @@ interface HomeTabProps {
   fitnessInsight: FitnessInsight;
   isInsightLoading: boolean;
   onNavigateToTab?: (tab: 'dashboard' | 'food' | 'insights' | 'lift' | 'profile') => void;
+}
+
+function renderFormattedText(
+  text: string,
+  baseStyle: StyleProp<TextStyle>,
+  boldStyle: StyleProp<TextStyle> = { fontWeight: 'bold' }
+) {
+  if (!text) return null;
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <Text style={baseStyle}>
+      {parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return (
+            <Text key={index} style={[baseStyle, boldStyle]}>
+              {part.slice(2, -2)}
+            </Text>
+          );
+        }
+        return part;
+      })}
+    </Text>
+  );
 }
 
 export function HomeTab({
@@ -74,9 +99,11 @@ export function HomeTab({
     return 'Good evening';
   };
 
-  const whisperText = isInsightLoading
+  const rawWhisper = isInsightLoading
     ? 'Reading your latest food and training data once. This insight will stay cached until your data changes.'
     : fitnessInsight.summary;
+
+  const whisperText = rawWhisper.replace(/^[\s*"'`•#-]+|[\s*"'`•#-]+$/g, '').trim();
 
   const currentWeight = useAuthStore((s) => s.profile?.weightKg ?? null);
 
@@ -370,9 +397,7 @@ export function HomeTab({
             fill={Colors.primary} 
           />
         </View>
-        <Text style={styles.insightQuote}>
-          "{whisperText}"
-        </Text>
+        {renderFormattedText(`"${whisperText}"`, styles.insightQuote)}
         <TouchableOpacity
           style={styles.insightBtn}
           activeOpacity={0.8}
