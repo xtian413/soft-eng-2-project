@@ -75,11 +75,13 @@ export function foodLogEntryToCreateLocalDietLogInput(
 
 export function foodLogEntryToRemoteCreateInput(
   entry: FoodLogEntry,
-  loggedAt: string
+  loggedAt: string,
+  sourceFoodId?: string | null
 ): DietLogCreateInput {
   return {
     meal_id: normalizeMealId(entry.mealId),
     meal_name: entry.name,
+    source_food_id: sourceFoodId ?? undefined,
     calories: entry.calories,
     protein_g: entry.protein,
     carbs_g: entry.carbs,
@@ -99,11 +101,13 @@ export function foodLogEntryToRemoteCreateInput(
 
 export function foodLogEntryToRemoteUpdateInput(
   entry: FoodLogEntry,
-  loggedAt: string
+  loggedAt: string,
+  sourceFoodId?: string | null
 ): DietLogUpdateInput {
   return {
     meal_id: normalizeMealId(entry.mealId),
     meal_name: entry.name,
+    source_food_id: sourceFoodId ?? undefined,
     calories: entry.calories,
     protein_g: entry.protein,
     carbs_g: entry.carbs,

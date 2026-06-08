@@ -448,7 +448,7 @@ export function FoodTab({
         foodLogEntryToCreateLocalDietLogInput(userId, entry, loggedAt, sourceFoodId)
       );
       const localEntry = localDietLogToFoodLogEntry(localLog);
-      const remoteInput = foodLogEntryToRemoteCreateInput(entry, loggedAt);
+      const remoteInput = foodLogEntryToRemoteCreateInput(entry, loggedAt, sourceFoodId);
 
       setFoodLogs((prev) => [...prev, localEntry]);
       triggerToast(successMessage);
@@ -481,7 +481,7 @@ export function FoodTab({
 
           console.log(`[FoodTab] Retrying local diet log: ${localLog.id}`);
           const entry = localDietLogToFoodLogEntry(localLog);
-          const remoteInput = foodLogEntryToRemoteCreateInput(entry, localLog.logged_at);
+          const remoteInput = foodLogEntryToRemoteCreateInput(entry, localLog.logged_at, localLog.source_food_id);
           const result = await syncCreatedDietLogToRemote(localLog.id, remoteInput, {
             showFailureToast: false,
             refreshAfterSync: false,
@@ -534,7 +534,7 @@ export function FoodTab({
 
           console.log(`[FoodTab] Retrying edited local diet log: ${localLog.id}`);
           const entry = localDietLogToFoodLogEntry(localLog);
-          const remoteInput = foodLogEntryToRemoteUpdateInput(entry, localLog.logged_at);
+          const remoteInput = foodLogEntryToRemoteUpdateInput(entry, localLog.logged_at, localLog.source_food_id);
 
           try {
             await updateRemoteDietLog(localLog.remote_id, remoteInput);

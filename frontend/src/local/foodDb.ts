@@ -6,8 +6,12 @@ import { FOOD_SEED_SOURCE, SEED_FOOD_ALIASES, SEED_FOOD_ITEMS } from '@/local/fo
 
 export const GEMI_FOOD_DATABASE_NAME = 'gemi_food.db';
 
-let foodDatabasePromise: Promise<SQLiteDatabase> | null = null;
-let foodInitializationPromise: Promise<SQLiteDatabase> | null = null;
+declare global {
+  // eslint-disable-next-line no-var
+  var __gemiFoodDbPromise: Promise<SQLiteDatabase> | undefined;
+  // eslint-disable-next-line no-var
+  var __gemiFoodDbInitPromise: Promise<SQLiteDatabase> | undefined;
+}
 
 type CountRow = {
   count: number;
@@ -21,11 +25,11 @@ async function openFoodDatabase() {
 }
 
 export async function getFoodDatabase() {
-  if (!foodDatabasePromise) {
-    foodDatabasePromise = openFoodDatabase();
+  if (!globalThis.__gemiFoodDbPromise) {
+    globalThis.__gemiFoodDbPromise = openFoodDatabase();
   }
 
-  return foodDatabasePromise;
+  return globalThis.__gemiFoodDbPromise;
 }
 
 export async function seedFoodDatabaseIfNeeded(db: SQLiteDatabase) {
@@ -106,8 +110,8 @@ export async function seedFoodDatabaseIfNeeded(db: SQLiteDatabase) {
 }
 
 export async function initializeFoodDatabase() {
-  if (!foodInitializationPromise) {
-    foodInitializationPromise = (async () => {
+  if (!globalThis.__gemiFoodDbInitPromise) {
+    globalThis.__gemiFoodDbInitPromise = (async () => {
       const db = await getFoodDatabase();
       await db.execAsync('PRAGMA foreign_keys = ON');
       await runFoodMigrations(db);
@@ -117,5 +121,5 @@ export async function initializeFoodDatabase() {
     })();
   }
 
-  return foodInitializationPromise;
+  return globalThis.__gemiFoodDbInitPromise;
 }

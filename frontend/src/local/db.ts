@@ -3,8 +3,12 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { runLocalMigrations } from '@/local/migrations';
 import { GEMI_USER_DATABASE_NAME } from '@/local/schema';
 
-let databasePromise: Promise<SQLiteDatabase> | null = null;
-let initializationPromise: Promise<SQLiteDatabase> | null = null;
+declare global {
+  // eslint-disable-next-line no-var
+  var __gemiUserDbPromise: Promise<SQLiteDatabase> | undefined;
+  // eslint-disable-next-line no-var
+  var __gemiUserDbInitPromise: Promise<SQLiteDatabase> | undefined;
+}
 
 async function openUserDatabase() {
   const db = await SQLite.openDatabaseAsync(GEMI_USER_DATABASE_NAME);
@@ -13,16 +17,16 @@ async function openUserDatabase() {
 }
 
 export async function getUserDatabase() {
-  if (!databasePromise) {
-    databasePromise = openUserDatabase();
+  if (!globalThis.__gemiUserDbPromise) {
+    globalThis.__gemiUserDbPromise = openUserDatabase();
   }
 
-  return databasePromise;
+  return globalThis.__gemiUserDbPromise;
 }
 
 export async function initializeLocalDatabase() {
-  if (!initializationPromise) {
-    initializationPromise = (async () => {
+  if (!globalThis.__gemiUserDbInitPromise) {
+    globalThis.__gemiUserDbInitPromise = (async () => {
       const db = await getUserDatabase();
       await db.execAsync('PRAGMA foreign_keys = ON');
       await runLocalMigrations(db);
@@ -30,5 +34,5 @@ export async function initializeLocalDatabase() {
     })();
   }
 
-  return initializationPromise;
+  return globalThis.__gemiUserDbInitPromise;
 }
