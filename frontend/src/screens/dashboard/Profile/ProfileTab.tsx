@@ -12,6 +12,8 @@ import { WeightTrendCard } from './subcomponents/WeightTrendCard';
 import { TrainingCalendar } from './subcomponents/TrainingCalendar';
 import { fetchWorkouts, type Workout } from '@/api/workoutApi';
 import { fetchDietLogs, type DietLog } from '@/api/dietApi';
+import { upsertRemoteDietLogForUser } from '@/local/repositories/dietLogsRepository';
+import { remoteDietLogToLocalRemoteInput } from '@/local/dietLogsMapper';
 import { DateDetailSheet } from './subcomponents/DateDetailSheet';
 import { getDailyLogsByUser } from '@/local/repositories/dailyLogsRepository';
 import type { LocalDailyLog } from '@/local/schema';
@@ -272,6 +274,15 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
         ];
         const [workouts, dietLogs, dailyLogs] = await Promise.all(promises);
         if (cancelled) return;
+
+        // Upsert remote diet logs to local SQLite so past-date history views can find them
+        const { user: authUser } = useAuthStore.getState();
+        if (authUser) {
+          await Promise.all(
+            dietLogs.map((log) => upsertRemoteDietLogForUser(authUser.id, remoteDietLogToLocalRemoteInput(log)))
+          );
+        }
+
         setHistoryWorkouts(workouts);
         setHistoryDietLogs(dietLogs);
         setHistoryDailyLogs(dailyLogs);

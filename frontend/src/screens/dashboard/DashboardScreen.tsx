@@ -6,6 +6,7 @@ import {
   View,
   Animated,
   Platform,
+  AppState,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '@/store/authStore';
@@ -112,6 +113,7 @@ export default function DashboardScreen() {
   const latestFitnessInsightSignatureRef = React.useRef<string | null>(null);
   const insightDisplayVersionRef = React.useRef(0);
   const activeChatRunRef = React.useRef(false);
+  const displayDateRef = React.useRef(format(new Date(), 'yyyy-MM-dd'));
 
   const goal: GoalKey = profile?.goal || (user?.user_metadata?.goal as GoalKey) || 'maintain';
   const gender = profile?.gender || 'male';
@@ -196,6 +198,32 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     loadTodayLogs();
+  }, [loadTodayLogs]);
+
+  // Midnight refresh: check every 60s if the date has changed
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = format(new Date(), 'yyyy-MM-dd');
+      if (displayDateRef.current !== now) {
+        displayDateRef.current = now;
+        loadTodayLogs();
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [loadTodayLogs]);
+
+  // Midnight refresh: also check when app returns to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        const now = format(new Date(), 'yyyy-MM-dd');
+        if (displayDateRef.current !== now) {
+          displayDateRef.current = now;
+          loadTodayLogs();
+        }
+      }
+    });
+    return () => subscription.remove();
   }, [loadTodayLogs]);
 
   const loadWorkoutLogs = useCallback(async () => {

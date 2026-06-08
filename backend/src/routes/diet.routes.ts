@@ -20,6 +20,16 @@ const dietLogSchema = z.object({
   protein_g: z.number().nonnegative().optional(),
   carbs_g: z.number().nonnegative().optional(),
   fat_g: z.number().nonnegative().optional(),
+  fiber_g: z.number().nonnegative().optional(),
+  sodium_mg: z.number().nonnegative().optional(),
+  potassium_mg: z.number().nonnegative().optional(),
+  calcium_mg: z.number().nonnegative().optional(),
+  iron_mg: z.number().nonnegative().optional(),
+  vitamin_c_mg: z.number().nonnegative().optional(),
+  folate_mcg: z.number().nonnegative().optional(),
+  serving_size: z.number().positive().optional(),
+  serving_unit: z.string().max(50).optional(),
+  source_food_id: z.string().optional(),
   logged_at: z.string().datetime(),
 });
 
