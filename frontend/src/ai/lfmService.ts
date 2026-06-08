@@ -24,6 +24,10 @@ const DEFAULT_TOP_K = 40;
 const DEFAULT_REPEAT_PENALTY = 1.05;
 
 const getHostLlmUrl = () => {
+  const envUrl = process.env.EXPO_PUBLIC_LLM_API_URL;
+  if (envUrl) {
+    return envUrl;
+  }
   if (Platform.OS === 'web') {
     // Web app runs on the host laptop itself, so it can connect to local Ollama directly.
     // This bypasses ngrok's browser warning block and CORS preflight header limitations.
@@ -36,9 +40,9 @@ const getHostLlmHeaders = () => {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
-  if (Platform.OS !== 'web') {
-    // ngrok requires this header to skip its browser-warning interstitial page.
-    // Without it, ngrok returns an HTML page instead of the Ollama JSON response.
+  const url = getHostLlmUrl();
+  // Only apply ngrok bypass header if we are actually hitting an ngrok endpoint.
+  if (Platform.OS !== 'web' && url.includes('ngrok-free.dev')) {
     headers['ngrok-skip-browser-warning'] = 'true';
   }
   return headers;
