@@ -7,13 +7,13 @@ import {
   ScrollView,
   TouchableOpacity,
   FlatList,
-  Image,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Colors } from '@/theme/colors';
 import { spacing, typography, fontWeight, radius, layout } from '@/theme/typography';
 import { X, Zap } from 'lucide-react-native';
-import { exerciseDbService, ExerciseDbExercise } from '@/api/exerciseDbService';
+import { exerciseDbService, ExerciseDbExercise, getGifSource } from '@/api/exerciseDbService';
 
 interface ExerciseBrowserProps {
   visible: boolean;
@@ -142,10 +142,10 @@ export function ExerciseBrowser({
             ))}
           </View>
 
-          {item.gifUrl && (
+          {getGifSource(item) && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Demo</Text>
-              <Image source={{ uri: item.gifUrl }} style={styles.gif} resizeMode="contain" />
+              <Image source={getGifSource(item)} style={styles.gif} contentFit="contain" />
             </View>
           )}
         </View>

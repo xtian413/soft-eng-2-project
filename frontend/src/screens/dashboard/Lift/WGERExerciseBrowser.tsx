@@ -10,12 +10,12 @@ import {
   ActivityIndicator,
   StatusBar,
   ScrollView,
-  Image,
 } from 'react-native';
-import { X, Zap, Search } from 'lucide-react-native';
+import { Image } from 'expo-image';
+import { X, Zap, Search, Plus } from 'lucide-react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, spacing, layout, radius } from '@/theme/typography';
-import { exerciseDbService, ExerciseDbExercise, EquipmentOption } from '@/api/exerciseDbService';
+import { exerciseDbService, ExerciseDbExercise, EquipmentOption, getGifSource } from '@/api/exerciseDbService';
 const POPULAR_EXERCISES = [
   'bench press',
   'squat',
@@ -145,9 +145,10 @@ export const WGERExerciseBrowser: React.FC<WGERExerciseBrowserProps> = ({
 
     return (
       <View style={[styles.exerciseCard, isAdded && styles.exerciseCardAdded]}>
-        <View style={styles.cardHeader}>
-          <View style={styles.titleContainer}>
+        <View style={styles.cardMainRow}>
+          <View style={styles.cardLeftCol}>
             <Text style={[styles.exerciseName, isAdded && styles.exerciseNameAdded]}>{exerciseName}</Text>
+            
             <View style={styles.badgeRow}>
               {isPrimary && <Text style={styles.primaryBadge}>Primary</Text>}
               {isAdded && (
@@ -156,38 +157,49 @@ export const WGERExerciseBrowser: React.FC<WGERExerciseBrowserProps> = ({
                 </View>
               )}
             </View>
+
+            {equipmentNames.length > 0 && (
+              <View style={styles.equipmentBadges}>
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{equipmentNames}</Text>
+                </View>
+              </View>
+            )}
+
+            <Text style={styles.shortDescription} numberOfLines={2}>
+              {item.target || item.bodyPart || 'Targeted muscle'}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.expandButton}
+              onPress={() => setExpandedId(isExpanded ? null : item.id)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.expandButtonText}>{isExpanded ? 'Hide Details' : 'Show Details'}</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            onPress={() => !isAdded && onSelectExercise(item)}
-            activeOpacity={isAdded ? 1 : 0.7}
-            style={[styles.zapBtn, isAdded && styles.zapBtnAdded]}
-          >
-            {isAdded
-              ? <Text style={styles.zapBtnAddedText}>Added</Text>
-              : <Zap size={20} color={Colors.primary} />
-            }
-          </TouchableOpacity>
+
+          <View style={styles.cardRightCol}>
+            <TouchableOpacity
+              onPress={() => !isAdded && onSelectExercise(item)}
+              activeOpacity={isAdded ? 1 : 0.7}
+              style={[styles.zapBtn, isAdded && styles.zapBtnAdded]}
+            >
+              {isAdded ? (
+                <Text style={styles.zapBtnAddedText}>Added</Text>
+              ) : (
+                <>
+                  <Plus size={12} color={Colors.primary} strokeWidth={3} style={{ marginRight: 2 }} />
+                  <Text style={styles.zapBtnText}>Add</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {getGifSource(item) && (
+              <Image source={getGifSource(item)} style={styles.cardThumbnailGif} contentFit="cover" />
+            )}
+          </View>
         </View>
-
-        {equipmentNames.length > 0 && (
-          <View style={styles.equipmentBadges}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{equipmentNames}</Text>
-            </View>
-          </View>
-        )}
-
-        <Text style={styles.shortDescription} numberOfLines={2}>
-          {item.target || item.bodyPart || 'Targeted muscle'}
-        </Text>
-
-        <TouchableOpacity
-          style={styles.expandButton}
-          onPress={() => setExpandedId(isExpanded ? null : item.id)}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.expandButtonText}>{isExpanded ? 'Hide Details' : 'Show Details'}</Text>
-        </TouchableOpacity>
 
         {isExpanded && (
           <View style={styles.expandedContent}>
@@ -220,13 +232,6 @@ export const WGERExerciseBrowser: React.FC<WGERExerciseBrowserProps> = ({
                     <Text style={styles.stepText}>{note}</Text>
                   </View>
                 ))}
-              </View>
-            )}
-
-            {item.gifUrl.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Demo</Text>
-                <Image source={{ uri: item.gifUrl }} style={styles.gif} resizeMode="contain" />
               </View>
             )}
           </View>
@@ -520,6 +525,28 @@ const styles = StyleSheet.create({
     color: '#10b981',
     textTransform: 'uppercase',
   },
+  cardMainRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  cardLeftCol: {
+    flex: 1,
+    paddingRight: spacing.sm,
+  },
+  cardRightCol: {
+    alignItems: 'flex-end',
+    width: 90,
+    justifyContent: 'flex-start',
+  },
+  cardThumbnailGif: {
+    width: 80,
+    height: 80,
+    borderRadius: radius.md,
+    marginTop: spacing.sm,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+  },
   zapBtn: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs + 1,
@@ -530,6 +557,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
     minHeight: 32,
+  },
+  zapBtnText: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.primary,
   },
   zapBtnAdded: {
     backgroundColor: 'rgba(16, 185, 129, 0.12)',
