@@ -25,7 +25,7 @@ export function HydrationTrackerCard({
   const [hydrationGoalInput, setHydrationGoalInput] = useState(String(hydrationGoal));
 
   const waterConsumedMl = waterGlassStates.filter(Boolean).length * 250;
-  const waterGlassCount = Math.min(12, Math.ceil(hydrationGoal / 250));
+  const waterGlassCount = Math.min(12, Math.max(Math.ceil(hydrationGoal / 250), waterGlassStates.length));
   const filledCount = waterGlassStates.filter(Boolean).length;
   const nextUnfilledIdx = filledCount;
   const lastFilledIdx = filledCount - 1;
@@ -58,7 +58,6 @@ export function HydrationTrackerCard({
 
   const updateHydrationGoal = (ml: number) => {
     setHydrationGoal(ml);
-    setWaterGlassStates(Array(Math.min(12, Math.ceil(ml / 250))).fill(false));
     setIsEditingHydration(false);
     triggerToast(`Hydration target updated to ${(ml / 1000).toFixed(2)}L!`);
   };

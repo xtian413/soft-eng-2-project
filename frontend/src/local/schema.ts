@@ -2,7 +2,7 @@ import type { MealId, GoalKey, ActivityLevel } from '@/screens/dashboard/types';
 
 export const GEMI_USER_DATABASE_NAME = 'gemi_user.db';
 
-export const LOCAL_SCHEMA_VERSION = 9;
+export const LOCAL_SCHEMA_VERSION = 10;
 
 export const LOCAL_TABLES = {
   schemaMigrations: 'schema_migrations',
@@ -53,6 +53,7 @@ export interface LocalDailyLog extends LocalBaseRecord {
   waketime: string | null;
   sleep_hours: number | null;
   water_ml: number | null;
+  water_goal_ml: number | null;
 }
 
 export interface LocalBodyProgress extends LocalBaseRecord {

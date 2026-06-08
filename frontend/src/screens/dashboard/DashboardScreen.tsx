@@ -30,6 +30,7 @@ import {
   getLatestAiInsightByUser,
   saveAiInsightLocal,
 } from '@/local/repositories/aiInsightsRepository';
+import { syncDailyLogsForUser } from '@/local/dailyLogsSync';
 import { HomeTab } from '@/screens/dashboard/Home/HomeTab';
 import { FoodTab } from '@/screens/dashboard/Food/FoodTab';
 import { LiftTab } from '@/screens/dashboard/Lift/LiftTab';
@@ -194,6 +195,8 @@ export default function DashboardScreen() {
     } catch (err) {
       console.warn('[Gemi] Remote diet-log refresh skipped:', err);
     }
+
+    void syncDailyLogsForUser(user.id);
   }, [user?.id]);
 
   useEffect(() => {

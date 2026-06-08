@@ -340,6 +340,7 @@ const MIGRATIONS: Migration[] = [
         waketime TEXT,
         sleep_hours REAL,
         water_ml REAL,
+        water_goal_ml REAL DEFAULT 2000,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         deleted_at TEXT,
@@ -378,6 +379,34 @@ const MIGRATIONS: Migration[] = [
       // Migrate legacy goal values to new goal types
       await db.execAsync(`UPDATE ${LOCAL_TABLES.profiles} SET goal = 'moderate_cut' WHERE goal = 'lose_weight'`);
       await db.execAsync(`UPDATE ${LOCAL_TABLES.profiles} SET goal = 'lean_bulk' WHERE goal = 'build_muscle'`);
+    },
+  },
+  {
+    version: 10,
+    name: 'add_water_goal_to_daily_logs',
+    apply: async (db) => {
+      const columns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${LOCAL_TABLES.dailyLogs})`
+      );
+      const hasWaterGoal = columns.some((column) => column.name === 'water_goal_ml');
+
+      if (!hasWaterGoal) {
+        await db.execAsync(
+          `ALTER TABLE ${LOCAL_TABLES.dailyLogs} ADD COLUMN water_goal_ml REAL DEFAULT 2000`
+        );
+      }
+
+      await db.execAsync(
+        `UPDATE ${LOCAL_TABLES.dailyLogs}
+         SET water_goal_ml = 2000
+         WHERE water_goal_ml IS NULL`
+      );
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_daily_logs_remote_id ON ${LOCAL_TABLES.dailyLogs}(remote_id)`
+      );
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_daily_logs_updated_at ON ${LOCAL_TABLES.dailyLogs}(updated_at)`
+      );
     },
   },
 ];
