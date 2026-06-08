@@ -409,6 +409,54 @@ const MIGRATIONS: Migration[] = [
       );
     },
   },
+  {
+    version: 11,
+    name: 'add_recorded_date_to_body_progress',
+    apply: async (db) => {
+      const columns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${LOCAL_TABLES.bodyProgress})`
+      );
+      const hasRecordedDate = columns.some((column) => column.name === 'recorded_date');
+
+      if (!hasRecordedDate) {
+        await db.execAsync(`ALTER TABLE ${LOCAL_TABLES.bodyProgress} ADD COLUMN recorded_date TEXT`);
+      }
+
+      await db.execAsync(
+        `UPDATE ${LOCAL_TABLES.bodyProgress}
+         SET recorded_date = substr(recorded_at, 1, 10)
+         WHERE recorded_date IS NULL OR recorded_date = ''`
+      );
+
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_body_progress_user_recorded_date
+         ON ${LOCAL_TABLES.bodyProgress}(user_id, recorded_date)`
+      );
+
+      const duplicate = await db.getFirstAsync<{ user_id: string; recorded_date: string; count: number }>(
+        `SELECT user_id, recorded_date, COUNT(*) AS count
+         FROM ${LOCAL_TABLES.bodyProgress}
+         WHERE deleted_at IS NULL
+         GROUP BY user_id, recorded_date
+         HAVING COUNT(*) > 1
+         LIMIT 1`
+      );
+
+      if (duplicate) {
+        console.warn(
+          '[GEMI_BODY_PROGRESS_SYNC] local_duplicate_dates_found',
+          { date: duplicate.recorded_date, count: duplicate.count }
+        );
+        return;
+      }
+
+      await db.execAsync(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_body_progress_unique_user_recorded_date
+         ON ${LOCAL_TABLES.bodyProgress}(user_id, recorded_date)
+         WHERE deleted_at IS NULL`
+      );
+    },
+  },
 ];
 
 type SchemaMigrationRow = {

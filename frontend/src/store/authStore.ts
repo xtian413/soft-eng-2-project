@@ -9,9 +9,10 @@ import {
   upsertLocalProfile,
   upsertRemoteProfileForUser,
 } from '@/local/repositories/profilesRepository';
-import { createBodyProgressLocal } from '@/local/repositories/bodyProgressRepository';
+import { recordWeightLocalFirst } from '@/local/bodyProgressRecording';
 import {
   getBodyProgressByUser,
+  normalizeRecordedDate,
   upsertRemoteBodyProgressForUser,
 } from '@/local/repositories/bodyProgressRepository';
 import type { LocalProfile } from '@/local/schema';
@@ -236,6 +237,7 @@ export const useAuthStore = create<AuthState>()(
                 id: userId,
                 full_name: metadata.fullName,
                 height_cm: metadata.height,
+                weight_kg: metadata.weight,
                 gender: metadata.gender,
                 goal: metadata.goal,
                 age: metadata.age ?? null,
@@ -254,6 +256,7 @@ export const useAuthStore = create<AuthState>()(
                 user_id: userId,
                 weight_kg: metadata.weight,
                 recorded_at: new Date().toISOString(),
+                recorded_date: normalizeRecordedDate(new Date().toISOString()),
               });
 
             if (weightError) {
@@ -325,14 +328,12 @@ export const useAuthStore = create<AuthState>()(
             macro_fats_pct: macroFatsPct !== undefined ? macroFatsPct : (currentProfile?.macroFatsPct || null),
           });
 
-          // Keep profile weight as a current-value cache; body_progress remains history.
-          if (!currentProfile || currentProfile.weightKg !== weightKg) {
-            await createBodyProgressLocal({
-              user_id: userId,
-              weight_kg: weightKg,
-              recorded_at: new Date().toISOString(),
-            });
-          }
+          await recordWeightLocalFirst({
+            userId,
+            weightKg,
+            recordedAt: new Date().toISOString(),
+            updateProfileCache: false,
+          });
 
           set({
             profile: localProfileToState(localProfile, weightKg)
@@ -362,7 +363,7 @@ export const useAuthStore = create<AuthState>()(
 
           const { data, error } = await supabase
             .from('profiles')
-            .select('full_name, height_cm, goal, gender, age, activity_level, target_weight_kg, macro_protein_pct, macro_carbs_pct, macro_fats_pct')
+            .select('full_name, height_cm, weight_kg, goal, gender, age, activity_level, target_weight_kg, macro_protein_pct, macro_carbs_pct, macro_fats_pct')
             .eq('id', userId)
             .maybeSingle();
 
@@ -373,26 +374,42 @@ export const useAuthStore = create<AuthState>()(
             return;
           }
 
-          const { data: weightData, error: weightError } = await supabase
+          const { data: weightRows, error: weightError } = await supabase
             .from('body_progress')
-            .select('id, weight_kg, recorded_at, created_at')
+            .select('id, weight_kg, body_fat_pct, recorded_at, recorded_date, created_at, updated_at')
             .eq('user_id', userId)
-            .order('recorded_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            .order('recorded_at', { ascending: false });
 
           if (weightError) {
             console.warn('[Gemi] Remote profile weight refresh skipped:', weightError.message);
           }
 
-          const remoteWeightKg = normalizeNumber(weightData?.weight_kg);
-          if (weightData?.id && weightData.recorded_at && remoteWeightKg !== null && remoteWeightKg > 0) {
-            await upsertRemoteBodyProgressForUser(userId, [{
-              id: String(weightData.id),
-              weight_kg: remoteWeightKg,
-              recorded_at: String(weightData.recorded_at),
-              created_at: weightData.created_at ? String(weightData.created_at) : undefined,
-            }]);
+          let remoteWeightKg: number | null = normalizeNumber(data.weight_kg);
+          if (Array.isArray(weightRows) && weightRows.length > 0) {
+            const safeRows = weightRows
+              .map((row) => {
+                const weight = normalizeNumber(row.weight_kg);
+                const recordedAt = typeof row.recorded_at === 'string' ? row.recorded_at : null;
+                if (!row.id || weight === null || weight <= 0 || !recordedAt) return null;
+
+                return {
+                  id: String(row.id),
+                  weight_kg: weight,
+                  body_fat_pct: normalizeNumber(row.body_fat_pct),
+                  recorded_at: recordedAt,
+                  recorded_date: typeof row.recorded_date === 'string'
+                    ? row.recorded_date
+                    : normalizeRecordedDate(recordedAt),
+                  created_at: row.created_at ? String(row.created_at) : undefined,
+                  updated_at: row.updated_at ? String(row.updated_at) : undefined,
+                };
+              })
+              .filter((row): row is NonNullable<typeof row> => row !== null);
+
+            if (safeRows.length > 0) {
+              await upsertRemoteBodyProgressForUser(userId, safeRows);
+              remoteWeightKg = safeRows[0].weight_kg;
+            }
           }
 
           const safeProfile = await upsertRemoteProfileForUser(userId, {

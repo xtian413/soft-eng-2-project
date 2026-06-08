@@ -1,12 +1,13 @@
-import { createProgressEntry } from '@/api/progressApi';
+import { createProgressEntry, updateProgressEntry } from '@/api/progressApi';
 import {
-  getUnsyncedNewBodyProgressByUser,
+  getPendingBodyProgressByUser,
   markBodyProgressSynced,
   markBodyProgressSyncFailed,
 } from '@/local/repositories/bodyProgressRepository';
 import type { LocalBodyProgress } from '@/local/schema';
 
-const inFlightBodyProgressCreateIds = new Set<string>();
+const LOG_PREFIX = '[GEMI_BODY_PROGRESS_SYNC]';
+const inFlightBodyProgressIds = new Set<string>();
 const retryingBodyProgressUsers = new Set<string>();
 
 function getErrorMessage(error: unknown) {
@@ -19,60 +20,101 @@ function assertSameUser(userId: string, localRow: LocalBodyProgress) {
   }
 }
 
-export async function syncBodyProgressCreateToRemote(
+function shortId(id: string | null | undefined) {
+  return id ? id.slice(0, 8) : null;
+}
+
+function logSync(
+  action: string,
+  localRow: LocalBodyProgress,
+  result: 'success' | 'failure' | 'skipped',
+  remoteId = localRow.remote_id
+) {
+  console.log(LOG_PREFIX, {
+    action,
+    localId: shortId(localRow.id),
+    remoteId: shortId(remoteId),
+    date: localRow.recorded_date,
+    status: localRow.sync_status,
+    result,
+    source: 'local',
+  });
+}
+
+export async function syncBodyProgressToRemote(
   userId: string,
   localRow: LocalBodyProgress
 ): Promise<LocalBodyProgress | null> {
   assertSameUser(userId, localRow);
 
-  if (localRow.remote_id || localRow.deleted_at) {
+  if (localRow.deleted_at) {
     return localRow;
   }
 
-  if (inFlightBodyProgressCreateIds.has(localRow.id)) {
-    console.log('[BodyProgressSync] Create sync skipped: already in-flight', {
-      localId: localRow.id,
-    });
+  if (inFlightBodyProgressIds.has(localRow.id)) {
+    logSync('sync_skip_in_flight', localRow, 'skipped');
     return null;
   }
 
-  inFlightBodyProgressCreateIds.add(localRow.id);
+  inFlightBodyProgressIds.add(localRow.id);
   try {
-    const remoteRow = await createProgressEntry({
+    const payload = {
       weight_kg: localRow.weight_kg,
       recorded_at: localRow.recorded_at,
-    });
+      recorded_date: localRow.recorded_date,
+    };
+    const remoteRow = localRow.remote_id
+      ? await updateProgressEntry(localRow.remote_id, payload)
+      : await createProgressEntry(payload);
 
-    return await markBodyProgressSynced(userId, localRow.id, remoteRow.id);
+    const synced = await markBodyProgressSynced(userId, localRow.id, remoteRow.id);
+    logSync(localRow.remote_id ? 'sync_update_remote' : 'sync_create_remote', synced, 'success', remoteRow.id);
+    return synced;
   } catch (error) {
-    console.warn('[BodyProgressSync] Failed to create remote body-progress row:', getErrorMessage(error));
+    console.warn(LOG_PREFIX, {
+      action: localRow.remote_id ? 'sync_update_remote' : 'sync_create_remote',
+      localId: shortId(localRow.id),
+      remoteId: shortId(localRow.remote_id),
+      date: localRow.recorded_date,
+      status: localRow.sync_status,
+      result: 'failure',
+      source: 'local',
+      error: getErrorMessage(error),
+    });
     try {
       await markBodyProgressSyncFailed(userId, localRow.id);
     } catch (markError) {
       console.error(
-        '[BodyProgressSync] Failed to mark body-progress sync failed:',
+        `${LOG_PREFIX} mark_failed_status_error`,
         getErrorMessage(markError)
       );
     }
     return null;
   } finally {
-    inFlightBodyProgressCreateIds.delete(localRow.id);
+    inFlightBodyProgressIds.delete(localRow.id);
   }
 }
 
+export const syncBodyProgressCreateToRemote = syncBodyProgressToRemote;
+
 export async function retryPendingBodyProgressCreates(userId: string): Promise<number> {
   if (retryingBodyProgressUsers.has(userId)) {
-    console.log('[BodyProgressSync] Create retry skipped: already running');
+    console.log(LOG_PREFIX, {
+      action: 'retry_skip_in_flight',
+      status: 'pending',
+      result: 'skipped',
+      source: 'local',
+    });
     return 0;
   }
 
   retryingBodyProgressUsers.add(userId);
   try {
-    const unsyncedRows = await getUnsyncedNewBodyProgressByUser(userId);
+    const unsyncedRows = await getPendingBodyProgressByUser(userId);
     let syncedCount = 0;
 
     for (const localRow of unsyncedRows) {
-      const synced = await syncBodyProgressCreateToRemote(userId, localRow);
+      const synced = await syncBodyProgressToRemote(userId, localRow);
       if (synced?.remote_id) {
         syncedCount += 1;
       }

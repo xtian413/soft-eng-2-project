@@ -9,6 +9,7 @@ export interface CreateLocalBodyProgressInput {
   weight_kg: number;
   body_fat_pct?: number | null;
   recorded_at: string;
+  recorded_date?: string;
 }
 
 export interface RemoteBodyProgressInput {
@@ -16,7 +17,9 @@ export interface RemoteBodyProgressInput {
   weight_kg: number;
   body_fat_pct?: number | null;
   recorded_at: string;
+  recorded_date?: string | null;
   created_at?: string;
+  updated_at?: string;
 }
 
 const BODY_PROGRESS_COLUMNS = [
@@ -26,6 +29,7 @@ const BODY_PROGRESS_COLUMNS = [
   'weight_kg',
   'body_fat_pct',
   'recorded_at',
+  'recorded_date',
   'created_at',
   'updated_at',
   'deleted_at',
@@ -70,6 +74,24 @@ function normalizeNullableNumber(value: number | null | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+export function normalizeRecordedDate(recordedAt: string, recordedDate?: string | null) {
+  if (recordedDate && /^\d{4}-\d{2}-\d{2}$/.test(recordedDate)) {
+    return recordedDate;
+  }
+
+  const parsed = new Date(recordedAt);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  const fallback = recordedAt.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(fallback)) {
+    return fallback;
+  }
+
+  throw new Error('Body-progress recorded_at must include a valid calendar date.');
+}
+
 function wrapBodyProgressError(action: string, error: unknown): never {
   const message = error instanceof Error ? error.message : String(error);
   throw new Error(`Local body-progress ${action} failed: ${message}`);
@@ -93,17 +115,19 @@ export async function createBodyProgressLocal(
         weight_kg,
         body_fat_pct,
         recorded_at,
+        recorded_date,
         created_at,
         updated_at,
         deleted_at,
         sync_status,
         last_synced_at
-      ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, NULL, 'pending', NULL)`,
+      ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, NULL, 'pending', NULL)`,
       id,
       input.user_id,
       normalizeWeightKg(input.weight_kg),
       normalizeNullableNumber(input.body_fat_pct),
       input.recorded_at,
+      normalizeRecordedDate(input.recorded_at, input.recorded_date),
       now,
       now
     );
@@ -150,7 +174,7 @@ export async function getBodyProgressByUser(userId: string): Promise<LocalBodyPr
       `SELECT ${BODY_PROGRESS_COLUMNS}
        FROM ${LOCAL_TABLES.bodyProgress}
        WHERE user_id = ? AND deleted_at IS NULL
-       ORDER BY recorded_at ASC`,
+       ORDER BY recorded_date ASC, recorded_at ASC, updated_at ASC`,
       userId
     );
   } catch (error) {
@@ -158,10 +182,34 @@ export async function getBodyProgressByUser(userId: string): Promise<LocalBodyPr
   }
 }
 
+export async function getBodyProgressByUserAndDate(
+  userId: string,
+  recordedDate: string
+): Promise<LocalBodyProgress | null> {
+  try {
+    assertUserId(userId);
+
+    const db = await initializeLocalDatabase();
+    return await db.getFirstAsync<LocalBodyProgress>(
+      `SELECT ${BODY_PROGRESS_COLUMNS}
+       FROM ${LOCAL_TABLES.bodyProgress}
+       WHERE user_id = ?
+         AND recorded_date = ?
+         AND deleted_at IS NULL
+       ORDER BY updated_at DESC, recorded_at DESC
+       LIMIT 1`,
+      userId,
+      recordedDate
+    );
+  } catch (error) {
+    wrapBodyProgressError('read by date', error);
+  }
+}
+
 export async function updateBodyProgressLocal(
   userId: string,
   id: string,
-  input: { weight_kg?: number; body_fat_pct?: number | null; recorded_at?: string }
+  input: { weight_kg?: number; body_fat_pct?: number | null; recorded_at?: string; recorded_date?: string }
 ): Promise<LocalBodyProgress> {
   try {
     assertUserId(userId);
@@ -185,6 +233,12 @@ export async function updateBodyProgressLocal(
     if (input.recorded_at) {
       fields.push('recorded_at = ?');
       params.push(input.recorded_at);
+
+      fields.push('recorded_date = ?');
+      params.push(normalizeRecordedDate(input.recorded_at, input.recorded_date));
+    } else if (input.recorded_date) {
+      fields.push('recorded_date = ?');
+      params.push(normalizeRecordedDate(`${input.recorded_date}T00:00:00.000Z`, input.recorded_date));
     }
 
     if (fields.length === 0) {
@@ -220,7 +274,7 @@ export async function updateBodyProgressLocal(
   }
 }
 
-export async function getUnsyncedNewBodyProgressByUser(
+export async function getPendingBodyProgressByUser(
   userId: string
 ): Promise<LocalBodyProgress[]> {
   try {
@@ -230,17 +284,18 @@ export async function getUnsyncedNewBodyProgressByUser(
     return await db.getAllAsync<LocalBodyProgress>(
       `SELECT ${BODY_PROGRESS_COLUMNS}
        FROM ${LOCAL_TABLES.bodyProgress}
-       WHERE user_id = ?
+         WHERE user_id = ?
          AND deleted_at IS NULL
-         AND remote_id IS NULL
          AND sync_status IN ('pending', 'failed')
        ORDER BY updated_at ASC, created_at ASC`,
       userId
     );
   } catch (error) {
-    wrapBodyProgressError('read unsynced new', error);
+    wrapBodyProgressError('read pending', error);
   }
 }
+
+export const getUnsyncedNewBodyProgressByUser = getPendingBodyProgressByUser;
 
 export async function markBodyProgressSynced(
   userId: string,
@@ -257,11 +312,9 @@ export async function markBodyProgressSynced(
       `UPDATE ${LOCAL_TABLES.bodyProgress}
        SET remote_id = ?,
            sync_status = 'synced',
-           updated_at = ?,
            last_synced_at = ?
        WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
       remoteId,
-      now,
       now,
       id,
       userId
@@ -287,14 +340,11 @@ export async function markBodyProgressSyncFailed(userId: string, id: string): Pr
     assertUserId(userId);
 
     const db = await initializeLocalDatabase();
-    const now = new Date().toISOString();
     const result = await db.runAsync(
       `UPDATE ${LOCAL_TABLES.bodyProgress}
        SET sync_status = 'failed',
-           updated_at = ?,
            last_synced_at = NULL
        WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
-      now,
       id,
       userId
     );
@@ -319,14 +369,16 @@ export async function upsertRemoteBodyProgressForUser(
 
     for (const remoteRow of remoteRows) {
       assertRemoteId(remoteRow.id);
+      const recordedDate = normalizeRecordedDate(remoteRow.recorded_at, remoteRow.recorded_date);
 
       const existing = await db.getFirstAsync<LocalBodyProgress>(
         `SELECT ${BODY_PROGRESS_COLUMNS}
          FROM ${LOCAL_TABLES.bodyProgress}
-         WHERE user_id = ? AND remote_id = ?
+         WHERE user_id = ? AND (remote_id = ? OR recorded_date = ?)
          LIMIT 1`,
         userId,
-        remoteRow.id
+        remoteRow.id,
+        recordedDate
       );
 
       if (existing) {
@@ -341,22 +393,24 @@ export async function upsertRemoteBodyProgressForUser(
            SET weight_kg = ?,
                body_fat_pct = ?,
                recorded_at = ?,
+               recorded_date = ?,
+               remote_id = ?,
                updated_at = ?,
                sync_status = 'synced',
                last_synced_at = ?
            WHERE id = ?
              AND user_id = ?
-             AND remote_id = ?
              AND deleted_at IS NULL
              AND sync_status = 'synced'`,
           normalizeWeightKg(remoteRow.weight_kg),
           normalizeNullableNumber(remoteRow.body_fat_pct),
           remoteRow.recorded_at,
-          now,
+          recordedDate,
+          remoteRow.id,
+          remoteRow.updated_at ?? existing.updated_at ?? now,
           now,
           existing.id,
-          userId,
-          remoteRow.id
+          userId
         );
 
         const updated = await getBodyProgressByUserAndId(userId, existing.id);
@@ -380,20 +434,22 @@ export async function upsertRemoteBodyProgressForUser(
           weight_kg,
           body_fat_pct,
           recorded_at,
+          recorded_date,
           created_at,
           updated_at,
           deleted_at,
           sync_status,
           last_synced_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?)`,
         id,
         userId,
         remoteRow.id,
         normalizeWeightKg(remoteRow.weight_kg),
         normalizeNullableNumber(remoteRow.body_fat_pct),
         remoteRow.recorded_at,
+        recordedDate,
         createdAt,
-        now,
+        remoteRow.updated_at ?? createdAt,
         now
       );
 

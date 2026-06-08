@@ -9,6 +9,7 @@ import {
   getBodyProgressByUser,
   upsertRemoteBodyProgressForUser,
 } from '@/local/repositories/bodyProgressRepository';
+import { upsertLocalProfile } from '@/local/repositories/profilesRepository';
 import type { LocalBodyProgress } from '@/local/schema';
 import { useAuthStore } from '@/store/authStore';
 import {
@@ -247,6 +248,12 @@ export function useProfileStats(): ProfileStats {
 
           const mergedRows = await getBodyProgressByUser(userId);
           if (cancelled) return;
+
+          const newestWeight = mergedRows[mergedRows.length - 1]?.weight_kg;
+          if (typeof newestWeight === 'number') {
+            await upsertLocalProfile({ user_id: userId, weight_kg: newestWeight });
+            void retryPendingProfileSync(userId);
+          }
 
           setWeightEntries(getRecentProgressEntries(mergedRows.map(bodyProgressToProgressEntry)));
         } else {
