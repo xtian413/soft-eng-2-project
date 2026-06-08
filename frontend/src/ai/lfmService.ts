@@ -24,6 +24,15 @@ const DEFAULT_TOP_K = 40;
 const DEFAULT_REPEAT_PENALTY = 1.05;
 const LFM_BUSY_MESSAGE = 'AI is currently busy. Please try again in a moment.';
 
+// Developer flag: set to true to run LLM inference on your host laptop CPU/GPU.
+// This requires Ollama (running qwen2.5:3b-instruct) or llama-server on port 11434.
+const USE_HOST_LLM_BRIDGE = true;
+const HOST_LLM_API = 'http://10.0.2.2:11434/api/generate';
+
+export function isHostLfmBridgeEnabled(): boolean {
+  return USE_HOST_LLM_BRIDGE;
+}
+
 let activeGenerationPromise: Promise<string> | null = null;
 
 type LfmNativeModule = {
@@ -142,13 +151,14 @@ export async function generateWorkoutInsight(userName: string) {
   ]);
 
   const prompt = buildWorkoutInsightPrompt(userName, workouts, dietLogs);
-  const response = await getLfmModule().generateResponse(
+  const response = await generateResponseWithTimeout(
     prompt,
     DEFAULT_INSIGHT_MAX_TOKENS,
     DEFAULT_TEMPERATURE,
     DEFAULT_TOP_P,
     DEFAULT_TOP_K,
-    DEFAULT_REPEAT_PENALTY
+    DEFAULT_REPEAT_PENALTY,
+    90_000
   );
   return cleanLfmResponse(response);
 }
@@ -162,6 +172,47 @@ async function generateResponseWithTimeout(
   repeatPenalty: number,
   timeoutMs: number,
 ) {
+  if (USE_HOST_LLM_BRIDGE) {
+    const startedAt = Date.now();
+    try {
+      console.log(`[Gemi] Routing inference to host bridge: ${HOST_LLM_API}`);
+      const response = await fetch(HOST_LLM_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'qwen2.5:3b-instruct',
+          prompt: prompt,
+          stream: false,
+          n_predict: maxTokens,
+          temperature,
+          top_p: topP,
+          top_k: topK,
+          repeat_penalty: repeatPenalty,
+          options: {
+            temperature,
+            top_p: topP,
+            top_k: topK,
+            repeat_penalty: repeatPenalty,
+            num_predict: maxTokens
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Host LLM API returned status ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`[Gemi] Host bridge response received in ${Date.now() - startedAt} ms`);
+      const text = data.response || data.content || '';
+      return text;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`[Gemi] Host bridge request failed: ${msg}`);
+      throw new Error(`Host LLM bridge failed: ${msg}`);
+    }
+  }
+
   if (activeGenerationPromise) {
     throw new Error(LFM_BUSY_MESSAGE);
   }

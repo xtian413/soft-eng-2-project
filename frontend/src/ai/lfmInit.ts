@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { getLfmModule, initLfmModel } from './lfmService';
+import { getLfmModule, initLfmModel, isHostLfmBridgeEnabled } from './lfmService';
 
 const LFM_MODEL_NAME = 'qwen2.5-3b-instruct-q4_k_m.gguf';
 
@@ -45,6 +45,12 @@ export async function initializeLfmOnStartup() {
 
 async function initializeLfm() {
   try {
+    if (isHostLfmBridgeEnabled()) {
+      console.log('🤖 Host LLM Bridge is enabled. Skipping native on-device model initialization.');
+      startupInitialized = true;
+      return true;
+    }
+
     console.log('🤖 Initializing on-device model...');
     const modelPath = await getLfmModelPath();
     await initLfmModel(modelPath);
