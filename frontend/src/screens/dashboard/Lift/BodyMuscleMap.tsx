@@ -3,7 +3,7 @@ import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native
 import { PinchGestureHandler, State } from 'react-native-gesture-handler';
 import Body from 'react-native-body-highlighter';
 import { Colors } from '@/theme/colors';
-import { typography, fontWeight, spacing } from '@/theme/typography';
+import { typography, fontWeight, spacing, radius } from '@/theme/typography';
 import { getMuscleDataForExercise } from './exerciseMuscles';
 import { Muscle, exerciseDbService } from '@/api/exerciseDbService';
 
@@ -20,9 +20,9 @@ interface BodyMuscleMapProps {
   secondaryMuscleIds?: number[];
 }
 
-const PRIMARY_FILL = '#0984e3';
-const SECONDARY_FILL = '#74b9ff';
-const DEFAULT_FILL = '#3f3f3f';
+const PRIMARY_FILL = Colors.primary;
+const SECONDARY_FILL = Colors.primaryContainer;
+const DEFAULT_FILL = '#e2e8f0';
 const MIN_SCALE = 0.75;
 const MAX_SCALE = 1.6;
 
@@ -343,7 +343,11 @@ export function BodyMuscleMap({
   try {
     return (
       <View style={styles.container}>
-        {isInteractive && <Text style={styles.instructionText}>Pinch to zoom, rotate with two fingers, tap a muscle to select it.</Text>}
+        {isInteractive && (
+          <Text style={styles.instructionText}>
+            Pinch to zoom • Tap a muscle to browse exercises
+          </Text>
+        )}
 
         {highlightMode === 'exercise' && (
           <View style={styles.legendContainer}>
@@ -359,18 +363,35 @@ export function BodyMuscleMap({
         )}
 
         <View style={styles.controlsRow}>
-          <TouchableOpacity style={[styles.sideButton, side === 'front' && styles.sideButtonActive]} onPress={() => setSide('front')}>
-            <Text style={[styles.sideButtonText, side === 'front' && styles.sideButtonTextActive]}>Front</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.sideButton, side === 'back' && styles.sideButtonActive]} onPress={() => setSide('back')}>
-            <Text style={[styles.sideButtonText, side === 'back' && styles.sideButtonTextActive]}>Back</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.resetButton} onPress={toggleSide}>
-            <Text style={styles.resetButtonText}>Flip</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.resetButton} onPress={resetView}>
-            <Text style={styles.resetButtonText}>Reset</Text>
-          </TouchableOpacity>
+          <View style={styles.sideControlsGroup}>
+            <TouchableOpacity
+              style={[styles.pillButton, side === 'front' && styles.pillButtonActive]}
+              onPress={() => setSide('front')}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.pillButtonText, side === 'front' && styles.pillButtonTextActive]}>
+                Front
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.pillButton, side === 'back' && styles.pillButtonActive]}
+              onPress={() => setSide('back')}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.pillButtonText, side === 'back' && styles.pillButtonTextActive]}>
+                Back
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.actionControlsGroup}>
+            <TouchableOpacity style={styles.actionPillButton} onPress={toggleSide} activeOpacity={0.8}>
+              <Text style={styles.actionPillButtonText}>Flip</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionPillButton} onPress={resetView} activeOpacity={0.8}>
+              <Text style={styles.actionPillButtonText}>Reset</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <PinchGestureHandler
@@ -383,7 +404,7 @@ export function BodyMuscleMap({
               data={highlightData as any}
               gender="male"
               side={side}
-              scale={1}
+              scale={1.1}
               colors={[PRIMARY_FILL, SECONDARY_FILL]}
               defaultFill={DEFAULT_FILL}
               onBodyPartPress={isInteractive ? (bodyPart: any) => handleBodyPartPress(bodyPart) : undefined}
@@ -411,58 +432,72 @@ const styles = StyleSheet.create({
   },
   instructionText: {
     fontSize: typography.xs,
-    color: Colors.primaryContainer,
-    fontWeight: fontWeight.bold,
-    marginBottom: spacing.sm,
-    letterSpacing: 0.5,
+    color: Colors.outline,
+    fontWeight: fontWeight.semiBold,
+    marginBottom: spacing.md,
+    letterSpacing: 0.25,
     textAlign: 'center',
   },
   controlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  sideControlsGroup: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 101, 145, 0.06)',
+    borderRadius: radius.full,
+    padding: 3,
+  },
+  actionControlsGroup: {
+    flexDirection: 'row',
     gap: spacing.xs,
-    marginBottom: spacing.sm,
   },
-  sideButton: {
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.xs,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.outline,
-    backgroundColor: Colors.surface,
+  pillButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  sideButtonActive: {
+  pillButtonActive: {
     backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
   },
-  sideButtonText: {
+  pillButtonText: {
     fontSize: typography.xs,
-    color: Colors.onSurface,
-    fontWeight: fontWeight.medium,
+    color: Colors.primary,
+    fontWeight: fontWeight.bold,
   },
-  sideButtonTextActive: {
+  pillButtonTextActive: {
     color: Colors.onPrimary,
   },
-  resetButton: {
+  actionPillButton: {
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.xs,
-    borderRadius: 999,
+    paddingVertical: spacing.xs + 4,
+    borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: Colors.outline,
-    backgroundColor: Colors.background,
+    borderColor: 'rgba(0, 101, 145, 0.2)',
+    backgroundColor: Colors.surfaceContainerLowest,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  resetButtonText: {
+  actionPillButtonText: {
     fontSize: typography.xs,
-    color: Colors.onBackground,
-    fontWeight: fontWeight.medium,
+    color: Colors.primary,
+    fontWeight: fontWeight.bold,
   },
   legendContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: spacing.base,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
+    backgroundColor: 'rgba(0, 101, 145, 0.03)',
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.full,
   },
   legendItem: {
     flexDirection: 'row',
@@ -470,28 +505,38 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   legendBox: {
-    width: 12,
-    height: 12,
-    borderRadius: 2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   legendText: {
     fontSize: typography.xs,
-    color: Colors.outline,
-    fontWeight: fontWeight.medium,
+    color: Colors.onSurfaceVariant,
+    fontWeight: fontWeight.semiBold,
   },
   bodyStage: {
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 320,
+    minHeight: 340,
     width: '100%',
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
     overflow: 'hidden',
+    paddingVertical: spacing.md,
   },
   selectedText: {
-    fontSize: typography.xs,
-    color: Colors.outline,
-    marginTop: spacing.sm,
-    fontWeight: fontWeight.medium,
+    fontSize: typography.sm,
+    color: Colors.primary,
+    marginTop: spacing.md,
+    fontWeight: fontWeight.bold,
     textAlign: 'center',
+    backgroundColor: 'rgba(0, 101, 145, 0.06)',
+    paddingVertical: spacing.xs + 3,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    overflow: 'hidden',
   },
   errorContainer: {
     padding: spacing.base,

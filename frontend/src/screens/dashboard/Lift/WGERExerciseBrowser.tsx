@@ -12,9 +12,9 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
-import { X, Zap } from 'lucide-react-native';
+import { X, Zap, Search } from 'lucide-react-native';
 import { Colors } from '@/theme/colors';
-import { typography, fontWeight, spacing, layout } from '@/theme/typography';
+import { typography, fontWeight, spacing, layout, radius } from '@/theme/typography';
 import { exerciseDbService, ExerciseDbExercise, EquipmentOption } from '@/api/exerciseDbService';
 const POPULAR_EXERCISES = [
   'bench press',
@@ -248,71 +248,84 @@ export const WGERExerciseBrowser: React.FC<WGERExerciseBrowserProps> = ({
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Exercises for {muscleName}</Text>
-          <TouchableOpacity onPress={onClose} activeOpacity={0.6}>
-            <X size={24} color={Colors.onSurface} />
+          <View>
+            <Text style={styles.eyebrow}>Muscle Map Browser</Text>
+            <Text style={styles.headerTitle}>{muscleName || 'Exercises'}</Text>
+          </View>
+          <TouchableOpacity onPress={onClose} activeOpacity={0.6} style={styles.closeButton}>
+            <X size={20} color={Colors.onSurface} />
           </TouchableOpacity>
         </View>
 
+        {/* Search */}
         <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search exercises"
-            placeholderTextColor={Colors.outline}
-            autoCapitalize="none"
-            autoCorrect={false}
-            clearButtonMode="while-editing"
-          />
+          <View style={styles.searchBarWrap}>
+            <Search size={16} color={Colors.outline} style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search exercises..."
+              placeholderTextColor={Colors.outline}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
+                <X size={14} color={Colors.outline} />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {/* Equipment Filter */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterScroll}
-          contentContainerStyle={styles.filterContainer}
-        >
-          <TouchableOpacity
-            style={[
-              styles.filterButton,
-              selectedEquipment === null && styles.filterButtonActive,
-            ]}
-            onPress={() => setSelectedEquipment(null)}
-            activeOpacity={0.7}
+        <View style={{ height: 52 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterScroll}
+            contentContainerStyle={styles.filterContainer}
           >
-            <Text
-              style={[
-                styles.filterButtonText,
-                selectedEquipment === null && styles.filterButtonTextActive,
-              ]}
-            >
-              All
-            </Text>
-          </TouchableOpacity>
-
-          {equipment.map((eq) => (
             <TouchableOpacity
-              key={eq.id}
               style={[
                 styles.filterButton,
-                selectedEquipment === eq.id && styles.filterButtonActive,
+                selectedEquipment === null && styles.filterButtonActive,
               ]}
-              onPress={() => setSelectedEquipment(eq.id)}
+              onPress={() => setSelectedEquipment(null)}
               activeOpacity={0.7}
             >
               <Text
                 style={[
                   styles.filterButtonText,
-                  selectedEquipment === eq.id && styles.filterButtonTextActive,
+                  selectedEquipment === null && styles.filterButtonTextActive,
                 ]}
               >
-                {eq.name}
+                All
               </Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+
+            {equipment.map((eq) => (
+              <TouchableOpacity
+                key={eq.id}
+                style={[
+                  styles.filterButton,
+                  selectedEquipment === eq.id && styles.filterButtonActive,
+                ]}
+                onPress={() => setSelectedEquipment(eq.id)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.filterButtonText,
+                    selectedEquipment === eq.id && styles.filterButtonTextActive,
+                  ]}
+                >
+                  {eq.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
 
         {/* Exercise List */}
         {isLoading ? (
@@ -347,51 +360,82 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.base,
+    paddingTop: spacing.base,
+    paddingBottom: spacing.base,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.outline,
-    backgroundColor: Colors.surface,
+    borderBottomColor: 'rgba(190, 200, 210, 0.15)',
+    backgroundColor: Colors.surfaceContainerLowest,
+  },
+  eyebrow: {
+    fontSize: typography.xs,
+    color: Colors.primary,
+    fontWeight: fontWeight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
   },
   headerTitle: {
     fontSize: typography.lg,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,
   },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   searchContainer: {
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.outline,
+    paddingVertical: spacing.md,
+    backgroundColor: Colors.surfaceContainerLowest,
+  },
+  searchBarWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.18)',
+    paddingHorizontal: spacing.sm,
+  },
+  searchIcon: {
+    marginRight: 6,
   },
   searchInput: {
-    minHeight: layout.minTouchTarget,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: Colors.outline,
-    paddingHorizontal: spacing.base,
+    flex: 1,
+    minHeight: 42,
     fontSize: typography.sm,
     color: Colors.onSurface,
-    backgroundColor: Colors.background,
+    paddingVertical: 0,
+  },
+  clearButton: {
+    padding: 4,
+    marginLeft: 2,
   },
   filterScroll: {
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.surfaceContainerLowest,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.outline,
+    borderBottomColor: 'rgba(190, 200, 210, 0.15)',
+    maxHeight: 52,
   },
   filterContainer: {
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
     gap: spacing.xs,
+    alignItems: 'center',
   },
   filterButton: {
-    paddingHorizontal: spacing.base,
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    borderRadius: 20,
+    borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: Colors.outline,
-    backgroundColor: Colors.background,
-    minHeight: 36,
+    borderColor: 'rgba(0, 101, 145, 0.12)',
+    backgroundColor: Colors.surfaceContainerLow,
+    minHeight: 32,
     justifyContent: 'center',
   },
   filterButtonActive: {
@@ -400,72 +444,39 @@ const styles = StyleSheet.create({
   },
   filterButtonText: {
     fontSize: typography.xs,
-    color: Colors.onBackground,
-    fontWeight: fontWeight.medium,
+    color: Colors.primary,
+    fontWeight: fontWeight.bold,
   },
   filterButtonTextActive: {
     color: Colors.onPrimary,
   },
   listContent: {
     paddingHorizontal: spacing.base,
-    paddingVertical: spacing.base,
+    paddingTop: spacing.base,
+    paddingBottom: spacing.xxl,
     gap: spacing.base,
   },
   exerciseCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: radius.lg,
     padding: spacing.base,
     borderWidth: 1,
-    borderColor: Colors.outline,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
   },
   exerciseCardAdded: {
-    borderColor: '#10b981',
-    backgroundColor: 'rgba(16, 185, 129, 0.05)',
-  },
-  exerciseNameAdded: {
-    color: Colors.outline,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: 2,
-  },
-  addedBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#10b981',
-  },
-  addedBadgeText: {
-    fontSize: 10,
-    fontWeight: fontWeight.bold,
-    color: '#10b981',
-  },
-  zapBtn: {
-    minWidth: layout.minTouchTarget,
-    minHeight: layout.minTouchTarget,
-    paddingHorizontal: spacing.sm,
-    borderRadius: 10,
-    backgroundColor: 'rgba(14, 165, 233, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  zapBtnAdded: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-  },
-  zapBtnAddedText: {
-    fontSize: 16,
-    fontWeight: fontWeight.bold,
-    color: '#10b981',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    backgroundColor: 'rgba(16, 185, 129, 0.02)',
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   titleContainer: {
     flex: 1,
@@ -475,43 +486,89 @@ const styles = StyleSheet.create({
     fontSize: typography.base,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,
-    marginBottom: spacing.xs,
+    marginBottom: 4,
+  },
+  exerciseNameAdded: {
+    color: Colors.outline,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
   },
   primaryBadge: {
-    fontSize: typography.xs,
+    fontSize: typography.xs - 1,
     color: Colors.primary,
+    backgroundColor: 'rgba(0, 101, 145, 0.08)',
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 1,
+    borderRadius: radius.xs,
     fontWeight: fontWeight.bold,
+    textTransform: 'uppercase',
+  },
+  addedBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 1,
+    borderRadius: radius.xs,
+    borderWidth: 0.5,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  addedBadgeText: {
+    fontSize: typography.xs - 1,
+    fontWeight: fontWeight.bold,
+    color: '#10b981',
+    textTransform: 'uppercase',
+  },
+  zapBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 1,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(0, 101, 145, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 4,
+    minHeight: 32,
+  },
+  zapBtnAdded: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
+  zapBtnAddedText: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: '#10b981',
   },
   equipmentBadges: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
-    marginBottom: spacing.sm,
+    marginVertical: spacing.xs,
   },
   badge: {
-    backgroundColor: Colors.secondaryContainer,
+    backgroundColor: Colors.surfaceContainerLow,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
   },
   badgeText: {
-    fontSize: typography.xs,
-    color: Colors.onSecondary,
-    fontWeight: fontWeight.medium,
+    fontSize: typography.xs - 1,
+    color: Colors.onSurfaceVariant,
+    fontWeight: fontWeight.semiBold,
   },
   shortDescription: {
     fontSize: typography.sm,
     color: Colors.outline,
-    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
     lineHeight: 18,
   },
   expandButton: {
+    marginTop: spacing.sm,
     paddingVertical: spacing.xs,
-    minHeight: layout.minTouchTarget,
-    justifyContent: 'center',
+    alignSelf: 'flex-start',
   },
   expandButtonText: {
-    fontSize: typography.sm,
+    fontSize: typography.xs,
     color: Colors.primary,
     fontWeight: fontWeight.bold,
   },
@@ -519,15 +576,17 @@ const styles = StyleSheet.create({
     marginTop: spacing.base,
     paddingTop: spacing.base,
     borderTopWidth: 1,
-    borderTopColor: Colors.outline,
+    borderTopColor: 'rgba(190, 200, 210, 0.12)',
   },
   section: {
     marginBottom: spacing.base,
   },
   sectionTitle: {
-    fontSize: typography.sm,
+    fontSize: typography.xs,
     fontWeight: fontWeight.bold,
     color: Colors.onSurface,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: spacing.sm,
   },
   muscleList: {
@@ -538,8 +597,8 @@ const styles = StyleSheet.create({
   muscleBadge: {
     backgroundColor: Colors.primary,
     paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
   },
   muscleBadgeText: {
     fontSize: typography.xs,
@@ -547,10 +606,12 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   muscleBadgeSecondary: {
-    backgroundColor: '#e3f2fd',
+    backgroundColor: 'rgba(0, 101, 145, 0.08)',
   },
   muscleBadgeTextSecondary: {
+    fontSize: typography.xs,
     color: Colors.primary,
+    fontWeight: fontWeight.semiBold,
   },
   instructionStep: {
     flexDirection: 'row',
@@ -561,19 +622,21 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     color: Colors.primary,
     marginRight: spacing.sm,
-    minWidth: 20,
+    minWidth: 16,
   },
   stepText: {
     flex: 1,
     fontSize: typography.sm,
-    color: Colors.onSurface,
+    color: Colors.onSurfaceVariant,
     lineHeight: 20,
   },
   gif: {
     width: '100%',
     height: 180,
-    borderRadius: 10,
-    backgroundColor: Colors.background,
+    borderRadius: radius.md,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.12)',
   },
   loadingContainer: {
     flex: 1,
@@ -584,9 +647,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: spacing.xl,
   },
   emptyText: {
     fontSize: typography.base,
     color: Colors.outline,
+    fontWeight: fontWeight.medium,
   },
 });
