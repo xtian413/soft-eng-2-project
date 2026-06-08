@@ -1,215 +1,135 @@
-# Gemi Android Developer Setup
+# Gemi — Full Developer Setup Guide
 
-Gemi is not an Expo Go-only app. It uses Expo + React Native with a custom Android native module for the local GGUF model, so developers must build the Android app locally.
+This guide will walk you through setting up the Gemi local development environment. 
 
-## Before You Start
+Gemi uses a **Hybrid Architecture**:
+* **Frontend**: React Native (Expo) running on the Android Emulator OR Web Browser.
+* **Backend**: Node.js Express server connected to Supabase.
+* **AI (LFM)**: Ollama running on your host machine's GPU, exposed to the app via ngrok (for native builds) or localhost (for Web builds).
 
-- Use JDK 17.
-- Install Android Studio.
-- Clone outside OneDrive, Dropbox, Google Drive, or iCloud.
-- Clone with Git submodules.
-- Do not use Expo Go. It cannot load the custom native Android module.
+---
 
-## Required Tools
+## 🛠️ Prerequisites
 
-| Tool | Required version / note |
-| --- | --- |
-| Git | Required |
-| Node.js | Node.js 20 LTS recommended, Node 18+ accepted |
-| JDK | JDK 17 |
-| Android Studio | Latest stable is fine |
-| Android SDK Platform | 36 |
-| Android SDK Build-Tools | 36.0.0 |
-| Android SDK Platform-Tools | Required |
-| Android SDK Command-line Tools | Required |
-| NDK Side by side | 27.1.12297006 |
-| CMake | 3.22.1 |
+Make sure you have the following installed on your machine:
+* **Node.js** (v20+ LTS recommended)
+* **JDK 17** (Required for Android Gradle builds)
+* **Android Studio** (For running the Android Emulator)
+* **Git**
+* **ngrok** (Free account, for tunneling Ollama)
+* **Ollama** (Free local LLM runner)
 
-## Quick Setup
+---
 
-1. Install the required tools.
+## 1. Setup the Database & Backend API
 
-   Install Git, Node.js, JDK 17, Android Studio, and the Android SDK packages listed above.
-
-2. Clone the repository correctly.
-
-   ```bash
-   git clone --recurse-submodules <repository_url>
-   cd soft-eng-2-project
-   ```
-
-   llama.cpp is stored as a Git submodule. The Android native build will fail if the submodule is missing.
-
-   If you already cloned without submodules, run this from the repository root:
-
-   ```bash
-   git submodule update --init --recursive
-   ```
-
-3. Configure the Android SDK path.
-
-   On Windows, create this file:
-
-   ```text
-   frontend/android/local.properties
-   ```
-
-   Add your SDK path:
-
-   ```properties
-   sdk.dir=C:\\Users\\<YourUsername>\\AppData\\Local\\Android\\Sdk
-   ```
-
-   macOS note:
-
-   ```properties
-   sdk.dir=/Users/<YourUsername>/Library/Android/sdk
-   ```
-
-4. Install frontend dependencies.
-
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-   Run `npm install` inside `frontend/`, not from the repository root.
-
-5. Add the GGUF model.
-
-   Download the model from the team shared drive:
-
-   ```text
-   qwen2.5-3b-instruct-q4_k_m.gguf
-   ```
-
-   Default Windows location:
-
-   ```text
-   C:\Users\<YourUsername>\Downloads\qwen2.5-3b-instruct-q4_k_m.gguf
-   ```
-
-   Default macOS location:
-
-   ```text
-   /Users/<YourUsername>/Downloads/qwen2.5-3b-instruct-q4_k_m.gguf
-   ```
-
-   `npm run android` automatically copies the model into:
-
-   ```text
-   frontend/android/app/src/main/assets/models/
-   ```
-
-   Optional custom model path on Windows PowerShell:
-
-   ```powershell
-   $env:LFM_MODEL_PATH="D:\Models\qwen2.5-3b-instruct-q4_k_m.gguf"
-   ```
-
-   Alternative filename from Downloads:
-
-   ```powershell
-   $env:LFM_MODEL_FILE="qwen2.5-3b-instruct-q4_k_m.gguf"
-   ```
-
-6. Start an Android emulator or connect a physical Android device with USB debugging enabled.
-
-7. Run the app.
-
-   ```bash
-   npm run android
-   ```
-
-   This bundles the model, builds the Android app, installs it, and opens it.
-
-## Useful Commands
-
-| Command | Purpose |
-| --- | --- |
-| `npm run android` | Bundle model, build, install, and run Android app |
-| `npm run start` | Start Metro only |
-| `npm run patch:android` | Restore copied native Android module files if needed |
-| `npm run prebuild` | Safely regenerate Android project and reapply native patch |
-| `git submodule update --init --recursive` | Restore missing llama.cpp submodule |
-
-## Common Fixes
-
-### Java version error
-
-Run:
-
+### Step 1.1: Clone and Install Backend Dependencies
+Navigate to the backend directory and install packages:
 ```bash
-java -version
+cd soft-eng-2-project/backend
+npm install
 ```
 
-Use JDK 17.
+### Step 1.2: Environment Variables
+Create a `.env` file in `soft-eng-2-project/backend/` using the following values:
+```env
+PORT=3000
+SUPABASE_URL=https://saifphlbxrbrdhipfpql.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhaWZwaGxieHJicmRoaXBmcHFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUwNDMsImV4cCI6MjA5NDk5MTA0M30.2tHff0TKBlIqvLTaWA3bmYmiepzY9ike0rDIPLqFXzo
+```
 
-### SDK location not found
-
-Create `frontend/android/local.properties` with the correct `sdk.dir` path.
-
-### Missing Android SDK package
-
-Open Android Studio SDK Manager and install the exact SDK, Build-Tools, NDK, or CMake version shown in the Gradle error.
-
-### llama.cpp or CMake source path error
-
-Run:
-
+### Step 1.3: Start the Backend Server
+Run the Express development server:
 ```bash
-git submodule update --init --recursive
+npm run dev
+```
+The API endpoints will be served at `http://localhost:3000`.
+
+---
+
+## 2. Setup Ollama (Local AI) & ngrok Tunnel
+
+### Step 2.1: Start Ollama with CORS Enabled
+Ollama must accept external host and origin headers so the app can talk to it. Run this command in a terminal:
+```bash
+# On Linux/macOS
+OLLAMA_HOST=0.0.0.0 OLLAMA_ORIGINS="*" ollama serve
+
+# On Windows (Command Prompt)
+set OLLAMA_HOST=0.0.0.0
+set OLLAMA_ORIGINS=*
+ollama serve
 ```
 
-### Model file not found
-
-Put `qwen2.5-3b-instruct-q4_k_m.gguf` in Downloads or set `LFM_MODEL_PATH` / `LFM_MODEL_FILE`.
-
-### Build fails inside OneDrive or another cloud folder
-
-Move the project to a local folder such as:
-
-```text
-C:\Projects\soft-eng-2-project
+### Step 2.2: Download the Model
+In a separate terminal, pull and run the Qwen 2.5 3B model:
+```bash
+ollama run qwen2.5:3b-instruct
 ```
 
-### Corrupted Gradle cache
+### Step 2.3: Start the ngrok Tunnel (Required for Android Emulator)
+The Android Emulator cannot connect directly to `localhost:11434` due to sandbox isolation. Tunnel the connection using ngrok:
+```bash
+ngrok http 11434
+```
+Copy the forwarding HTTPS URL generated by ngrok (e.g. `https://surfacing-imposing-scrooge.ngrok-free.dev`).
 
-From `frontend/`, run:
+---
 
-```powershell
-.\android\gradlew.bat clean
+## 3. Setup the Frontend (Expo Mobile / Web)
+
+### Step 3.1: Install Frontend Dependencies
+```bash
+cd soft-eng-2-project/frontend
+npm install
+```
+
+### Step 3.2: Configure Environment Variables
+Create a `.env` file in `soft-eng-2-project/frontend/` with the following variables:
+```env
+# Point to your local backend (10.0.2.2 is the emulator's gateway to localhost:3000)
+EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:3000
+EXPO_PUBLIC_SUPABASE_URL=https://saifphlbxrbrdhipfpql.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhaWZwaGxieHJicmRoaXBmcHFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0MTUwNDMsImV4cCI6MjA5NDk5MTA0M30.2tHff0TKBlIqvLTaWA3bmYmiepzY9ike0rDIPLqFXzo
+```
+
+### Step 3.3: Set the ngrok URL in Frontend Code
+Open `frontend/src/ai/lfmService.ts` and set the ngrok URL:
+```typescript
+// Replace with your current ngrok URL
+return 'https://<your-ngrok-id>.ngrok-free.dev/api/generate';
+```
+*(Note: If you run Gemi in a web browser using `Platform.OS === 'web'`, the app automatically bypasses ngrok and connects directly to http://localhost:11434 for maximum speed).*
+
+---
+
+## 🚀 Running the App
+
+### Running on Android Emulator:
+Ensure your Android emulator is booted and running:
+```bash
+cd frontend
+# 1. Give Gradle wrapper execute permissions (first run only)
+chmod +x android/gradlew
+
+# 2. Build and run the app
 npm run android
 ```
 
-macOS/Linux:
-
+### Running on Web Browser:
 ```bash
-./android/gradlew clean
-npm run android
+cd frontend
+npm run start
+# Press 'w' inside the terminal to open in your web browser
 ```
 
-## Important Rules
+---
 
-- Do not use Expo Go.
-- Do not clone inside a cloud-synced folder.
-- Do not forget `--recurse-submodules`.
-- Do not run `npm install` from the repository root.
-- Do not commit the GGUF model file.
-- Do not run raw `npx expo prebuild --clean`.
-- Use `npm run prebuild` only when native regeneration is truly needed.
+## 🔗 Key Developer Endpoints
 
-## Fresh Machine Checklist
-
-1. Install Git.
-2. Install Node.js 20 LTS.
-3. Install JDK 17.
-4. Install Android Studio and required SDK packages.
-5. Clone with `--recurse-submodules`.
-6. Configure `local.properties`.
-7. Run `cd frontend` and `npm install`.
-8. Add the GGUF model.
-9. Start emulator or connect device.
-10. Run `npm run android`.
-
-If setup still fails, send the first actual error line from the terminal, not only the final `BUILD FAILED` line.
+| Service | Address | Purpose |
+| :--- | :--- | :--- |
+| **Backend API** | `http://localhost:3000` | Syncs diets, workouts, and profiles |
+| **Local Ollama** | `http://localhost:11434` | Text completion & AI insights generation |
+| **ngrok Tunnel** | `https://*.ngrok-free.dev` | Forwards external/emulator requests to Ollama |
+| **Metro Bundler** | `http://localhost:8081` | Serves JavaScript bundles to Expo client |
