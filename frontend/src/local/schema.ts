@@ -2,7 +2,7 @@ import type { MealId, GoalKey, ActivityLevel } from '@/screens/dashboard/types';
 
 export const GEMI_USER_DATABASE_NAME = 'gemi_user.db';
 
-export const LOCAL_SCHEMA_VERSION = 9;
+export const LOCAL_SCHEMA_VERSION = 11;
 
 export const LOCAL_TABLES = {
   schemaMigrations: 'schema_migrations',
@@ -166,6 +166,7 @@ export interface LocalRoutine extends LocalBaseRecord {
   remote_id: string | null;
   remote_template_workout_id: string | null;
   routine_name: string;
+  rest_time_seconds: number | null;
 }
 
 export interface LocalRoutineExercise extends LocalBaseRecord {
@@ -183,6 +184,7 @@ export interface CreateLocalRoutineInput {
   routineName: string;
   remoteId?: string | null;
   remoteTemplateWorkoutId?: string | null;
+  restTimeSeconds?: number | null;
   exercises: Array<{
     id?: string;
     remoteId?: string | null;

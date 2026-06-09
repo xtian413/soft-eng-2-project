@@ -18,6 +18,7 @@ import {
   AppState,
   type AppStateStatus,
   Alert,
+  Vibration,
 } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
@@ -148,6 +149,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const [isRoutineLoading, setIsRoutineLoading] = useState(false);
   const [showRoutineModal, setShowRoutineModal] = useState(false);
   const [routineNameInput, setRoutineNameInput] = useState('');
+  const [routineRestTimeInput, setRoutineRestTimeInput] = useState('90');
   const [routineDraftExercises, setRoutineDraftExercises] = useState<RoutineDraftExercise[]>([]);
   const [isSavingRoutine, setIsSavingRoutine] = useState(false);
   const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
@@ -155,6 +157,13 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const [routineProgress, setRoutineProgress] = useState<
     Record<string, { sets: string; reps: string; weight: string; doneSets: boolean[] }>
   >({});
+
+  // Rest Timer State
+  const [restTimeRemaining, setRestTimeRemaining] = useState<number | null>(null);
+  const [restTimeTotal, setRestTimeTotal] = useState<number>(90);
+  const [restExerciseName, setRestExerciseName] = useState<string>('');
+  const [restNextSetNum, setRestNextSetNum] = useState<number>(1);
+  const [restNextExerciseName, setRestNextExerciseName] = useState<string>('');
 
   // Exercise management state
   const [exercisesList, setExercisesList] = useState<Exercise[]>([]);
@@ -244,6 +253,84 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [isRunning, scaleAnim]);
+
+  const playBeepSound = () => {
+    if (Platform.OS === 'web') {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          const ctx = new AudioContextClass();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          
+          osc.frequency.setValueAtTime(800, ctx.currentTime);
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+          
+          osc.start();
+          osc.stop(ctx.currentTime + 0.5);
+        }
+      } catch (e) {
+        console.warn('Failed to play web beep sound:', e);
+      }
+    }
+  };
+
+  const handleStartRestTimer = (exercise: RoutineExercise, completedSetNum: number) => {
+    if (!activeRoutine) return;
+    
+    const isLastExercise = activeRoutine.exercises[activeRoutine.exercises.length - 1].id === exercise.id;
+    const setsForEx = routineProgress[exercise.id]?.doneSets?.length || exercise.sets || 1;
+    const isLastSet = completedSetNum >= setsForEx;
+    
+    if (isLastExercise && isLastSet) {
+      return;
+    }
+
+    const restTime = activeRoutine.rest_time_seconds ?? 90;
+    if (restTime <= 0) return;
+
+    setRestTimeRemaining(restTime);
+    setRestTimeTotal(restTime);
+    setRestExerciseName(exercise.exercise_name);
+    
+    let nextSet = completedSetNum + 1;
+    let nextExerciseName = exercise.exercise_name;
+    if (isLastSet) {
+      const currentExIdx = activeRoutine.exercises.findIndex((e) => e.id === exercise.id);
+      const nextEx = activeRoutine.exercises[currentExIdx + 1];
+      if (nextEx) {
+        nextSet = 1;
+        nextExerciseName = nextEx.exercise_name;
+      }
+    }
+    setRestNextSetNum(nextSet);
+    setRestNextExerciseName(nextExerciseName);
+  };
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (restTimeRemaining !== null && restTimeRemaining > 0) {
+      interval = setInterval(() => {
+        setRestTimeRemaining((prev) => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            clearInterval(interval!);
+            Vibration.vibrate([0, 500, 200, 500]);
+            playBeepSound();
+            triggerToast(`Rest complete! Start Set ${restNextSetNum} of ${restNextExerciseName}`);
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [restTimeRemaining, restNextSetNum, restNextExerciseName]);
 
   const formatTime = (secs: number): string => {
     const h = Math.floor(secs / 3600);
@@ -597,7 +684,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const fetchRemoteRoutineInputs = async (userId: string) => {
     const { data: routineRows, error: routineError } = await supabase
       .from('routines')
-      .select('id,routine_name,routines_id')
+      .select('id,routine_name,routines_id,rest_time_seconds')
       .eq('user_id', userId);
 
     if (routineError) throw routineError;
@@ -725,6 +812,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
   const resetRoutineDraft = () => {
     setRoutineNameInput('');
+    setRoutineRestTimeInput('90');
     setRoutineDraftExercises([]);
     setEditingRoutineId(null);
     setEditingWorkoutId(null);
@@ -799,6 +887,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setEditingRoutineId(routine.id);
     setEditingWorkoutId(workoutId ?? null);
     setRoutineNameInput(routine.name);
+    setRoutineRestTimeInput(String(routine.rest_time_seconds ?? 90));
 
     const draftExercises = routine.exercises.map((exercise) => {
       const weightValue = isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg;
@@ -910,7 +999,10 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         });
         const { error: routineUpdateError } = await supabase
           .from('routines')
-          .update({ routine_name: localRoutine.routine_name })
+          .update({
+            routine_name: localRoutine.routine_name,
+            rest_time_seconds: localRoutine.rest_time_seconds,
+          })
           .eq('id', routineId)
           .eq('user_id', authUser.id);
 
@@ -918,7 +1010,12 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       } else {
         const { data: routine, error: routineError } = await supabase
           .from('routines')
-          .insert({ user_id: authUser.id, routine_name: localRoutine.routine_name, routines_id: workoutId })
+          .insert({
+            user_id: authUser.id,
+            routine_name: localRoutine.routine_name,
+            routines_id: workoutId,
+            rest_time_seconds: localRoutine.rest_time_seconds,
+          })
           .select('id,routines_id')
           .single();
 
@@ -1071,6 +1168,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       const localInput = routineDraftsToLocalInput(trimmedName, cleanedExercises, {
         remoteId: existingRoutine?.remote_id ?? null,
         remoteTemplateWorkoutId: existingRoutine?.routines_id ?? editingWorkoutId ?? null,
+        restTimeSeconds: parseInt(routineRestTimeInput, 10) || 90,
       });
       const localRoutine = editingRoutineId
         ? await updateRoutineWithExercisesLocal(authUser.id, editingRoutineId, localInput)
@@ -1471,6 +1569,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         reps: defaults.reps,
         weight: defaults.weight,
         weightUnit: isLbs ? 'lbs' : 'kg',
+        restTimeSeconds: '90',
         muscleGroup,
       },
     ]);
@@ -1518,6 +1617,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           reps: configReps,
           weight: configWeight,
           weightUnit: configWeightUnit,
+          restTimeSeconds: '90',
           muscleGroup,
         },
       ]);
@@ -1920,8 +2020,35 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                             ]}
                             onPress={() => {
                               const nextDone = [...progress.doneSets];
-                              nextDone[index] = !nextDone[index];
-                              updateRoutineProgress(exercise.id, { doneSets: nextDone });
+                              const wasDone = nextDone[index];
+                              nextDone[index] = !wasDone;
+
+                              if (!wasDone) {
+                                if (restTimeRemaining !== null && restTimeRemaining > 0) {
+                                  Alert.alert(
+                                    'Restart Rest Timer?',
+                                    `A rest timer is already running. Would you like to restart the timer for Set ${index + 1} of ${exercise.exercise_name}?`,
+                                    [
+                                      {
+                                        text: 'Cancel (Misclick)',
+                                        style: 'cancel',
+                                      },
+                                      {
+                                        text: 'Yes, Start Timer',
+                                        onPress: () => {
+                                          updateRoutineProgress(exercise.id, { doneSets: nextDone });
+                                          handleStartRestTimer(exercise, index + 1);
+                                        },
+                                      },
+                                    ]
+                                  );
+                                } else {
+                                  updateRoutineProgress(exercise.id, { doneSets: nextDone });
+                                  handleStartRestTimer(exercise, index + 1);
+                                }
+                              } else {
+                                updateRoutineProgress(exercise.id, { doneSets: nextDone });
+                              }
                             }}
                             activeOpacity={0.7}
                           >
@@ -2091,6 +2218,18 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
               onChangeText={setRoutineNameInput}
               placeholderTextColor={Colors.outline}
             />
+
+            <View style={styles.routineRestTimeRow}>
+              <Text style={styles.routineRestTimeLabel}>Rest duration (seconds):</Text>
+              <TextInput
+                style={styles.routineRestTimeInput}
+                placeholder="90"
+                value={routineRestTimeInput}
+                onChangeText={setRoutineRestTimeInput}
+                keyboardType="number-pad"
+                placeholderTextColor={Colors.outline}
+              />
+            </View>
           </View>
 
           {/* Scrollable body — map + exercises flow together */}
@@ -2190,6 +2329,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                           textAlign="center"
                         />
                       </View>
+
                       <View style={styles.metricCol}>
                         <Text style={styles.metricLabel}>Unit</Text>
                         <View style={styles.unitToggleRowSmall}>
@@ -2524,6 +2664,56 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Rest Timer Floating Panel */}
+      {restTimeRemaining !== null && (
+        <View style={styles.restFloatingContainer}>
+          <View style={styles.restFloatingHeader}>
+            <Text style={styles.restFloatingTitle}>REST TIMER</Text>
+            <Text style={styles.restFloatingExercise} numberOfLines={1}>
+              {restExerciseName}
+            </Text>
+          </View>
+          
+          <View style={styles.restCountdownRow}>
+            <Text style={styles.restCountdownText}>
+              Resting: {Math.floor(restTimeRemaining / 60)}:{String(restTimeRemaining % 60).padStart(2, '0')} remaining
+            </Text>
+            <Text style={styles.restNextSetText}>
+              Next: Set {restNextSetNum} of {restNextExerciseName}
+            </Text>
+          </View>
+
+          {/* Progress bar container */}
+          <View style={styles.restProgressContainer}>
+            <View
+              style={[
+                styles.restProgressBarFill,
+                { width: `${((restTimeTotal - restTimeRemaining) / restTimeTotal) * 100}%` }
+              ]}
+            />
+          </View>
+
+          <View style={styles.restButtonRow}>
+            <TouchableOpacity
+              style={styles.restActionBtn}
+              onPress={() => setRestTimeRemaining((prev) => (prev !== null ? prev + 30 : null))}
+            >
+              <Text style={styles.restActionBtnText}>+30s</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.restActionBtn, styles.restSkipBtn]}
+              onPress={() => {
+                setRestTimeRemaining(null);
+                triggerToast('Rest timer skipped');
+              }}
+            >
+              <Text style={styles.restSkipBtnText}>Skip</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </>
   );
 }
@@ -3497,6 +3687,29 @@ const styles = StyleSheet.create({
     fontSize: typography.base,
     color: Colors.onSurface,
   },
+  routineRestTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+  },
+  routineRestTimeLabel: {
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    fontWeight: fontWeight.medium,
+  },
+  routineRestTimeInput: {
+    height: 36,
+    width: 80,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+    borderRadius: radius.md,
+    backgroundColor: Colors.background,
+    paddingHorizontal: spacing.sm,
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    textAlign: 'center',
+  },
   routineModalScroll: {
     backgroundColor: Colors.surfaceContainerLowest,
     maxHeight: '78%',
@@ -3899,5 +4112,94 @@ const styles = StyleSheet.create({
     marginRight: -spacing.xs,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Rest Timer HUD Styling
+  restFloatingContainer: {
+    position: 'absolute',
+    bottom: 90, // Positioned above the bottom navigation tab bar (clears Gym tab bar)
+    left: spacing.lg,
+    right: spacing.lg,
+    backgroundColor: '#0c1a30',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1.5,
+    borderColor: 'rgba(14, 165, 233, 0.3)',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+  },
+  restFloatingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  restFloatingTitle: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: '#38bdf8',
+    letterSpacing: 1,
+  },
+  restFloatingExercise: {
+    fontSize: typography.xs,
+    color: 'rgba(255, 255, 255, 0.7)',
+    maxWidth: '60%',
+  },
+  restCountdownRow: {
+    flexDirection: 'column',
+    marginBottom: spacing.sm,
+    gap: 2,
+  },
+  restCountdownText: {
+    fontSize: typography.lg,
+    fontWeight: fontWeight.bold,
+    color: '#ffffff',
+  },
+  restNextSetText: {
+    fontSize: typography.sm,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: fontWeight.medium,
+  },
+  restProgressContainer: {
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: radius.full,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+  },
+  restProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#0ea5e9',
+    borderRadius: radius.full,
+  },
+  restButtonRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  restActionBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(14, 165, 233, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(14, 165, 233, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  restActionBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#38bdf8',
+  },
+  restSkipBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  restSkipBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#f87171',
   },
 });

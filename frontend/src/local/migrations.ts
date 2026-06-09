@@ -380,6 +380,38 @@ const MIGRATIONS: Migration[] = [
       await db.execAsync(`UPDATE ${LOCAL_TABLES.profiles} SET goal = 'lean_bulk' WHERE goal = 'build_muscle'`);
     },
   },
+  {
+    version: 10,
+    name: 'add_rest_timer_to_routines',
+    apply: async (db) => {
+      const columns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${LOCAL_TABLES.routines})`
+      );
+      const hasRestTime = columns.some((column) => column.name === 'rest_time_seconds');
+
+      if (!hasRestTime) {
+        await db.execAsync(
+          `ALTER TABLE ${LOCAL_TABLES.routines} ADD COLUMN rest_time_seconds INTEGER DEFAULT 90`
+        );
+      }
+    },
+  },
+  {
+    version: 11,
+    name: 'ensure_rest_timer_in_routines',
+    apply: async (db) => {
+      const columns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${LOCAL_TABLES.routines})`
+      );
+      const hasRestTime = columns.some((column) => column.name === 'rest_time_seconds');
+
+      if (!hasRestTime) {
+        await db.execAsync(
+          `ALTER TABLE ${LOCAL_TABLES.routines} ADD COLUMN rest_time_seconds INTEGER DEFAULT 90`
+        );
+      }
+    },
+  },
 ];
 
 type SchemaMigrationRow = {
