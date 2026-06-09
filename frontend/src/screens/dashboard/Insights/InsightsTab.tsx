@@ -10,6 +10,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  StyleProp,
+  TextStyle,
 } from 'react-native';
 import { MessageCircle, RefreshCw, Send, Sparkles, X } from 'lucide-react-native';
 import { Colors } from '@/theme/colors';
@@ -28,6 +30,29 @@ type ChatMessage = FitnessInsightChatMessage & {
   id: string;
 };
 
+function renderFormattedText(
+  text: string,
+  baseStyle: StyleProp<TextStyle>,
+  boldStyle: StyleProp<TextStyle> = { fontWeight: 'bold' }
+) {
+  if (!text) return null;
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return (
+    <Text style={baseStyle}>
+      {parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return (
+            <Text key={index} style={[baseStyle, boldStyle]}>
+              {part.slice(2, -2)}
+            </Text>
+          );
+        }
+        return part;
+      })}
+    </Text>
+  );
+}
+
 export function InsightsTab({
   insight,
   isLoading,
@@ -41,6 +66,15 @@ export function InsightsTab({
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+
+  const cleanInsight = {
+    title: insight.title.replace(/^[\s*"'`•#-]+|[\s*"'`•#-]+$/g, '').trim(),
+    summary: insight.summary.replace(/^[\s*"'`•#-]+|[\s*"'`•#-]+$/g, '').trim(),
+    nutrition: insight.nutrition.replace(/^[\s*"'`•#-]+|[\s*"'`•#-]+$/g, '').trim(),
+    training: insight.training.replace(/^[\s*"'`•#-]+|[\s*"'`•#-]+$/g, '').trim(),
+    nextStep: insight.nextStep.replace(/^[\s*"'`•#-]+|[\s*"'`•#-]+$/g, '').trim(),
+    confidence: insight.confidence.replace(/^[\s*"'`•#-]+|[\s*"'`•#-]+$/g, '').trim(),
+  };
 
   const handleSendChat = async () => {
     const question = chatInput.trim();
@@ -84,8 +118,8 @@ export function InsightsTab({
         <View style={styles.headerBand}>
           <View style={styles.headerText}>
             <Text style={styles.eyebrow}>ON-DEVICE RAG</Text>
-            <Text style={styles.title}>{insight.title}</Text>
-            <Text style={styles.subtitle}>{insight.summary}</Text>
+            <Text style={styles.title}>{cleanInsight.title}</Text>
+            <Text style={styles.subtitle}>{cleanInsight.summary}</Text>
           </View>
           <View style={styles.sparkleBadge}>
             {isLoading ? (
@@ -130,26 +164,26 @@ export function InsightsTab({
 
         <View style={styles.insightCard}>
           <Text style={styles.cardLabel}>Summary</Text>
-          <Text style={styles.cardText}>{insight.summary}</Text>
+          {renderFormattedText(cleanInsight.summary, styles.cardText)}
         </View>
 
         <View style={styles.insightCard}>
           <Text style={styles.cardLabel}>Nutrition</Text>
-          <Text style={styles.cardText}>{insight.nutrition}</Text>
+          {renderFormattedText(cleanInsight.nutrition, styles.cardText)}
         </View>
 
         <View style={styles.insightCard}>
           <Text style={styles.cardLabel}>Training</Text>
-          <Text style={styles.cardText}>{insight.training}</Text>
+          {renderFormattedText(cleanInsight.training, styles.cardText)}
         </View>
 
         <View style={styles.nextCard}>
           <Text style={styles.cardLabel}>Next Step</Text>
-          <Text style={styles.nextText}>{insight.nextStep}</Text>
+          {renderFormattedText(cleanInsight.nextStep, styles.nextText, { fontWeight: fontWeight.bold })}
         </View>
 
         <View style={styles.confidenceCard}>
-          <Text style={styles.confidenceText}>Confidence: {insight.confidence}</Text>
+          <Text style={styles.confidenceText}>Confidence: {cleanInsight.confidence}</Text>
         </View>
       </ScrollView>
 
@@ -183,7 +217,7 @@ export function InsightsTab({
 
             <View style={styles.chatContextCard}>
               <Text style={styles.chatContextLabel}>Current insight</Text>
-              <Text style={styles.chatContextText}>{insight.title}</Text>
+              <Text style={styles.chatContextText}>{cleanInsight.title}</Text>
             </View>
 
             <ScrollView
@@ -208,9 +242,11 @@ export function InsightsTab({
                     key={message.id}
                     style={[styles.chatBubble, isUser ? styles.userBubble : styles.assistantBubble]}
                   >
-                    <Text style={[styles.chatBubbleText, isUser ? styles.userBubbleText : styles.assistantBubbleText]}>
-                      {message.content}
-                    </Text>
+                    {renderFormattedText(
+                      message.content,
+                      [styles.chatBubbleText, isUser ? styles.userBubbleText : styles.assistantBubbleText],
+                      { fontWeight: 'bold' }
+                    )}
                   </View>
                 );
               })}

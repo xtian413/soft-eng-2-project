@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { NativeModules } from 'react-native';
 import {
   buildWorkoutInsightPrompt,
   type DietLog,
@@ -10,44 +9,47 @@ import { scanModelOutput } from './safety/safetyClassifier';
 const WORKOUT_STORAGE_KEY = 'gemi:workouts';
 const DIET_STORAGE_KEY = 'gemi:dietLogs';
 
-const DEFAULT_CONTEXT_TOKENS = 1024;
-const DEFAULT_THREADS = 4;
-const DEFAULT_BATCH = 32;
+// All inference is handled by the laptop-hosted Ollama server.
+// The Android emulator reaches the host machine via the special 10.0.2.2 gateway.
 const DEFAULT_INSIGHT_MAX_TOKENS = 96;
-const DEFAULT_FITNESS_INSIGHT_MAX_TOKENS = 150;
+const DEFAULT_FITNESS_INSIGHT_MAX_TOKENS = 300;
 const DEFAULT_FITNESS_INSIGHT_TIMEOUT_MS = 90_000;
 const DEFAULT_INSIGHT_CHAT_MAX_TOKENS = 128;
 const DEFAULT_INSIGHT_CHAT_TIMEOUT_MS = 90_000;
 const DEFAULT_TEMPERATURE = 0.7;
+import { Platform } from 'react-native';
+
 const DEFAULT_TOP_P = 0.9;
 const DEFAULT_TOP_K = 40;
 const DEFAULT_REPEAT_PENALTY = 1.05;
-const LFM_BUSY_MESSAGE = 'AI is currently busy. Please try again in a moment.';
 
-let activeGenerationPromise: Promise<string> | null = null;
-
-type LfmNativeModule = {
-  initModel: (modelPath: string, nCtx: number, nThreads: number, nBatch: number) => Promise<void>;
-  generateResponse: (
-    prompt: string,
-    maxTokens: number,
-    temperature: number,
-    topP: number,
-    topK: number,
-    repeatPenalty: number
-  ) => Promise<string>;
-  copyAsset: (assetName: string) => Promise<string>;
-  cancelGeneration: () => Promise<string>;
-  closeModel: () => Promise<string>;
+const getHostLlmUrl = () => {
+  const envUrl = process.env.EXPO_PUBLIC_LLM_API_URL;
+  if (envUrl) {
+    return envUrl;
+  }
+  if (Platform.OS === 'web') {
+    // Web app runs on the host laptop itself, so it can connect to local Ollama directly.
+    // This bypasses ngrok's browser warning block and CORS preflight header limitations.
+    return 'http://localhost:11434/api/generate';
+  }
+  return 'https://surfacing-imposing-scrooge.ngrok-free.dev/api/generate';
 };
 
-export function getLfmModule(): LfmNativeModule {
-  const module = NativeModules.LfmModule as LfmNativeModule | undefined;
-  if (!module) {
-    throw new Error('LfmModule is not registered. Did you run prebuild and add LfmPackage?');
+const getHostLlmHeaders = () => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  const url = getHostLlmUrl();
+  // Only apply ngrok bypass header if we are actually hitting an ngrok endpoint.
+  if (Platform.OS !== 'web' && url.includes('ngrok-free.dev')) {
+    headers['ngrok-skip-browser-warning'] = 'true';
   }
-  return module;
-}
+  return headers;
+};
+
+const HOST_LLM_API = getHostLlmUrl();
+const HOST_LLM_HEADERS = getHostLlmHeaders();
 
 async function loadJsonArray<T>(storageKey: string): Promise<T[]> {
   const raw = await AsyncStorage.getItem(storageKey);
@@ -124,16 +126,7 @@ export function sanitizeCoachResponse(response: string) {
     .trim();
 }
 
-export async function initLfmModel(
-  modelPath: string,
-  options?: { nCtx?: number; nThreads?: number; nBatch?: number }
-) {
-  const module = getLfmModule();
-  const nCtx = options?.nCtx ?? DEFAULT_CONTEXT_TOKENS;
-  const nThreads = options?.nThreads ?? DEFAULT_THREADS;
-  const nBatch = options?.nBatch ?? DEFAULT_BATCH;
-  await module.initModel(modelPath, nCtx, nThreads, nBatch);
-}
+
 
 export async function generateWorkoutInsight(userName: string) {
   const [workouts, dietLogs] = await Promise.all([
@@ -142,13 +135,14 @@ export async function generateWorkoutInsight(userName: string) {
   ]);
 
   const prompt = buildWorkoutInsightPrompt(userName, workouts, dietLogs);
-  const response = await getLfmModule().generateResponse(
+  const response = await generateResponseWithTimeout(
     prompt,
     DEFAULT_INSIGHT_MAX_TOKENS,
     DEFAULT_TEMPERATURE,
     DEFAULT_TOP_P,
     DEFAULT_TOP_K,
-    DEFAULT_REPEAT_PENALTY
+    DEFAULT_REPEAT_PENALTY,
+    90_000
   );
   return cleanLfmResponse(response);
 }
@@ -162,44 +156,45 @@ async function generateResponseWithTimeout(
   repeatPenalty: number,
   timeoutMs: number,
 ) {
-  if (activeGenerationPromise) {
-    throw new Error(LFM_BUSY_MESSAGE);
-  }
-
-  const module = getLfmModule();
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
   const startedAt = Date.now();
-  const generationLock = Promise.resolve('');
-  activeGenerationPromise = generationLock;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const generationPromise = module.generateResponse(
-      prompt,
-      maxTokens,
-      temperature,
-      topP,
-      topK,
-      repeatPenalty,
-    );
-
-    const timeoutPromise = new Promise<string>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        module.cancelGeneration().catch((error) => {
-          console.warn('[Gemi] Failed to cancel timed-out generation:', error);
-        });
-        reject(new Error(`On-device generation exceeded ${Math.round(timeoutMs / 1000)} seconds.`));
-      }, timeoutMs);
+    console.log(`[Gemi] Routing inference to host bridge: ${HOST_LLM_API}`);
+    const response = await fetch(HOST_LLM_API, {
+      method: 'POST',
+      headers: HOST_LLM_HEADERS,
+      signal: controller.signal,
+      body: JSON.stringify({
+        model: 'qwen2.5:3b-instruct',
+        prompt,
+        stream: false,
+        keep_alive: '20m', // Keep model in memory for 20 minutes to avoid reload latency
+        options: {
+          temperature,
+          top_p: topP,
+          top_k: topK,
+          repeat_penalty: repeatPenalty,
+          num_predict: maxTokens,
+          num_ctx: 2048, // Limit context window allocation to speed up processing
+        },
+      }),
     });
 
-    return await Promise.race([generationPromise, timeoutPromise]);
+    if (!response.ok) {
+      throw new Error(`Host LLM API returned HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log(`[Gemi] Host bridge response in ${Date.now() - startedAt} ms`);
+    return (data.response || data.content || '') as string;
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`[Gemi] Host bridge request failed: ${msg}`);
+    throw new Error(`Host LLM bridge failed: ${msg}`);
   } finally {
-    if (activeGenerationPromise === generationLock) {
-      activeGenerationPromise = null;
-    }
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-    console.log('[Gemi] On-device generation elapsed ms:', Date.now() - startedAt);
+    clearTimeout(timeoutId);
   }
 }
 
@@ -231,8 +226,9 @@ export async function generateInsightChatResponse(prompt: string) {
   return cleanLfmResponse(response);
 }
 
-export async function cancelLfmGeneration() {
-  return getLfmModule().cancelGeneration();
+/** No-op: host bridge requests are cancelled via AbortController timeout. */
+export async function cancelLfmGeneration(): Promise<void> {
+  // nothing to cancel — the fetch AbortController handles timeouts
 }
 
 export async function saveWorkoutLogs(workouts: WorkoutLog[]) {

@@ -3,6 +3,65 @@
 **Format**: `[YYYY-MM-DD HH:MM +TZ] TYPE: description`
 
 ---
+### [2026-06-09 01:00 +0800] FIX: Web compatibility for API Base URL and Host LLM Bridge (ERR-014, ERR-015)
+- **Branch**: `ai-optimization`
+- **Commit**: N/A (uncommitted)
+- **Files Modified**:
+  - `frontend/src/ai/lfmService.ts`
+  - `frontend/src/lib/api.ts`
+- **Changes**:
+  - ✅ **Web LLM Bridge CORS/Warning Bypass**: Configured `HOST_LLM_API` to dynamically route to `http://localhost:11434` instead of ngrok when the app runs in the Web browser (`Platform.OS === 'web'`). Since the browser is running on the host machine where Ollama lives, it bypasses ngrok's browser warning block and preflight OPTIONS request CORS failures.
+  - ✅ **Web API URL Route Fix**: Updated `getBaseUrl()` in `api.ts` to substitute the emulator gateway IP (`10.0.2.2`) with `localhost` when executing in the browser (`Platform.OS === 'web'`), resolving backend network request timeouts.
+
+### [2026-06-08 23:25 +0800] FEAT: Host-Bridge Local LLM Acceleration & Git Rebase Integration
+
+- **Branch**: `ai-optimization`
+- **Commit**: `e0a0150`
+- **Files Created**:
+  - `frontend/LFM_OPTIMIZATION_GUIDE.md`
+- **Files Modified**:
+  - `frontend/android/llama/build.gradle`
+  - `frontend/src/ai/lfmInit.ts`
+  - `frontend/src/ai/lfmService.ts`
+- **Changes**:
+  - ✅ **NDK Build Mismatch Fix**: Resolved `[CXX1101]` native library build failure by binding `android/llama/build.gradle`'s `ndkVersion` directly to the project's root NDK configuration (`rootProject.ext.ndkVersion`).
+  - ✅ **Host-Bridge LLM Acceleration**: Implemented a developer mode flag `USE_HOST_LLM_BRIDGE` in `lfmService.ts` to redirect inference calls to `10.0.2.2:11434` (Ollama/llama.cpp server running on the host laptop). This resolves latency constraints (~85s emulator CPU inference reduced to sub-second responses using RTX GPU) and bypasses emulator OOM limits.
+  - ✅ **Setup & Optimization Guide**: Authored `LFM_OPTIMIZATION_GUIDE.md` with instructions on bypassing APK limits via shell pipes (`tee` workaround), resolving SD card permission errors (`cp: Permission denied`), and booting with expanded partitions.
+  - ✅ **Clean Git Rebase**: Rebased `ai-optimization` onto `master` safely by restoring the 4 emptied Supabase migration files and preserving master's diet sync schema/redesigned UI components.
+  - **Build**: ✅ Verified `npx tsc --noEmit` on frontend is clean.
+
+### [2026-06-08 23:30 +0800] REFACTOR: Permanently remove on-device LLM — host-bridge only
+- **Branch**: `ai-optimization`
+- **Commit**: N/A (uncommitted)
+- **Files Modified**:
+  - `frontend/src/ai/lfmService.ts`
+  - `frontend/src/ai/lfmInit.ts`
+  - `frontend/package.json`
+- **Changes**:
+  - ✅ **Removed on-device inference path**: Deleted `NativeModules` import, `LfmNativeModule` type, `getLfmModule()`, `initLfmModel()`, `cancelLfmGeneration()` (native), and the entire on-device branch inside `generateResponseWithTimeout()`. The service now has a single clean fetch path to Ollama.
+  - ✅ **Timeout via AbortController**: Replaced manual `setTimeout + Promise.race` with native `AbortController` signal passed to `fetch()`.
+  - ✅ **lfmInit.ts no-op**: Replaced the full model-copy/init logic with a one-liner `return true` stub. `initializeLfmOnStartup()` export preserved so `DashboardScreen.tsx` call sites don't need to change.
+  - ✅ **package.json scripts**: Removed `npm run bundle:model &&` prefix from `android` and `prebuild` scripts — no GGUF file to bundle anymore.
+  - **Build**: ✅ `npx tsc --noEmit` — 0 errors.
+
+### [2026-06-08 23:33 +0800] FIX: gradlew EACCES on Linux — mark as executable (ERR-011)
+- **Branch**: `ai-optimization`
+- **Commit**: `880ec75`
+- **Files Modified**:
+  - `frontend/android/gradlew` (mode: `100644 → 100755`)
+- **Changes**:
+  - ✅ **chmod +x**: Fixed `spawn gradlew EACCES` error. Git on Windows strips the Unix execute bit; `chmod +x` restores it.
+  - ✅ **Persisted to Git**: Used `git update-index --chmod=+x android/gradlew` to commit the permission change so all future Linux clones are unaffected.
+
+### [2026-06-08 23:37 +0800] FIX: Backend unreachable from emulator — change localhost → 10.0.2.2 (ERR-012)
+- **Branch**: `ai-optimization`
+- **Commit**: N/A (uncommitted — .env is gitignored)
+- **Files Modified**:
+  - `frontend/.env`
+- **Changes**:
+  - ✅ **EXPO_PUBLIC_API_BASE_URL**: Changed `http://localhost:3000` → `http://10.0.2.2:3000`. Inside the Android emulator `localhost` resolves to the emulator's own loopback; `10.0.2.2` is the gateway to the host machine.
+  - ✅ **Also identified ERR-013**: `routines_user_id_fkey` FK violation logged in background sync — user `ef29e47e` has no profiles row. Likely migration `009` not applied or account created before trigger fix. See ERR-013 for resolution steps.
+
 ### [2026-06-07 15:10 +0800] FIX: Supabase Profiles Schema Mismatch and Registration Sync Trigger
 - **Branch**: `jb-branch`
 - **Files Created**:

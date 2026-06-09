@@ -15,7 +15,10 @@ const extra = Constants.expoConfig?.extra as ExpoExtra | undefined;
 // - On a real Android device, I need to use my machine's LAN IP (e.g. 192.168.1.x).
 //   Set EXPO_PUBLIC_API_BASE_URL in .env to override this for real device testing.
 const getBaseUrl = () => {
-  const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? extra?.apiBaseUrl;
+  let envUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? extra?.apiBaseUrl;
+  if (Platform.OS === 'web' && envUrl?.includes('10.0.2.2')) {
+    envUrl = envUrl.replace('10.0.2.2', 'localhost');
+  }
   if (envUrl) {
     return envUrl;
   }

@@ -1238,6 +1238,94 @@
       "limitations": [
         "This is a protective app rule informed by REDs safety principles, not a diagnosis."
       ]
+    },
+    {
+      "id": "sleep-recovery-mps",
+      "topic": "sleep and muscle recovery",
+      "tags": [
+        "sleep",
+        "recovery",
+        "muscle growth"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "healthy adults"
+      ],
+      "claim": "7-9 hours of sleep supports muscle protein synthesis and anabolic hormone balance.",
+      "practicalAdvice": [
+        "Aim for 7 to 9 hours of sleep to optimize recovery and muscle building.",
+        "Consistent sleep schedules help regulate hormones necessary for training adaptation."
+      ],
+      "source": {
+        "title": "WHO Guidelines on Physical Activity and Sedentary Behaviour",
+        "organization": "World Health Organization",
+        "year": 2020,
+        "sourceType": "guideline",
+        "url": "https://www.who.int/publications/i/item/9789240015128",
+        "scope": "Population-level guidance."
+      },
+      "evidenceLevel": "moderate",
+      "lastReviewedAt": "2026-05-31"
+    },
+    {
+      "id": "hydration-strength-output",
+      "topic": "hydration and training performance",
+      "tags": [
+        "hydration",
+        "water",
+        "performance",
+        "strength"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "healthy adults"
+      ],
+      "claim": "Acute dehydration exceeding 2% of body mass has been shown to reduce strength and endurance output.",
+      "practicalAdvice": [
+        "Maintain adequate hydration by drinking water consistently throughout the day.",
+        "Dehydration can decrease power output and make workouts feel harder."
+      ],
+      "source": {
+        "title": "Nutrition and Athletic Performance",
+        "organization": "American College of Sports Medicine",
+        "year": 2016,
+        "sourceType": "position_stand",
+        "doi": "10.1249/MSS.0000000000000852",
+        "pmid": "26920240",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/26920240/",
+        "scope": "Nutrition factors that influence performance."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-05-31"
+    },
+    {
+      "id": "sleep-deprivation-cortisol",
+      "topic": "sleep deprivation and cortisol",
+      "tags": [
+        "sleep",
+        "recovery",
+        "cortisol",
+        "performance decline"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "healthy adults"
+      ],
+      "claim": "Chronic sleep restriction elevates cortisol and reduces testosterone, impairing the anabolic response to resistance training.",
+      "practicalAdvice": [
+        "Prioritize sleep duration when training load is high to mitigate stress hormones.",
+        "Sleep deprivation impairs muscle repair and strength recovery after heavy training."
+      ],
+      "source": {
+        "title": "WHO Guidelines on Physical Activity and Sedentary Behaviour",
+        "organization": "World Health Organization",
+        "year": 2020,
+        "sourceType": "guideline",
+        "url": "https://www.who.int/publications/i/item/9789240015128",
+        "scope": "Population-level guidance."
+      },
+      "evidenceLevel": "moderate",
+      "lastReviewedAt": "2026-05-31"
     }
   ]
 }

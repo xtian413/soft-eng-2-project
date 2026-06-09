@@ -1,6 +1,6 @@
 # tasks.md — Task Tracker
 ## Gemi
-**Last Updated**: 2026-06-07T15:10:00+08:00
+**Last Updated**: 2026-06-08T23:25:00+08:00
 
 ---
 
@@ -182,3 +182,12 @@
   - ✅ **Supabase Database Schema**: Added missing columns (`age`, `activity_level`, `target_weight_kg`, etc.) to the `public.profiles` table.
   - ✅ **Goal Check Constraint**: Updated the goal check constraint on `public.profiles` to support new goals (`moderate_cut`, `aggressive_cut`, `maintain`, `lean_bulk`).
   - ✅ **Auth Trigger**: Revised `public.handle_new_user()` trigger function to sync registration metadata fields to the profile.
+
+### [TASK-C015] Local LLM Host-Bridge Acceleration & Android Build Fixes
+- **Completed**: 2026-06-08 | **Branch**: `ai-optimization`
+- **Description**: Integrated native compilation and local LLM routing configurations to accelerate development testing cycles.
+- **Changes**:
+  - ✅ **NDK Compilations**: Configured dynamic NDK resolution in Gradle to match root configurations.
+  - ✅ **Host-Bridge Acceleration**: Designed and built the developer host-bridge proxy routing layer to offload inference calculations to local high-performance hardware.
+  - ✅ **Documentation**: Authored the Gemi LFM Optimization & Troubleshooting Guide.
+  - ✅ **Integration Rebase**: Safe rebase integration onto master branch prioritizing master layouts.

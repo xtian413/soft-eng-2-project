@@ -215,3 +215,117 @@
 ---
 
 *Append new errors below using the `[ERR-NNN]` format.*
+
+---
+
+### [ERR-011] `gradlew` EACCES — Missing Execute Permission on Linux
+- **Date**: 2026-06-08
+- **Severity**: Build-blocking
+- **Symptom**: `npm run android` fails immediately with:
+  ```
+  Error: spawn /home/jed/Gemi/soft-eng-2-project/frontend/android/gradlew EACCES
+  ```
+  The Gradle wrapper script cannot be executed.
+- **Root Cause**: Git on Windows does not preserve Unix file permission bits. When the repository is cloned on Linux, `android/gradlew` loses its `+x` (executable) bit and becomes a plain text file that the OS refuses to spawn as a process.
+- **Fix**:
+  ```bash
+  chmod +x android/gradlew
+  ```
+  To persist the fix in Git so it never happens again:
+  ```bash
+  git update-index --chmod=+x android/gradlew
+  git commit -m "chore: mark gradlew as executable"
+  ```
+- **Files**: `frontend/android/gradlew`
+- **Commit**: `880ec75`
+- **Status**: ✅ Resolved
+
+---
+
+### [ERR-012] Backend `Network Error` — `localhost:3000` Unreachable from Android Emulator
+- **Date**: 2026-06-08
+- **Severity**: Runtime — all backend API calls fail silently
+- **Symptom**: Every API call from the running app logs:
+  ```
+  [Gemi] Network error — no response received. Check that your backend is running
+  and that EXPO_PUBLIC_API_BASE_URL points to the correct host.
+  Current baseURL: http://localhost:3000 Network Error
+  ```
+  Diet logs, food enrichment, profile sync, body-progress, and workout sync all fail. The backend IS running fine on port 3000.
+- **Root Cause**: Inside an Android emulator, `localhost` (or `127.0.0.1`) resolves to the **emulator's own loopback interface**, not the host machine. The host machine is reachable only via the special Android emulator gateway `10.0.2.2`.
+- **Fix**: Update `frontend/.env`:
+  ```diff
+  -EXPO_PUBLIC_API_BASE_URL=http://localhost:3000
+  +EXPO_PUBLIC_API_BASE_URL=http://10.0.2.2:3000
+  ```
+  Then rebuild the app (`npm run android`) since `EXPO_PUBLIC_*` variables are baked into the JS bundle at build time — a Metro restart alone is not sufficient.
+- **Files**: `frontend/.env`
+- **Status**: ✅ Resolved
+
+---
+
+### [ERR-013] `routines_user_id_fkey` Foreign Key Violation on Routine Sync
+- **Date**: 2026-06-08
+- **Severity**: Data sync failure (routine not persisted to remote)
+- **Symptom**: Background routine sync retry logs:
+  ```
+  [LiftTab] Background routine sync retry failed:
+  { code: "23503", details: "Key is not present in table \"profiles\".",
+    message: "insert or update on table \"routines\" violates foreign key constraint
+    \"routines_user_id_fkey\"" }
+  ```
+  The local routine (id `d099143a-71b1-44da-a01d-907d967ee83f`) is repeatedly retried but never syncs.
+- **Root Cause**: The `routines` table has a foreign key on `user_id` referencing `profiles(id)`. The authenticated user (`ef29e47e-b63d-4d69-899a-e80439b4d418`) does not yet have a row in the `profiles` table on this Supabase instance (likely a fresh / test account that bypassed the registration trigger, or migration `009` was not applied).
+- **Fix (choose one)**:
+  1. **Apply migration 009**: Run `supabase db push` to apply `009_update_profiles_schema.sql` which updates the `handle_new_user()` trigger. Then re-register (or manually insert a profiles row for the affected user ID).
+  2. **Manual insert** (quick workaround for dev):
+     ```sql
+     INSERT INTO profiles (id) VALUES ('ef29e47e-b63d-4d69-899a-e80439b4d418')
+     ON CONFLICT (id) DO NOTHING;
+     ```
+- **Files**: `supabase/migrations/20260607090000_009_update_profiles_schema.sql`
+- **Status**: ⚠️ Identified — fix depends on Supabase migration state
+
+---
+
+*Append new errors below using the `[ERR-NNN]` format.*
+
+---
+
+### [ERR-014] Web App LLM request fails with `Failed to fetch` on ngrok tunnel
+- **Date**: 2026-06-09
+- **Severity**: Runtime — LLM features fail on Web build (`npm run start` -> web)
+- **Symptom**: Triggering AI insights in a web browser logs:
+  ```
+  Web  ERROR  [Gemi] Host bridge request failed: Failed to fetch
+  ```
+- **Root Cause**: Two issues combined:
+  1. The free-tier ngrok tunnel shows a browser interstitial warning page when a standard Web browser user agent requests it.
+  2. The custom `ngrok-skip-browser-warning` header solves it for direct requests, but fails on Web due to CORS preflight options requests (browsers do not send custom headers on preflight `OPTIONS` requests, causing the preflight to fail CORS check).
+- **Fix**: Dynamically check the platform. If `Platform.OS === 'web'`, bypass the ngrok tunnel completely and connect to `http://localhost:11434` directly, since the Web app runs on the same machine where Ollama is running. For native app builds, continue routing through the ngrok tunnel.
+- **Files**: `frontend/src/ai/lfmService.ts`
+- **Status**: ✅ Resolved
+
+---
+
+### [ERR-015] Web App Backend unreachable due to `10.0.2.2` API Base URL
+- **Date**: 2026-06-09
+- **Severity**: Runtime — all network requests fail on Web build with timeout
+- **Symptom**: Opening the Web dashboard logs:
+  ```
+  Web  ERROR  [Gemi] Network error — no response received. ... Current baseURL: http://10.0.2.2:3000 timeout of 15000ms exceeded
+  ```
+- **Root Cause**: While `10.0.2.2` is correct for routing from an Android emulator to the host machine, it is an invalid IP address for a browser running on the host machine itself.
+- **Fix**: Update the `getBaseUrl()` utility to check the platform:
+  ```typescript
+  if (Platform.OS === 'web' && envUrl?.includes('10.0.2.2')) {
+    envUrl = envUrl.replace('10.0.2.2', 'localhost');
+  }
+  ```
+- **Files**: `frontend/src/lib/api.ts`
+- **Status**: ✅ Resolved
+
+---
+
+*Append new errors below using the `[ERR-NNN]` format.*
+

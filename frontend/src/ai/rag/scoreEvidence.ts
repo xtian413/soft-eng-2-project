@@ -49,7 +49,7 @@ const INTENT_TAGS: Partial<Record<CoachIntent, string[]>> = {
   exercise_technique: ['technique', 'supervision', 'resistance training', 'safety'],
   nutrition: ['protein', 'calories', 'deficit', 'surplus', 'nutrition', 'hydration'],
   meal_suggestion: ['meal', 'protein', 'carbohydrate', 'nutrition', 'athletic performance'],
-  progress_analysis: ['progression', 'recovery', 'performance decline', 'training load'],
+  progress_analysis: ['progression', 'recovery', 'performance decline', 'training load', 'sleep', 'hydration', 'water', 'cortisol'],
   injury_or_pain: ['safety', 'pain', 'injury', 'medical clearance'],
   general_coaching: ['resistance training', 'physical activity', 'nutrition'],
 };

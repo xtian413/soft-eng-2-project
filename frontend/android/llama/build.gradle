@@ -3,6 +3,7 @@ apply plugin: 'com.android.library'
 android {
     namespace 'com.anonymous.frontend.llama'
     compileSdkVersion rootProject.ext.compileSdkVersion
+    ndkVersion rootProject.ext.ndkVersion
 
     defaultConfig {
         minSdkVersion rootProject.ext.minSdkVersion

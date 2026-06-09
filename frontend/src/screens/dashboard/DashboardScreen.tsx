@@ -52,7 +52,8 @@ import {
   type FitnessInsightChatMessage,
 } from '@/ai/insights/fitnessInsight';
 import { buildFitnessInsightSignature } from '@/ai/insights/fitnessInsightCache';
-import type { LocalAiInsight } from '@/local/schema';
+import { getDailyLogsByUser } from '@/local/repositories/dailyLogsRepository';
+import type { LocalDailyLog, LocalAiInsight } from '@/local/schema';
 import { format } from 'date-fns';
 
 type TabType = 'dashboard' | 'food' | 'insights' | 'lift' | 'profile';
@@ -99,6 +100,7 @@ export default function DashboardScreen() {
   const pulseAnim = useState(new Animated.Value(1))[0];
   const [foodLogs, setFoodLogs] = useState<FoodLogEntry[]>([]);
   const [workouts, setWorkouts] = useState<WorkoutLog[]>([]);
+  const [historyDailyLogs, setHistoryDailyLogs] = useState<LocalDailyLog[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(true);
   const [hasLoadedWorkouts, setHasLoadedWorkouts] = useState(false);
   const [fitnessInsight, setFitnessInsight] = useState(createLoadingFitnessInsight);
@@ -229,6 +231,7 @@ export default function DashboardScreen() {
   const loadWorkoutLogs = useCallback(async () => {
     if (!user?.id) {
       setWorkouts([]);
+      setHistoryDailyLogs([]);
       setHasLoadedWorkouts(true);
       return;
     }
@@ -239,6 +242,14 @@ export default function DashboardScreen() {
     } catch (error) {
       console.warn('[Gemi] Failed to load workout logs for insights:', error);
       setWorkouts([]);
+    }
+
+    try {
+      const localDailyLogs = await getDailyLogsByUser(user.id);
+      setHistoryDailyLogs(localDailyLogs.slice(0, 7));
+    } catch (error) {
+      console.warn('[Gemi] Failed to load daily logs for insights:', error);
+      setHistoryDailyLogs([]);
     } finally {
       setHasLoadedWorkouts(true);
     }
@@ -283,8 +294,9 @@ export default function DashboardScreen() {
       targets,
       foodLogs,
       workouts,
+      dailyLogs: historyDailyLogs,
     }),
-    [foodLogs, fullName, goal, heightCm, targets, weightKg, workouts],
+    [foodLogs, fullName, goal, heightCm, targets, weightKg, workouts, historyDailyLogs],
   );
 
   const fitnessInsightSignature = useMemo(
@@ -455,7 +467,7 @@ export default function DashboardScreen() {
         let prompt = buildFitnessInsightPrompt(fitnessInsightInput);
         let response = await generateFitnessInsightResponse(prompt);
         let parsed = parseFitnessInsight(response);
-        let quality = assessFitnessInsightQuality(parsed);
+        let quality = assessFitnessInsightQuality(parsed, fitnessInsightInput);
 
         if (!quality.isUsable && response.trim().length > 0) {
           console.warn('[Gemi] Fitness insight rejected before repair:', {
@@ -466,7 +478,7 @@ export default function DashboardScreen() {
           prompt = buildFitnessInsightRepairPrompt(fitnessInsightInput, response, quality);
           response = await generateFitnessInsightResponse(prompt);
           parsed = parseFitnessInsight(response);
-          quality = assessFitnessInsightQuality(parsed);
+          quality = assessFitnessInsightQuality(parsed, fitnessInsightInput);
         } else if (!quality.isUsable) {
           console.warn('[Gemi] Fitness insight returned empty output; skipping repair pass:', {
             reasons: quality.reasons,
