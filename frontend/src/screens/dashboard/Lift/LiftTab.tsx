@@ -21,11 +21,12 @@ import {
 } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
-import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle } from 'lucide-react-native';
+import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle, Info } from 'lucide-react-native';
 import { getMuscleDataForExercise } from './exerciseMuscles';
 import { BodyMuscleMap } from './BodyMuscleMap';
 import { WGERExerciseBrowser } from './WGERExerciseBrowser';
-import type { ExerciseDbExercise } from '@/api/exerciseDbService';
+import { exerciseDbService, getGifSource, type ExerciseDbExercise } from '@/api/exerciseDbService';
+import { Image } from 'expo-image';
 import { createWorkout, fetchWorkoutById } from '@/api/workoutApi';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -178,6 +179,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const [showExerciseBrowser, setShowExerciseBrowser] = useState(false);
   const [exerciseBrowserTarget, setExerciseBrowserTarget] = useState<'routine' | 'workout'>('workout');
   const [pendingExercise, setPendingExercise] = useState<ExerciseDbExercise | null>(null);
+  const [exerciseDetailItem, setExerciseDetailItem] = useState<ExerciseDbExercise | null>(null);
   const [showExerciseConfigSheet, setShowExerciseConfigSheet] = useState(false);
   const [configSets, setConfigSets] = useState('3');
   const [configReps, setConfigReps] = useState('10');
@@ -1132,6 +1134,27 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     applyRoutineDefaults(exercise);
   };
 
+  const handleOpenExerciseDetailByName = async (exerciseName: string) => {
+    try {
+      const allExercises = await exerciseDbService.getExercises();
+      const normalizedName = exerciseName.toLowerCase().trim();
+      const matched = allExercises.find(ex => ex.name.toLowerCase().trim() === normalizedName);
+      if (matched) {
+        setExerciseDetailItem(matched);
+      } else {
+        const results = await exerciseDbService.searchExercises(exerciseName);
+        if (results && results.length > 0) {
+          setExerciseDetailItem(results[0]);
+        } else {
+          triggerToast('Exercise instructions not found');
+        }
+      }
+    } catch (e) {
+      console.error('[LiftTab] Failed to lookup exercise details:', e);
+      triggerToast('Error loading instructions');
+    }
+  };
+
   const updateRoutineProgress = (
     exerciseId: string,
     patch: Partial<{ sets: string; reps: string; weight: string; doneSets: boolean[] }>
@@ -1738,9 +1761,14 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                           styles.routineExerciseRow,
                           isActiveExercise && styles.routineExerciseRowActive,
                         ]}
-                        onPress={() => handleSelectRoutineExercise(exercise.id)}
+                        onPress={() => {
+                          if (activeRoutineId === selectedRoutine.id) {
+                            handleSelectRoutineExercise(exercise.id);
+                          } else {
+                            handleOpenExerciseDetailByName(exercise.exercise_name);
+                          }
+                        }}
                         activeOpacity={0.8}
-                        disabled={activeRoutineId !== selectedRoutine.id}
                       >
                         <View style={styles.routineExerciseInfo}>
                           <Text style={styles.routineExerciseName}>{exercise.exercise_name}</Text>
@@ -1836,6 +1864,13 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                     <View key={exercise.id} style={styles.routineWorkoutRow}>
                       <View style={styles.routineWorkoutHeader}>
                         <Text style={styles.routineWorkoutName}>{exercise.exercise_name}</Text>
+                        <TouchableOpacity
+                          style={styles.instructionIconButton}
+                          onPress={() => handleOpenExerciseDetailByName(exercise.exercise_name)}
+                          activeOpacity={0.7}
+                        >
+                          <Info size={16} color={Colors.primary} />
+                        </TouchableOpacity>
                       </View>
 
                       <View style={styles.routineWorkoutInputs}>
@@ -2426,6 +2461,66 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Exercise Detail Modal */}
+      <Modal
+        visible={!!exerciseDetailItem}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setExerciseDetailItem(null)}
+      >
+        <TouchableOpacity
+          style={styles.detailModalOverlay}
+          activeOpacity={1}
+          onPress={() => setExerciseDetailItem(null)}
+        >
+          <View style={styles.detailModalSheet}>
+            <View style={styles.routineModalHandleBar} />
+            <View style={styles.detailModalHeader}>
+              <Text style={styles.detailModalTitle}>{exerciseDetailItem?.name}</Text>
+              <TouchableOpacity onPress={() => setExerciseDetailItem(null)} activeOpacity={0.6}>
+                <X size={20} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={styles.detailModalScroll}
+              contentContainerStyle={styles.detailModalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {exerciseDetailItem && (
+                <>
+                  <View style={styles.detailBadgesRow}>
+                    <View style={styles.detailBadge}>
+                      <Text style={styles.detailBadgeText}>{exerciseDetailItem.target}</Text>
+                    </View>
+                    <View style={[styles.detailBadge, styles.detailBadgeEquipment]}>
+                      <Text style={styles.detailBadgeText}>{exerciseDetailItem.equipment}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.detailGifContainer}>
+                    <Image
+                      source={getGifSource(exerciseDetailItem)}
+                      style={styles.detailGif}
+                      contentFit="contain"
+                    />
+                  </View>
+                  <Text style={styles.detailSectionTitle}>Instructions</Text>
+                  {exerciseDetailItem.instructions && exerciseDetailItem.instructions.length > 0 ? (
+                    exerciseDetailItem.instructions.map((step, idx) => (
+                      <View key={idx} style={styles.detailStepRow}>
+                        <Text style={styles.detailStepNumber}>{idx + 1}</Text>
+                        <Text style={styles.detailStepText}>{step}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.detailNoSteps}>No instructions available.</Text>
+                  )}
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
       </Modal>
     </>
   );
@@ -3676,5 +3771,122 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     marginTop: 6,
+  },
+  detailModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  detailModalSheet: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.base,
+    maxHeight: '82%',
+    minHeight: '60%',
+  },
+  detailModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  detailModalTitle: {
+    fontSize: typography.base + 2,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    flex: 1,
+    marginRight: spacing.base,
+    textTransform: 'capitalize',
+  },
+  detailModalScroll: {
+    flex: 1,
+  },
+  detailModalScrollContent: {
+    paddingBottom: spacing.xxl,
+  },
+  detailBadgesRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginBottom: spacing.base,
+  },
+  detailBadge: {
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+  },
+  detailBadgeEquipment: {
+    backgroundColor: 'rgba(0, 101, 145, 0.08)',
+    borderColor: 'rgba(0, 101, 145, 0.15)',
+  },
+  detailBadgeText: {
+    fontSize: typography.xs,
+    color: Colors.primary,
+    fontWeight: fontWeight.medium,
+    textTransform: 'capitalize',
+  },
+  detailGifContainer: {
+    width: '100%',
+    height: 260,
+    backgroundColor: '#f8fafc',
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.base,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.1)',
+  },
+  detailGif: {
+    width: '100%',
+    height: '100%',
+  },
+  detailSectionTitle: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  detailStepRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    alignItems: 'flex-start',
+  },
+  detailStepNumber: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0, 101, 145, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    textAlign: 'center',
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.primary,
+    lineHeight: 22,
+  },
+  detailStepText: {
+    flex: 1,
+    fontSize: typography.sm,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 20,
+  },
+  detailNoSteps: {
+    fontSize: typography.sm,
+    color: Colors.outline,
+    fontStyle: 'italic',
+  },
+  instructionIconButton: {
+    padding: spacing.xs,
+    marginRight: -spacing.xs,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
