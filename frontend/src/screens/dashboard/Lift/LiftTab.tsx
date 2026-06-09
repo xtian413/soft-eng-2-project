@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
-import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle, Sparkles } from 'lucide-react-native';
+import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle } from 'lucide-react-native';
 import { getMuscleDataForExercise } from './exerciseMuscles';
 import { BodyMuscleMap } from './BodyMuscleMap';
 import { WGERExerciseBrowser } from './WGERExerciseBrowser';
@@ -47,7 +47,7 @@ import {
 } from '@/local/routinesMapper';
 import {
   createWorkoutWithSetsLocal,
-  getRecentWorkoutsByUser,
+  getWorkoutsByUserSince,
   getUnsyncedNewWorkoutsByUser,
   markWorkoutRemoteCreateIncomplete,
   markWorkoutSyncFailed,
@@ -130,13 +130,6 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const profile = useAuthStore((state) => state.profile);
 
   const fullName = profile?.fullName || user?.user_metadata?.fullName || user?.user_metadata?.full_name || 'User';
-
-  const getGreeting = () => {
-    const hours = new Date().getHours();
-    if (hours < 12) return 'Good morning';
-    if (hours < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
 
   // Timer state
   const [isRunning, setIsRunning] = useState(false);
@@ -303,7 +296,8 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     }
 
     try {
-      const workouts = await getRecentWorkoutsByUser(user.id, 10);
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const workouts = await getWorkoutsByUserSince(user.id, sevenDaysAgo);
       setCompletedWorkouts(workouts);
     } catch (error) {
       console.error('[LiftTab] Failed to load local workout history:', error);
@@ -510,7 +504,8 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       }
 
       if (syncedAnyWorkout) {
-        const recentWorkouts = await getRecentWorkoutsByUser(userId, 10);
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const recentWorkouts = await getWorkoutsByUserSince(userId, sevenDaysAgo);
         setCompletedWorkouts(recentWorkouts);
       }
       console.log('[LiftTab] Workout create retry complete');
@@ -557,7 +552,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       const localWorkout = await createWorkoutWithSetsLocal(user.id, payload);
       setCompletedWorkouts((prev) => [localWorkout, ...prev.filter((workout) => workout.id !== localWorkout.id)]);
       resetFinishedSessionState();
-      triggerToast('✓ Workout saved');
+      triggerToast('Workout saved');
       void syncWorkoutToRemote(localWorkout, payload);
     } catch (error) {
       console.error('[LiftTab] Failed to save local workout:', error);
@@ -1077,7 +1072,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
       resetRoutineDraft();
       setShowRoutineModal(false);
-      triggerToast(editingRoutineId ? '✓ Routine updated' : '✓ Routine saved');
+      triggerToast(editingRoutineId ? 'Routine updated' : 'Routine saved');
       void syncRoutineToRemote(localRoutine);
     } catch (error) {
       console.error('[LiftTab] Failed to save local routine:', error);
@@ -1576,19 +1571,6 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Dynamic Header Greeting */}
-        <View style={styles.welcomeSection}>
-          <View style={styles.welcomeGreetingRow}>
-            <Text style={styles.welcomeTitle}>
-              {getGreeting()}, {fullName.split(' ')[0]}!
-            </Text>
-            <Sparkles size={18} color="#eab308" fill="#eab308" style={styles.greetingSparkle} />
-          </View>
-          <Text style={styles.welcomeSubtitle}>
-            Track your routines and daily training sessions.
-          </Text>
-        </View>
-
         {/* Session Timer Card */}
         <View style={[styles.timerCard, (activeRoutineId || elapsedSecs > 0) && styles.timerCardActive]}>
           {activeRoutineId || elapsedSecs > 0 ? (
@@ -2003,7 +1985,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
         {completedWorkouts.length > 0 && (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>RECENT SAVED WORKOUTS</Text>
+            <Text style={styles.cardTitle}>WORKOUT HISTORY</Text>
             <View style={styles.savedWorkoutList}>
               {completedWorkouts.map((workout, index) => {
                 const syncStatus = workout.sync_status || 'pending';
@@ -3006,28 +2988,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  welcomeSection: {
-    marginBottom: spacing.base,
-    marginTop: spacing.xs,
-  },
-  welcomeGreetingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  greetingSparkle: {
-    marginTop: -2,
-  },
-  welcomeTitle: {
-    fontSize: typography.xl,
-    fontWeight: fontWeight.bold,
-    color: Colors.onSurface,
-  },
-  welcomeSubtitle: {
-    fontSize: typography.sm,
-    color: Colors.onSurfaceVariant,
-    marginTop: 2,
-  },
   routineCard: {
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: radius.lg,
@@ -3153,12 +3113,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     minHeight: layout.minTouchTarget,
     justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
     marginTop: spacing.xs,
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 0,
+      },
+    }),
   },
   routineStartButtonActive: {
     backgroundColor: 'rgba(16, 185, 129, 0.15)',
@@ -3183,33 +3149,33 @@ const styles = StyleSheet.create({
   },
   routineEditButton: {
     flex: 1,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: radius.full,
     alignItems: 'center',
     backgroundColor: Colors.surfaceContainerLowest,
     borderWidth: 1,
     borderColor: 'rgba(0, 101, 145, 0.25)',
-    minHeight: layout.minTouchTarget,
+    minHeight: 36,
     justifyContent: 'center',
   },
   routineEditText: {
-    fontSize: typography.sm,
+    fontSize: typography.xs,
     fontWeight: fontWeight.bold,
     color: Colors.primary,
   },
   routineDeleteButton: {
     flex: 1,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: radius.full,
     alignItems: 'center',
     backgroundColor: Colors.surfaceContainerLowest,
     borderWidth: 1,
     borderColor: 'rgba(239, 68, 68, 0.25)',
-    minHeight: layout.minTouchTarget,
+    minHeight: 36,
     justifyContent: 'center',
   },
   routineDeleteText: {
-    fontSize: typography.sm,
+    fontSize: typography.xs,
     fontWeight: fontWeight.bold,
     color: '#ef4444',
   },
