@@ -6,12 +6,7 @@ const CSV_PATH = path.join(__dirname, 'assets', 'exercises.csv');
 const GIFS_DIR = path.join(__dirname, 'assets', 'gifs');
 const MAP_FILE_PATH = path.join(__dirname, 'src', 'api', 'localGifs.ts');
 
-const EXCLUDED_EQUIPMENT = [
-  'band', 'bosu ball', 'kettlebell', 'medicine ball', 'resistance band', 
-  'roller', 'skierg machine', 'sled machine', 'stability ball', 
-  'stationary bike', 'stepmill machine', 'trap bar', 'tire', 
-  'upper body ergometer', 'wheel roller'
-].map(s => s.toLowerCase().trim());
+const EXCLUDED_EQUIPMENT = [].map(s => s.toLowerCase().trim());
 
 // Create gifs directory if it doesn't exist
 if (!fs.existsSync(GIFS_DIR)) {
