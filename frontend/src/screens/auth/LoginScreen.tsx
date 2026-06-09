@@ -5,6 +5,7 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import { Controller, useForm } from 'react-hook-form';
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -102,9 +103,11 @@ export default function LoginScreen() {
       >
         {/* Logo Icon box */}
         <View style={styles.logoSection}>
-          <View style={styles.logoBox}>
-            <Text style={styles.logoText}>A</Text>
-          </View>
+          <Image
+            source={require('../../../assets/logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Ready to hit today's targets?</Text>
         </View>
@@ -254,7 +257,7 @@ export default function LoginScreen() {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>New to Aura?</Text>
+          <Text style={styles.footerText}>New to Gemi?</Text>
           <TouchableOpacity
             onPress={() => navigation.navigate('Register')}
             accessibilityRole="button"
@@ -318,6 +321,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.xl,
     width: '100%',
+  },
+  logoImage: {
+    width: 120,
+    height: 120,
+    marginBottom: spacing.lg,
   },
   logoBox: {
     width: 64,

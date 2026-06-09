@@ -12,13 +12,6 @@ buildscript {
   }
 }
 
-// Override Kotlin version to 2.2.0 to align with Expo SDK 56.
-// This must be set BEFORE the expo-root-project plugin applies (which uses setIfNotExist).
-ext {
-  kotlinVersion = "2.2.0"
-  kspVersion = "2.2.0-2.0.2"
-}
-
 allprojects {
   repositories {
     google()

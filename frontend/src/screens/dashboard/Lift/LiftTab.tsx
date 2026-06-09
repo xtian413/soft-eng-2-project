@@ -614,9 +614,11 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
     if (setError) throw setError;
 
-    return routinesWithTemplates.map((routine) =>
-      remoteRoutineToLocalInput(routine, (setRows || []) as RemoteRoutineSetRow[])
-    );
+    return routinesWithTemplates
+      .map((routine) =>
+        remoteRoutineToLocalInput(routine, (setRows || []) as RemoteRoutineSetRow[])
+      )
+      .filter((input) => input.exercises.length > 0);
   };
 
   const refreshRemoteRoutines = async (userId: string) => {
@@ -624,7 +626,11 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       const remoteInputs = await fetchRemoteRoutineInputs(userId);
 
       for (const remoteInput of remoteInputs) {
-        await upsertRemoteRoutineForUser(userId, remoteInput);
+        try {
+          await upsertRemoteRoutineForUser(userId, remoteInput);
+        } catch (innerError) {
+          console.warn(`[LiftTab] Skipping remote routine "${remoteInput.routineName}":`, innerError);
+        }
       }
 
       const mergedLocalRows = await getRoutinesByUser(userId);

@@ -37,3 +37,7 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# On-device AI Models
+android/app/src/main/assets/models/
+
+
