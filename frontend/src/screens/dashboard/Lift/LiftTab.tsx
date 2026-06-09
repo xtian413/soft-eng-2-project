@@ -1402,7 +1402,6 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
   const getRoutineDraftDefaults = (exerciseName: string) => {
     const normalized = normalizeExerciseName(exerciseName);
-    const lastDraft = routineDraftExercises[routineDraftExercises.length - 1];
 
     const previousMatch = routines
       .flatMap((routine) => routine.exercises)
@@ -1414,14 +1413,6 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         sets: String(Math.max(1, previousMatch.sets)),
         reps: String(Math.max(1, previousMatch.reps)),
         weight: formatWeight(weightValue),
-      };
-    }
-
-    if (lastDraft) {
-      return {
-        sets: lastDraft.sets || '3',
-        reps: lastDraft.reps || '10',
-        weight: lastDraft.weight || '',
       };
     }
 
