@@ -77,6 +77,10 @@ function percentOfTarget(value: number, target: number) {
   return Math.max(0, Math.round((value / target) * 100));
 }
 
+function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return count === 1 ? singular : plural;
+}
+
 function sumFood(foodLogs: FoodLogEntry[]) {
   return foodLogs.reduce(
     (total, item) => ({
@@ -185,6 +189,46 @@ function buildRecoverySignals(
   }
 
   return lines.length > 0 ? lines.join('\n') : null;
+}
+
+function getRecentRecoveryLogs(input: FitnessInsightInput) {
+  return (input.dailyLogs ?? [])
+    .filter((l) =>
+      Boolean(l.date) &&
+      (
+        (typeof l.sleep_hours === 'number' && l.sleep_hours > 0) ||
+        (typeof l.water_ml === 'number' && l.water_ml > 0)
+      )
+    )
+    .slice(0, 7);
+}
+
+function hasRecoveryData(input?: FitnessInsightInput) {
+  return Boolean(input && getRecentRecoveryLogs(input).length > 0);
+}
+
+function hasRecoveryMention(value: string) {
+  return /\b(sleep|water|hydration|hrs?|ml)\b/i.test(value);
+}
+
+function buildRecoveryFallbackSentence(input: FitnessInsightInput) {
+  const logs = getRecentRecoveryLogs(input);
+  const sleepEntries = logs.filter((l) => typeof l.sleep_hours === 'number' && l.sleep_hours > 0);
+  const waterEntries = logs.filter((l) => typeof l.water_ml === 'number' && l.water_ml > 0);
+  const parts: string[] = [];
+
+  if (sleepEntries.length > 0) {
+    const avgSleep = sleepEntries.reduce((total, log) => total + (log.sleep_hours ?? 0), 0) / sleepEntries.length;
+    parts.push(`${avgSleep.toFixed(1)} hrs sleep across ${sleepEntries.length} logged ${pluralize(sleepEntries.length, 'night')}`);
+  }
+
+  if (waterEntries.length > 0) {
+    const avgWater = waterEntries.reduce((total, log) => total + (log.water_ml ?? 0), 0) / waterEntries.length;
+    parts.push(`${Math.round(avgWater)} ml hydration across ${waterEntries.length} logged ${pluralize(waterEntries.length, 'day')}`);
+  }
+
+  if (parts.length === 0) return null;
+  return `Your recovery logs show ${parts.join(' and ')}, so match training intensity to that recovery today.`;
 }
 
 function buildRankedSignals(input: FitnessInsightInput) {
@@ -497,6 +541,66 @@ function isGenericTitle(value: string) {
   return /^(fitness insight|start tracking|daily insight|nutrition status|training gap|\.{2,}|…+)$/i.test(value.trim());
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function userNamePatterns(userName: string) {
+  const trimmed = userName.trim();
+  const words = trimmed.split(/\s+/).filter((word) => word.length > 1);
+  return [...new Set([trimmed, words[0]].filter((value) => value && value.length > 1))];
+}
+
+function hasUserNameMention(value: string, input?: FitnessInsightInput) {
+  if (!input?.userName.trim()) return false;
+  return userNamePatterns(input.userName).some((name) =>
+    new RegExp(`\\b${escapeRegExp(name)}\\b`, 'i').test(value)
+  );
+}
+
+function hasThirdPersonUserPronoun(value: string) {
+  return /\b(he|she|they|him|his|her|hers|them|their|theirs|himself|herself|themselves)\b/i.test(value);
+}
+
+function sanitizeSecondPerson(value: string, input?: FitnessInsightInput) {
+  let next = cleanLine(value);
+
+  if (input?.userName.trim()) {
+    userNamePatterns(input.userName).forEach((name) => {
+      const escaped = escapeRegExp(name);
+      next = next
+        .replace(new RegExp(`\\b${escaped}\\s*'?s\\b`, 'gi'), 'your')
+        .replace(new RegExp(`\\b${escaped}\\b`, 'gi'), 'you');
+    });
+  }
+
+  next = next
+    .replace(/\b(?:he|she)\s+has\b/gi, 'you have')
+    .replace(/\bthey\s+have\b/gi, 'you have')
+    .replace(/\b(?:he|she)\s+is\b/gi, 'you are')
+    .replace(/\bthey\s+are\b/gi, 'you are')
+    .replace(/\b(?:he|she)\s+was\b/gi, 'you were')
+    .replace(/\bthey\s+were\b/gi, 'you were')
+    .replace(/\b(?:he|she)\s+needs\b/gi, 'you need')
+    .replace(/\bthey\s+need\b/gi, 'you need')
+    .replace(/\b(?:he|she)\s+does\b/gi, 'you do')
+    .replace(/\b(?:he|she)\s+aims\b/gi, 'you aim')
+    .replace(/\b(?:he|she|they)\s+(should|can|could|may|might|would|will|must|logged|did|plan|plans|need to|needs to|want to|wants to)\b/gi, 'you $1')
+    .replace(/\b(?:his|hers|their|theirs)\b/gi, 'your')
+    .replace(/\bher\s+(?=\w)/gi, 'your ')
+    .replace(/\b(?:him|her|them)\b/gi, 'you')
+    .replace(/\b(?:he|she|they)\b/gi, 'you')
+    .replace(/\byou needs to\b/gi, 'you need to')
+    .replace(/\byou need to\b/gi, 'you need to')
+    .replace(/\byou wants to\b/gi, 'you want to')
+    .replace(/\byou plans\b/gi, 'you plan')
+    .replace(/\byou logged\b/gi, 'you logged')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return next.replace(/^you\b/i, 'You');
+}
+
 function titleFromModelText(value: string) {
   const text = value
     .replace(/\bChristian(?:\s+G)?'?s?\b/gi, '')
@@ -513,6 +617,93 @@ function titleFromModelText(value: string) {
   return titleWords
     .map((word) => (/\d/.test(word) ? word : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()))
     .join(' ');
+}
+
+function buildDeterministicFitnessInsight(input: FitnessInsightInput): FitnessInsight {
+  const totals = sumFood(input.foodLogs);
+  const macroGaps = [
+    { label: 'protein', current: roundNumber(totals.protein), target: input.targets.protein, unit: 'g' },
+    { label: 'carbs', current: roundNumber(totals.carbs), target: input.targets.carbs, unit: 'g' },
+    { label: 'fat', current: roundNumber(totals.fats), target: input.targets.fats, unit: 'g' },
+  ].sort((a, b) => percentOfTarget(a.current, a.target) - percentOfTarget(b.current, b.target));
+  const lowestMacro = macroGaps[0];
+  const recentWorkouts = input.workouts.slice(-5);
+  const recentSets = recentWorkouts.reduce((total, workout) => total + workout.sets.length, 0);
+  const recentVolume = roundNumber(recentWorkouts.reduce((total, workout) => total + workoutVolume(workout), 0));
+  const lastWorkout = input.workouts.at(-1);
+  const lastWorkoutAge = lastWorkout ? daysSince(lastWorkout.performedAt) : null;
+  const recoverySentence = buildRecoveryFallbackSentence(input);
+  const trainingBase = lastWorkout
+    ? `Your recent training shows ${recentWorkouts.length} ${pluralize(recentWorkouts.length, 'workout')}, ${recentSets} sets, and ${recentVolume}kg volume; your last workout was ${lastWorkoutAge ?? 'unknown'} days ago.`
+    : 'You have no workout sessions logged yet, so start with a manageable first session.';
+
+  return {
+    title: recoverySentence ? 'Recovery-Aware Insight' : 'Logged Data Insight',
+    summary: `You logged ${input.foodLogs.length} ${pluralize(input.foodLogs.length, 'meal')} today and reached ${roundNumber(totals.calories)} of ${input.targets.calories} kcal (${percentOfTarget(totals.calories, input.targets.calories)}%).`,
+    nutrition: `Your largest macro gap is ${lowestMacro.label}: ${lowestMacro.current}${lowestMacro.unit} of ${lowestMacro.target}${lowestMacro.unit} (${percentOfTarget(lowestMacro.current, lowestMacro.target)}%).`,
+    training: recoverySentence ? `${trainingBase} ${recoverySentence}` : trainingBase,
+    nextStep: input.foodLogs.length === 0
+      ? `Log 1 meal with protein today, then use your ${input.targets.calories} kcal target to plan the rest.`
+      : `Choose 1 next action: close the ${lowestMacro.label} gap or log your next workout while the data is fresh.`,
+    confidence: 'medium: repaired from model output using logged data.',
+  };
+}
+
+function shouldUseFallbackField(value: string, field: keyof Pick<FitnessInsight, 'summary' | 'nutrition' | 'training' | 'nextStep'>) {
+  if (!value || normalizeInsightText(value).length < 10) return true;
+  if (isRetryPlaceholder(value)) return true;
+  if (isGenericInsightText(value)) return true;
+  return field !== 'nextStep' && !hasUserDataAnchor(value);
+}
+
+export function repairFitnessInsightAfterParsing(
+  insight: FitnessInsight,
+  input: FitnessInsightInput,
+): FitnessInsight {
+  const fallback = buildDeterministicFitnessInsight(input);
+  const repaired: FitnessInsight = {
+    title: sanitizeSecondPerson(insight.title, input),
+    summary: sanitizeSecondPerson(insight.summary, input),
+    nutrition: sanitizeSecondPerson(insight.nutrition, input),
+    training: sanitizeSecondPerson(insight.training, input),
+    nextStep: sanitizeSecondPerson(insight.nextStep, input),
+    confidence: insight.confidence || fallback.confidence,
+  };
+
+  if (!repaired.title || isGenericTitle(repaired.title) || isRetryPlaceholder(repaired.title) || hasUserNameMention(repaired.title, input)) {
+    repaired.title = fallback.title;
+  }
+
+  (['summary', 'nutrition', 'training', 'nextStep'] as const).forEach((field) => {
+    if (
+      shouldUseFallbackField(repaired[field], field) ||
+      hasUserNameMention(repaired[field], input) ||
+      hasThirdPersonUserPronoun(repaired[field])
+    ) {
+      repaired[field] = fallback[field];
+    }
+  });
+
+  if (hasRecoveryData(input) && ![repaired.summary, repaired.training].some(hasRecoveryMention)) {
+    const recoverySentence = buildRecoveryFallbackSentence(input);
+    if (recoverySentence) {
+      repaired.training = `${repaired.training} ${recoverySentence}`.trim();
+    }
+  }
+
+  (['summary', 'nutrition', 'training', 'nextStep'] as const).forEach((field) => {
+    repaired[field] = sanitizeSecondPerson(repaired[field], input);
+    if (hasUserNameMention(repaired[field], input) || hasThirdPersonUserPronoun(repaired[field])) {
+      repaired[field] = fallback[field];
+    }
+  });
+
+  repaired.title = sanitizeSecondPerson(repaired.title, input);
+  if (hasUserNameMention(repaired.title, input) || hasThirdPersonUserPronoun(repaired.title)) {
+    repaired.title = fallback.title;
+  }
+
+  return repaired;
 }
 
 export function parseFitnessInsight(output: string): FitnessInsight {
@@ -578,17 +769,30 @@ export function assessFitnessInsightQuality(
     if (hasUserDataAnchor(value)) {
       anchoredFields.push(field);
     }
+    if (hasUserNameMention(value, input)) {
+      reasons.push(`${field} refers to the user by name`);
+    }
+    if (hasThirdPersonUserPronoun(value)) {
+      reasons.push(`${field} uses third-person wording`);
+    }
   });
+
+  if (hasUserNameMention(insight.title, input)) {
+    reasons.push('title refers to the user by name');
+  }
+  if (hasThirdPersonUserPronoun(insight.title)) {
+    reasons.push('title uses third-person wording');
+  }
 
   if (anchoredFields.length < 2) {
     reasons.push('insight is not anchored enough to logged user data');
   }
 
   if (input?.dailyLogs && input.dailyLogs.some((l) => l.sleep_hours || l.water_ml)) {
-    const hasRecoveryMention = [insight.training, insight.summary].some(
-      (field) => /\b(sleep|water|hydration|hrs?|ml)\b/i.test(field)
+    const recoveryMentioned = [insight.training, insight.summary].some(
+      (field) => hasRecoveryMention(field)
     );
-    if (!hasRecoveryMention) {
+    if (!recoveryMentioned) {
       reasons.push('recovery data is available but not referenced in insight');
     }
   }

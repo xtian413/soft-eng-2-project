@@ -48,6 +48,7 @@ import {
   createModelRetryFitnessInsight,
   createLoadingFitnessInsight,
   parseFitnessInsight,
+  repairFitnessInsightAfterParsing,
   type FitnessInsight,
   type FitnessInsightInput,
   type FitnessInsightChatMessage,
@@ -469,7 +470,7 @@ export default function DashboardScreen() {
 
         let prompt = buildFitnessInsightPrompt(fitnessInsightInput);
         let response = await generateFitnessInsightResponse(prompt);
-        let parsed = parseFitnessInsight(response);
+        let parsed = repairFitnessInsightAfterParsing(parseFitnessInsight(response), fitnessInsightInput);
         let quality = assessFitnessInsightQuality(parsed, fitnessInsightInput);
 
         if (!quality.isUsable && response.trim().length > 0) {
@@ -480,7 +481,7 @@ export default function DashboardScreen() {
           });
           prompt = buildFitnessInsightRepairPrompt(fitnessInsightInput, response, quality);
           response = await generateFitnessInsightResponse(prompt);
-          parsed = parseFitnessInsight(response);
+          parsed = repairFitnessInsightAfterParsing(parseFitnessInsight(response), fitnessInsightInput);
           quality = assessFitnessInsightQuality(parsed, fitnessInsightInput);
         } else if (!quality.isUsable) {
           console.warn('[Gemi] Fitness insight returned empty output; skipping repair pass:', {
