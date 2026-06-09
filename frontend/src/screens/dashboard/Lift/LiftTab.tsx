@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
-import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle, Info } from 'lucide-react-native';
+import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle, Info, Trash2 } from 'lucide-react-native';
 import { getMuscleDataForExercise } from './exerciseMuscles';
 import { BodyMuscleMap } from './BodyMuscleMap';
 import { WGERExerciseBrowser } from './WGERExerciseBrowser';
@@ -154,8 +154,24 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const [isSavingRoutine, setIsSavingRoutine] = useState(false);
   const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
   const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
+  
+  // Custom interface for individual set logging details
   const [routineProgress, setRoutineProgress] = useState<
-    Record<string, { sets: string; reps: string; weight: string; doneSets: boolean[] }>
+    Record<
+      string,
+      {
+        sets: string;
+        reps: string;
+        weight: string;
+        doneSets: boolean[];
+        setsDetails?: Array<{
+          id: string;
+          reps: string;
+          weight: string;
+          done: boolean;
+        }>;
+      }
+    >
   >({});
 
   // Rest Timer State
@@ -403,6 +419,27 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     const sets: CompletedWorkoutInput['sets'] = activeRoutine.exercises.flatMap((exercise) => {
       const progress = routineProgress[exercise.id];
       if (!progress) return [];
+
+      const details = progress.setsDetails || [];
+      if (details.length > 0) {
+        return details
+          .map((setDetail, index) => {
+            if (!setDetail.done) return null;
+            const reps = Math.max(1, parseInt(setDetail.reps, 10) || 1);
+            const weight = parseFloat(setDetail.weight) || 0;
+            const weightKg = isLbs ? weight * 0.45359237 : weight;
+            return {
+              exerciseName: exercise.exercise_name,
+              muscleGroup: exercise.muscle_group ?? null,
+              setNumber: index + 1,
+              reps,
+              weightKg: weightKg > 0 ? weightKg : null,
+              rir: 0,
+              estimated1rm: estimateOneRepMax(weightKg, reps),
+            };
+          })
+          .filter((s): s is NonNullable<typeof s> => s !== null);
+      }
 
       const reps = Math.max(1, parseInt(progress.reps, 10) || 1);
       const weight = parseFloat(progress.weight) || 0;
@@ -659,11 +696,20 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     if (nextIsLbs === isLbs) return;
     setIsLbs(nextIsLbs);
     setRoutineProgress((prev) => {
-      const updated: Record<string, { sets: string; reps: string; weight: string; doneSets: boolean[] }> = {};
+      const updated: typeof prev = {};
       Object.entries(prev).forEach(([key, value]) => {
         const currentWeight = parseFloat(value.weight) || 0;
         const nextWeight = convertWeightValue(currentWeight, nextIsLbs);
-        updated[key] = { ...value, weight: formatWeight(nextWeight) };
+        const updatedDetails = (value.setsDetails || []).map((detail) => {
+          const detailWeight = parseFloat(detail.weight) || 0;
+          const nextDetailWeight = convertWeightValue(detailWeight, nextIsLbs);
+          return { ...detail, weight: formatWeight(nextDetailWeight) };
+        });
+        updated[key] = {
+          ...value,
+          weight: formatWeight(nextWeight),
+          setsDetails: updatedDetails,
+        };
       });
       return updated;
     });
@@ -1201,15 +1247,23 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const handleStartRoutine = (routine: Routine) => {
     if (routine.exercises.length === 0) return;
 
-    const initialProgress: Record<string, { sets: string; reps: string; weight: string; doneSets: boolean[] }> = {};
+    const initialProgress: typeof routineProgress = {};
     routine.exercises.forEach((exercise) => {
       const weightValue = isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg;
       const setCount = Math.max(1, exercise.sets);
+      const repsVal = String(exercise.reps);
+      const weightVal = formatWeight(weightValue);
       initialProgress[exercise.id] = {
         sets: String(setCount),
-        reps: String(exercise.reps),
-        weight: formatWeight(weightValue),
+        reps: repsVal,
+        weight: weightVal,
         doneSets: Array.from({ length: setCount }, () => false),
+        setsDetails: Array.from({ length: setCount }, (_, idx) => ({
+          id: `${exercise.id}-set-${idx}-${Date.now()}-${Math.random()}`,
+          reps: repsVal,
+          weight: weightVal,
+          done: false,
+        })),
       };
     });
 
@@ -1261,20 +1315,49 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
   const updateRoutineProgress = (
     exerciseId: string,
-    patch: Partial<{ sets: string; reps: string; weight: string; doneSets: boolean[] }>
+    patch: Partial<{
+      sets: string;
+      reps: string;
+      weight: string;
+      doneSets: boolean[];
+      setsDetails: Array<{ id: string; reps: string; weight: string; done: boolean }>;
+    }>
   ) => {
     setRoutineProgress((prev) => {
       const current = prev[exerciseId];
       if (!current) return prev;
 
       let nextDoneSets = current.doneSets;
+      let nextDetails = current.setsDetails || [];
+
+      if (patch.setsDetails !== undefined) {
+        nextDetails = patch.setsDetails;
+        nextDoneSets = nextDetails.map((s) => s.done);
+      } else if (patch.doneSets !== undefined) {
+        nextDoneSets = patch.doneSets;
+        nextDetails = nextDetails.map((s, idx) => ({
+          ...s,
+          done: nextDoneSets[idx] !== undefined ? nextDoneSets[idx] : s.done,
+        }));
+      }
+
       if (patch.sets !== undefined) {
         const nextCount = Math.max(1, parseInt(patch.sets, 10) || 1);
-        if (nextCount > nextDoneSets.length) {
-          nextDoneSets = [...nextDoneSets, ...Array.from({ length: nextCount - nextDoneSets.length }, () => false)];
-        } else if (nextCount < nextDoneSets.length) {
-          nextDoneSets = nextDoneSets.slice(0, nextCount);
+        if (nextCount > nextDetails.length) {
+          const lastSet = nextDetails[nextDetails.length - 1];
+          const defaultReps = lastSet ? lastSet.reps : current.reps;
+          const defaultWeight = lastSet ? lastSet.weight : current.weight;
+          const newSets = Array.from({ length: nextCount - nextDetails.length }, (_, idx) => ({
+            id: `${exerciseId}-set-${nextDetails.length + idx}-${Date.now()}-${Math.random()}`,
+            reps: defaultReps,
+            weight: defaultWeight,
+            done: false,
+          }));
+          nextDetails = [...nextDetails, ...newSets];
+        } else if (nextCount < nextDetails.length) {
+          nextDetails = nextDetails.slice(0, nextCount);
         }
+        nextDoneSets = nextDetails.map((s) => s.done);
       }
 
       return {
@@ -1282,7 +1365,9 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         [exerciseId]: {
           ...current,
           ...patch,
-          doneSets: patch.doneSets ?? nextDoneSets,
+          doneSets: nextDoneSets,
+          setsDetails: nextDetails,
+          sets: String(nextDetails.length),
         },
       };
     });
@@ -1955,11 +2040,96 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
               <View style={styles.routineWorkoutList}>
                 {activeRoutine.exercises.map((exercise) => {
-                  const progress = routineProgress[exercise.id] || {
-                    sets: String(exercise.sets),
-                    reps: String(exercise.reps),
-                    weight: formatWeight(isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg),
-                    doneSets: Array.from({ length: Math.max(1, exercise.sets) }, () => false),
+                  const progress = routineProgress[exercise.id] || (() => {
+                    const weightValue = isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg;
+                    const setCount = Math.max(1, exercise.sets);
+                    const repsVal = String(exercise.reps || 10);
+                    const weightVal = formatWeight(weightValue);
+                    return {
+                      sets: String(setCount),
+                      reps: repsVal,
+                      weight: weightVal,
+                      doneSets: Array.from({ length: setCount }, () => false),
+                      setsDetails: Array.from({ length: setCount }, (_, idx) => ({
+                        id: `${exercise.id}-set-${idx}-${Date.now()}-${Math.random()}`,
+                        reps: repsVal,
+                        weight: weightVal,
+                        done: false,
+                      })),
+                    };
+                  })();
+
+                  const details = progress.setsDetails || [];
+
+                  const handleToggleSet = (setIdx: number) => {
+                    const nextDetails = details.map((s, sIdx) =>
+                      sIdx === setIdx ? { ...s, done: !s.done } : s
+                    );
+                    const wasDone = details[setIdx].done;
+
+                    if (!wasDone) {
+                      if (restTimeRemaining !== null && restTimeRemaining > 0) {
+                        Alert.alert(
+                          'Restart Rest Timer?',
+                          `A rest timer is already running. Would you like to restart the timer for Set ${setIdx + 1} of ${exercise.exercise_name}?`,
+                          [
+                            {
+                              text: 'Cancel (Misclick)',
+                              style: 'cancel',
+                            },
+                            {
+                              text: 'Yes, Start Timer',
+                              onPress: () => {
+                                updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
+                                handleStartRestTimer(exercise, setIdx + 1);
+                              },
+                            },
+                          ]
+                        );
+                      } else {
+                        updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
+                        handleStartRestTimer(exercise, setIdx + 1);
+                      }
+                    } else {
+                      updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
+                    }
+                  };
+
+                  const handleWeightChange = (setIdx: number, val: string) => {
+                    const nextDetails = details.map((s, sIdx) =>
+                      sIdx === setIdx ? { ...s, weight: val } : s
+                    );
+                    updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
+                  };
+
+                  const handleRepsChange = (setIdx: number, val: string) => {
+                    const nextDetails = details.map((s, sIdx) =>
+                      sIdx === setIdx ? { ...s, reps: val } : s
+                    );
+                    updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
+                  };
+
+                  const handleDeleteSet = (setIdx: number) => {
+                    if (details.length <= 1) {
+                      triggerToast('An exercise must have at least one set');
+                      return;
+                    }
+                    const nextDetails = details.filter((_, sIdx) => sIdx !== setIdx);
+                    updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
+                  };
+
+                  const handleAddSet = () => {
+                    const lastSet = details[details.length - 1];
+                    const defaultReps = lastSet ? lastSet.reps : String(exercise.reps || 10);
+                    const defaultWeight = lastSet ? lastSet.weight : formatWeight(isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg);
+                    const newSet = {
+                      id: `${exercise.id}-set-${details.length}-${Date.now()}-${Math.random()}`,
+                      reps: defaultReps,
+                      weight: defaultWeight,
+                      done: false,
+                    };
+                    const nextDetails = [...details, newSet];
+                    updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
                   };
 
                   return (
@@ -1975,98 +2145,83 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                         </TouchableOpacity>
                       </View>
 
-                      <View style={styles.routineWorkoutInputs}>
-                        <View style={styles.routineInputCol}>
-                          <Text style={styles.routineInputLabel}>Sets</Text>
-                          <TextInput
-                            style={styles.routineInput}
-                            value={progress.sets}
-                            onChangeText={(value) => updateRoutineProgress(exercise.id, { sets: value })}
-                            onBlur={() => handleSaveRoutineDefaults(exercise.id)}
-                            keyboardType="numeric"
-                          />
+                      {/* Sets Table */}
+                      <View style={styles.setsTableContainer}>
+                        {/* Table Header */}
+                        <View style={styles.setsTableHeader}>
+                          <Text style={[styles.setsTableHeaderCell, styles.cellCheck]} />
+                          <Text style={[styles.setsTableHeaderCell, styles.cellLabel]}>Set</Text>
+                          <Text style={[styles.setsTableHeaderCell, styles.cellInput]}>{isLbs ? 'lbs' : 'kg'}</Text>
+                          <Text style={[styles.setsTableHeaderCell, styles.cellInput]}>Reps</Text>
+                          <Text style={[styles.setsTableHeaderCell, styles.cellAction]} />
                         </View>
-                        <View style={styles.routineInputCol}>
-                          <Text style={styles.routineInputLabel}>Reps</Text>
-                          <TextInput
-                            style={styles.routineInput}
-                            value={progress.reps}
-                            onChangeText={(value) => updateRoutineProgress(exercise.id, { reps: value })}
-                            onBlur={() => handleSaveRoutineDefaults(exercise.id)}
-                            keyboardType="numeric"
-                          />
-                        </View>
-                        <View style={styles.routineInputCol}>
-                          <Text style={styles.routineInputLabel}>Weight</Text>
-                          <TextInput
-                            style={styles.routineInput}
-                            value={progress.weight}
-                            onChangeText={(value) => updateRoutineProgress(exercise.id, { weight: value })}
-                            onBlur={() => handleSaveRoutineDefaults(exercise.id)}
-                            keyboardType="numeric"
-                          />
-                        </View>
-                      </View>
 
-                      <View style={styles.routineSetRow}>
-                        <Text style={styles.routineSetHint}>Tap any set to mark complete</Text>
-                        <View style={styles.routineSetGrid}>
-                        {progress.doneSets.map((isDone, index) => (
-                          <TouchableOpacity
-                            key={`${exercise.id}-set-${index}`}
-                            style={[
-                              styles.routineSetCard,
-                              isDone && styles.routineSetCardDone,
-                            ]}
-                            onPress={() => {
-                              const nextDone = [...progress.doneSets];
-                              const wasDone = nextDone[index];
-                              nextDone[index] = !wasDone;
+                        {/* Table Rows */}
+                        {details.map((setDetail, setIndex) => (
+                          <View key={setDetail.id} style={[styles.setsTableRow, setDetail.done && styles.setsTableRowDone]}>
+                            {/* Checkbox */}
+                            <TouchableOpacity
+                              style={[styles.setRowCheckBtn, setDetail.done && styles.setRowCheckBtnDone]}
+                              onPress={() => handleToggleSet(setIndex)}
+                              activeOpacity={0.7}
+                            >
+                              {setDetail.done && <Check size={10} color="#ffffff" strokeWidth={3} />}
+                            </TouchableOpacity>
 
-                              if (!wasDone) {
-                                if (restTimeRemaining !== null && restTimeRemaining > 0) {
-                                  Alert.alert(
-                                    'Restart Rest Timer?',
-                                    `A rest timer is already running. Would you like to restart the timer for Set ${index + 1} of ${exercise.exercise_name}?`,
-                                    [
-                                      {
-                                        text: 'Cancel (Misclick)',
-                                        style: 'cancel',
-                                      },
-                                      {
-                                        text: 'Yes, Start Timer',
-                                        onPress: () => {
-                                          updateRoutineProgress(exercise.id, { doneSets: nextDone });
-                                          handleStartRestTimer(exercise, index + 1);
-                                        },
-                                      },
-                                    ]
-                                  );
-                                } else {
-                                  updateRoutineProgress(exercise.id, { doneSets: nextDone });
-                                  handleStartRestTimer(exercise, index + 1);
-                                }
-                              } else {
-                                updateRoutineProgress(exercise.id, { doneSets: nextDone });
-                              }
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={[styles.routineSetCardNum, isDone && styles.routineSetCardNumDone]}>
-                              {index + 1}
-                            </Text>
-                            <Text style={[styles.routineSetCardMeta, isDone && styles.routineSetCardMetaDone]}>
-                              {progress.reps} reps
-                            </Text>
-                            {isDone && (
-                              <View style={styles.routineSetCardCheck}>
-                                <Check size={10} color="#ffffff" strokeWidth={3} />
-                              </View>
+                            {/* Label */}
+                            <View style={styles.setRowLabelContainer}>
+                              <Text style={styles.setRowLabel}>Set {setIndex + 1}</Text>
+                            </View>
+
+                            {/* Weight Input */}
+                            <TextInput
+                              style={[styles.setRowInput, setDetail.done && styles.setRowInputDone]}
+                              value={setDetail.weight}
+                              onChangeText={(val) => handleWeightChange(setIndex, val)}
+                              keyboardType="decimal-pad"
+                              textAlign="center"
+                              editable={!setDetail.done}
+                              placeholder="0"
+                              placeholderTextColor={Colors.outline}
+                            />
+
+                            {/* Reps Input */}
+                            <TextInput
+                              style={[styles.setRowInput, setDetail.done && styles.setRowInputDone]}
+                              value={setDetail.reps}
+                              onChangeText={(val) => handleRepsChange(setIndex, val)}
+                              keyboardType="number-pad"
+                              textAlign="center"
+                              editable={!setDetail.done}
+                              placeholder="0"
+                              placeholderTextColor={Colors.outline}
+                            />
+
+                            {/* Action Button */}
+                            {details.length > 1 ? (
+                              <TouchableOpacity
+                                style={styles.setRowDeleteBtn}
+                                onPress={() => handleDeleteSet(setIndex)}
+                                activeOpacity={0.7}
+                              >
+                                <Trash2 size={14} color="#ef4444" />
+                              </TouchableOpacity>
+                            ) : (
+                              <View style={styles.setRowDeleteBtnPlaceholder} />
                             )}
-                          </TouchableOpacity>
+                          </View>
                         ))}
-                        </View>
                       </View>
+
+                      {/* Add Set Button */}
+                      <TouchableOpacity
+                        style={styles.addSetDashedBtn}
+                        onPress={handleAddSet}
+                        activeOpacity={0.7}
+                      >
+                        <Plus size={14} color={Colors.primary} style={{ marginRight: 4 }} />
+                        <Text style={styles.addSetDashedBtnText}>Add Set</Text>
+                      </TouchableOpacity>
                     </View>
                   );
                 })}
@@ -4201,5 +4356,120 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
     fontWeight: fontWeight.bold,
     color: '#f87171',
+  },
+  // Sets Table Styles (Phase 16)
+  setsTableContainer: {
+    width: '100%',
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  setsTableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.15)',
+    marginBottom: spacing.xs,
+  },
+  setsTableHeaderCell: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  cellCheck: {
+    width: 32,
+  },
+  cellLabel: {
+    flex: 1.2,
+    textAlign: 'left',
+    paddingLeft: spacing.xs,
+  },
+  cellInput: {
+    flex: 2,
+  },
+  cellAction: {
+    width: 36,
+  },
+  setsTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    marginVertical: 2,
+    backgroundColor: 'transparent',
+  },
+  setsTableRowDone: {
+    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+  },
+  setRowCheckBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: 'rgba(190, 200, 210, 0.5)',
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  setRowCheckBtnDone: {
+    borderColor: '#10b981',
+    backgroundColor: '#10b981',
+  },
+  setRowLabelContainer: {
+    flex: 1.2,
+    justifyContent: 'center',
+    paddingLeft: spacing.xs,
+  },
+  setRowLabel: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.semiBold,
+    color: Colors.onSurface,
+  },
+  setRowInput: {
+    flex: 2,
+    height: 36,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+    borderRadius: radius.md,
+    backgroundColor: Colors.surfaceContainerLow,
+    marginHorizontal: 4,
+    fontSize: typography.sm,
+    fontWeight: fontWeight.semiBold,
+    color: Colors.onSurface,
+  },
+  setRowInputDone: {
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'rgba(16, 185, 129, 0.02)',
+    color: Colors.outline,
+  },
+  setRowDeleteBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  setRowDeleteBtnPlaceholder: {
+    width: 36,
+  },
+  addSetDashedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 36,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(14, 165, 233, 0.4)',
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(14, 165, 233, 0.03)',
+    marginTop: spacing.xs,
+  },
+  addSetDashedBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.primary,
   },
 });
