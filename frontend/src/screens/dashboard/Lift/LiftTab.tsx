@@ -1829,16 +1829,11 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           {activeRoutine ? (
             <>
               <View style={styles.exerciseHeader}>
-                <View style={styles.exerciseTitleRow}>
-                  <View style={styles.tagChip}>
-                    <View style={styles.tagChipContent}>
-                      <Dumbbell size={10} color={Colors.primaryContainer} style={{ marginRight: 4 }} />
-                      <Text style={styles.tagChipText}>Routine</Text>
-                    </View>
+                <View style={styles.routineHighlightBadge}>
+                  <View style={styles.tagChipContent}>
+                    <Dumbbell size={10} color={Colors.primaryContainer} style={{ marginRight: 4 }} />
+                    <Text style={styles.tagChipText}>Routine</Text>
                   </View>
-                  <Text style={styles.exerciseTitle}>{activeRoutine.name}</Text>
-                </View>
-                <View style={styles.exerciseActions}>
                   <View style={styles.unitToggleRow}>
                     <TouchableOpacity onPress={() => toggleUnit(true)}>
                       <Text style={[styles.unitBtn, isLbs && styles.unitBtnActive]}>lbs</Text>
@@ -1849,6 +1844,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                     </TouchableOpacity>
                   </View>
                 </View>
+                <Text style={styles.exerciseTitle}>{activeRoutine.name}</Text>
               </View>
 
               <View style={styles.routineWorkoutList}>
@@ -2847,9 +2843,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(186, 26, 26, 0.08)',
   },
   exerciseHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: 'column',
+    alignItems: 'stretch',
     marginBottom: spacing.md,
   },
   exerciseTitleRow: {
@@ -2860,8 +2855,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  tagChip: {
+  routineHighlightBadge: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    paddingHorizontal: spacing.base,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    marginBottom: spacing.sm,
+  },
+  tagChip: {
+    backgroundColor: 'rgba(14, 165, 233, 0.18)',
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radius.full,
