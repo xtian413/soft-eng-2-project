@@ -42,6 +42,7 @@ import {
   searchLocalFoods,
 } from '@/local/repositories/foodsRepository';
 import { getDailyLogByDate, upsertDailyLog } from '@/local/repositories/dailyLogsRepository';
+import { syncDailyLogsForUser } from '@/local/dailyLogsSync';
 import { format } from 'date-fns';
 
 import type { FoodLogEntry, MacroTargets, MealId } from '@/screens/dashboard/types';
@@ -234,8 +235,6 @@ export function FoodTab({
   // Adjust glass states when goal is changed
   const updateHydrationGoal = (ml: number) => {
     setHydrationGoal(ml);
-    const count = Math.min(12, Math.ceil(ml / 250));
-    setWaterGlassStates(Array(count).fill(false));
     setIsEditingHydration(false);
     triggerToast(`Hydration target updated to ${(ml / 1000).toFixed(2)}L!`);
   };
@@ -276,6 +275,33 @@ export function FoodTab({
   }, [sleepHours]);
 
   const isDailyLogLoadedRef = useRef(false);
+  const skipNextDailyAutosaveRef = useRef(false);
+
+  const applyDailyLogToState = useCallback((log: Awaited<ReturnType<typeof getDailyLogByDate>>) => {
+    if (log) {
+      const targetGoal = log.water_goal_ml ?? 2000;
+      setHydrationGoal(targetGoal);
+      setHydrationGoalInput(String(targetGoal));
+
+      const checkedCount = log.water_ml ? Math.floor(log.water_ml / 250) : 0;
+      const totalGlasses = Math.min(12, Math.max(Math.ceil(targetGoal / 250), checkedCount));
+      const newStates = Array(totalGlasses).fill(false);
+      for (let i = 0; i < Math.min(checkedCount, totalGlasses); i++) {
+        newStates[i] = true;
+      }
+      setWaterGlassStates(newStates);
+
+      setBedtime(log.bedtime);
+      setWaketime(log.waketime);
+      return;
+    }
+
+    setHydrationGoal(2000);
+    setHydrationGoalInput('2000');
+    setWaterGlassStates(Array(8).fill(false));
+    setBedtime(null);
+    setWaketime(null);
+  }, []);
 
   // Load initial daily log for today
   useEffect(() => {
@@ -289,31 +315,17 @@ export function FoodTab({
       try {
         const log = await getDailyLogByDate(userId!, todayStr);
         if (!active) return;
-        if (log) {
-          // 1. Water Glass States
-          const targetGoal = log.water_ml ? Math.max(log.water_ml, 2000) : 2000;
-          setHydrationGoal(targetGoal);
-          setHydrationGoalInput(String(targetGoal));
+        skipNextDailyAutosaveRef.current = true;
+        applyDailyLogToState(log);
 
-          const totalGlasses = Math.min(12, Math.ceil(targetGoal / 250));
-          const checkedCount = log.water_ml ? Math.floor(log.water_ml / 250) : 0;
-          const newStates = Array(totalGlasses).fill(false);
-          for (let i = 0; i < Math.min(checkedCount, totalGlasses); i++) {
-            newStates[i] = true;
+        void (async () => {
+          await syncDailyLogsForUser(userId!);
+          const refreshed = await getDailyLogByDate(userId!, todayStr);
+          if (active) {
+            skipNextDailyAutosaveRef.current = true;
+            applyDailyLogToState(refreshed);
           }
-          setWaterGlassStates(newStates);
-
-          // 2. Sleep bedtime & waketime
-          setBedtime(log.bedtime);
-          setWaketime(log.waketime);
-        } else {
-          // No log yet, use defaults: water 0, sleep null
-          setHydrationGoal(2000);
-          setHydrationGoalInput('2000');
-          setWaterGlassStates(Array(8).fill(false));
-          setBedtime(null);
-          setWaketime(null);
-        }
+        })();
       } catch (err) {
         console.warn('[FoodTab] Failed to load today\'s daily log:', err);
       } finally {
@@ -327,11 +339,15 @@ export function FoodTab({
     return () => {
       active = false;
     };
-  }, [userId]);
+  }, [applyDailyLogToState, userId]);
 
   // Autosave hydration & sleep recovery changes to SQLite
   useEffect(() => {
     if (!userId || !isDailyLogLoadedRef.current) return;
+    if (skipNextDailyAutosaveRef.current) {
+      skipNextDailyAutosaveRef.current = false;
+      return;
+    }
 
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const consumed = waterGlassStates.filter(Boolean).length * 250;
@@ -340,17 +356,19 @@ export function FoodTab({
       try {
         await upsertDailyLog(userId, todayStr, {
           water_ml: consumed,
+          water_goal_ml: hydrationGoal,
           bedtime,
           waketime,
           sleep_hours: sleepHours > 0 ? sleepHours : null,
         });
+        void syncDailyLogsForUser(userId);
       } catch (err) {
         console.warn('[FoodTab] Failed to save daily log:', err);
       }
     };
 
     saveChanges();
-  }, [userId, waterGlassStates, bedtime, waketime, sleepHours]);
+  }, [userId, waterGlassStates, hydrationGoal, bedtime, waketime, sleepHours]);
 
 
   // Natural-language quick log state
@@ -679,6 +697,7 @@ export function FoodTab({
     void retryPendingDietLogCreates(userId);
     void retryPendingDietLogUpdates(userId);
     void retryPendingDietLogDeletes(userId);
+    void syncDailyLogsForUser(userId);
   }, [retryPendingDietLogCreates, retryPendingDietLogDeletes, retryPendingDietLogUpdates, userId]);
 
   useEffect(() => {
@@ -694,6 +713,7 @@ export function FoodTab({
         void retryPendingDietLogCreates(userId);
         void retryPendingDietLogUpdates(userId);
         void retryPendingDietLogDeletes(userId);
+        void syncDailyLogsForUser(userId);
       }
     });
 

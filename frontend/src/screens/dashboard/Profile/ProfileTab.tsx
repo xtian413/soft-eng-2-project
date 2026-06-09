@@ -16,6 +16,7 @@ import { upsertRemoteDietLogForUser } from '@/local/repositories/dietLogsReposit
 import { remoteDietLogToLocalRemoteInput } from '@/local/dietLogsMapper';
 import { DateDetailSheet } from './subcomponents/DateDetailSheet';
 import { getDailyLogsByUser } from '@/local/repositories/dailyLogsRepository';
+import { syncDailyLogsForUser } from '@/local/dailyLogsSync';
 import type { LocalDailyLog } from '@/local/schema';
 import { format } from 'date-fns';
 
@@ -267,6 +268,10 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
       setHistoryLoading(true);
       setHistoryError(null);
       try {
+        if (user?.id) {
+          await syncDailyLogsForUser(user.id);
+        }
+
         const promises: [Promise<Workout[]>, Promise<DietLog[]>, Promise<LocalDailyLog[]>] = [
           fetchWorkouts(),
           fetchDietLogs(),

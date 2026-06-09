@@ -41,10 +41,14 @@ export function FoodHistoryView({
   const waterGlassStates = useMemo(() => {
     if (!dailyLog?.water_ml) return [];
     const glasses = Math.floor(dailyLog.water_ml / 250);
-    return Array.from({ length: Math.min(12, Math.ceil((dailyLog.water_ml || 2000) / 250)) }, (_, i) => i < glasses);
+    const totalGlasses = Math.min(
+      12,
+      Math.max(Math.ceil((dailyLog.water_goal_ml ?? 2000) / 250), glasses)
+    );
+    return Array.from({ length: totalGlasses }, (_, i) => i < glasses);
   }, [dailyLog]);
 
-  const hydrationGoal = dailyLog?.water_ml ? Math.max(dailyLog.water_ml, 2000) : 2000;
+  const hydrationGoal = dailyLog?.water_goal_ml ?? 2000;
 
   // Build sleep data
   const bedtime = dailyLog?.bedtime ?? null;

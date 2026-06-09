@@ -31,6 +31,7 @@ export async function syncProfileToRemote(userId: string): Promise<boolean> {
       .update({
         full_name: localProfile.full_name,
         height_cm: localProfile.height_cm,
+        weight_kg: localProfile.weight_kg,
         goal: localProfile.goal,
         gender: localProfile.gender,
         age: localProfile.age,

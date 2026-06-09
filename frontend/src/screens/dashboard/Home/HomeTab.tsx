@@ -15,10 +15,10 @@ import type { MacroTargets } from '@/screens/dashboard/types';
 import { Flame, Sparkles, Edit } from 'lucide-react-native';
 import { Modal, TextInput, ActivityIndicator } from 'react-native';
 import { useAuthStore } from '@/store/authStore';
+import { recordWeightLocalFirst } from '@/local/bodyProgressRecording';
 import {
-  getBodyProgressByUser,
-  createBodyProgressLocal,
-  updateBodyProgressLocal,
+  getBodyProgressByUserAndDate,
+  normalizeRecordedDate,
 } from '@/local/repositories/bodyProgressRepository';
 import type { FitnessInsight } from '@/ai/insights/fitnessInsight';
 
@@ -75,7 +75,6 @@ export function HomeTab({
   const [weightModalVisible, setWeightModalVisible] = useState(false);
   const [weightText, setWeightText] = useState('');
   const [isSavingWeight, setIsSavingWeight] = useState(false);
-  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   // Pure derived calculations
   const caloriesRemaining = Math.max(0, targets.calories - caloriesEaten);
@@ -263,14 +262,11 @@ export function HomeTab({
       if (!userId) return;
       // load today's entry if present
       try {
-        const rows = await getBodyProgressByUser(userId);
-        const today = new Date().toISOString().slice(0, 10);
-        const todayRow = rows.find((r) => (r.recorded_at ?? '').slice(0, 10) === today);
+        const today = normalizeRecordedDate(new Date().toISOString());
+        const todayRow = await getBodyProgressByUserAndDate(userId, today);
         if (todayRow) {
-          setEditingEntryId(todayRow.id);
           setWeightText(String(todayRow.weight_kg ?? ''));
         } else {
-          setEditingEntryId(null);
           setWeightText('');
         }
         setWeightModalVisible(true);
@@ -346,15 +342,14 @@ export function HomeTab({
               setIsSavingWeight(true);
               try {
                 const recordedAt = new Date().toISOString();
-                if (editingEntryId) {
-                  await updateBodyProgressLocal(userId, editingEntryId, { weight_kg: parsed, recorded_at: recordedAt });
-                } else {
-                  await createBodyProgressLocal({ user_id: userId, weight_kg: parsed, recorded_at: recordedAt });
-                }
+                await recordWeightLocalFirst({
+                  userId,
+                  weightKg: parsed,
+                  recordedAt,
+                });
                 // refresh profile so UI updates
                 void useAuthStore.getState().fetchProfile();
                 setWeightText('');
-                setEditingEntryId(null);
                 setSaveSuccess(true);
                 setTimeout(() => setSaveSuccess(false), 1600);
                 setTimeout(() => setWeightModalVisible(false), 800);

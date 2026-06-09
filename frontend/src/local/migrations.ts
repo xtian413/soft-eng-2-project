@@ -340,6 +340,7 @@ const MIGRATIONS: Migration[] = [
         waketime TEXT,
         sleep_hours REAL,
         water_ml REAL,
+        water_goal_ml REAL DEFAULT 2000,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         deleted_at TEXT,
@@ -378,6 +379,82 @@ const MIGRATIONS: Migration[] = [
       // Migrate legacy goal values to new goal types
       await db.execAsync(`UPDATE ${LOCAL_TABLES.profiles} SET goal = 'moderate_cut' WHERE goal = 'lose_weight'`);
       await db.execAsync(`UPDATE ${LOCAL_TABLES.profiles} SET goal = 'lean_bulk' WHERE goal = 'build_muscle'`);
+    },
+  },
+  {
+    version: 10,
+    name: 'add_water_goal_to_daily_logs',
+    apply: async (db) => {
+      const columns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${LOCAL_TABLES.dailyLogs})`
+      );
+      const hasWaterGoal = columns.some((column) => column.name === 'water_goal_ml');
+
+      if (!hasWaterGoal) {
+        await db.execAsync(
+          `ALTER TABLE ${LOCAL_TABLES.dailyLogs} ADD COLUMN water_goal_ml REAL DEFAULT 2000`
+        );
+      }
+
+      await db.execAsync(
+        `UPDATE ${LOCAL_TABLES.dailyLogs}
+         SET water_goal_ml = 2000
+         WHERE water_goal_ml IS NULL`
+      );
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_daily_logs_remote_id ON ${LOCAL_TABLES.dailyLogs}(remote_id)`
+      );
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_daily_logs_updated_at ON ${LOCAL_TABLES.dailyLogs}(updated_at)`
+      );
+    },
+  },
+  {
+    version: 11,
+    name: 'add_recorded_date_to_body_progress',
+    apply: async (db) => {
+      const columns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${LOCAL_TABLES.bodyProgress})`
+      );
+      const hasRecordedDate = columns.some((column) => column.name === 'recorded_date');
+
+      if (!hasRecordedDate) {
+        await db.execAsync(`ALTER TABLE ${LOCAL_TABLES.bodyProgress} ADD COLUMN recorded_date TEXT`);
+      }
+
+      await db.execAsync(
+        `UPDATE ${LOCAL_TABLES.bodyProgress}
+         SET recorded_date = substr(recorded_at, 1, 10)
+         WHERE recorded_date IS NULL OR recorded_date = ''`
+      );
+
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_body_progress_user_recorded_date
+         ON ${LOCAL_TABLES.bodyProgress}(user_id, recorded_date)`
+      );
+
+      const duplicate = await db.getFirstAsync<{ user_id: string; recorded_date: string; count: number }>(
+        `SELECT user_id, recorded_date, COUNT(*) AS count
+         FROM ${LOCAL_TABLES.bodyProgress}
+         WHERE deleted_at IS NULL
+         GROUP BY user_id, recorded_date
+         HAVING COUNT(*) > 1
+         LIMIT 1`
+      );
+
+      if (duplicate) {
+        console.warn(
+          '[GEMI_BODY_PROGRESS_SYNC] local_duplicate_dates_found',
+          { date: duplicate.recorded_date, count: duplicate.count }
+        );
+        return;
+      }
+
+      await db.execAsync(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_body_progress_unique_user_recorded_date
+         ON ${LOCAL_TABLES.bodyProgress}(user_id, recorded_date)
+         WHERE deleted_at IS NULL`
+      );
     },
   },
 ];
