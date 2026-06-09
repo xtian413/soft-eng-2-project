@@ -199,6 +199,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   // UI state
   const [setsList, setSetsList] = useState<SetLog[]>([]);
   const [completedWorkouts, setCompletedWorkouts] = useState<LocalWorkoutWithSets[]>([]);
+  const [selectedHistoryWorkout, setSelectedHistoryWorkout] = useState<LocalWorkoutWithSets | null>(null);
   const [isFinishingWorkout, setIsFinishingWorkout] = useState(false);
   const [showCustomExerciseModal, setShowCustomExerciseModal] = useState(false);
   const [showExerciseBrowser, setShowExerciseBrowser] = useState(false);
@@ -2300,12 +2301,14 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
               {completedWorkouts.map((workout, index) => {
                 const syncStatus = workout.sync_status || 'pending';
                 return (
-                  <View
+                  <TouchableOpacity
                     key={workout.id}
                     style={[
                       styles.savedWorkoutRow,
                       index > 0 && styles.savedWorkoutRowBorder
                     ]}
+                    onPress={() => setSelectedHistoryWorkout(workout)}
+                    activeOpacity={0.7}
                   >
                     <View style={styles.savedWorkoutLeft}>
                       <View style={styles.savedWorkoutIconWrapper}>
@@ -2335,7 +2338,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                       <Text style={styles.savedWorkoutSetsNumber}>{workout.sets.length}</Text>
                       <Text style={styles.savedWorkoutSetsLabel}>sets</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -2815,6 +2818,107 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                   )}
                 </>
               )}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Workout History Detail Modal */}
+      <Modal
+        visible={!!selectedHistoryWorkout}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedHistoryWorkout(null)}
+      >
+        <TouchableOpacity
+          style={styles.detailModalOverlay}
+          activeOpacity={1}
+          onPress={() => setSelectedHistoryWorkout(null)}
+        >
+          <View style={[styles.detailModalSheet, { maxHeight: '85%' }]}>
+            <View style={styles.routineModalHandleBar} />
+            <View style={styles.detailModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.detailModalTitle}>{selectedHistoryWorkout?.name}</Text>
+                <Text style={styles.savedWorkoutDate}>
+                  {selectedHistoryWorkout?.performed_at.split('T')[0]}
+                  {selectedHistoryWorkout && getWorkoutDurationLabel(selectedHistoryWorkout.notes)
+                    ? ` · ${getWorkoutDurationLabel(selectedHistoryWorkout.notes)}`
+                    : ''}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedHistoryWorkout(null)} activeOpacity={0.6}>
+                <X size={20} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.detailModalScroll}
+              contentContainerStyle={styles.detailModalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {selectedHistoryWorkout && (() => {
+                // Group sets by exercise name
+                const groups: { [exerciseName: string]: { muscleGroup: string | null; sets: typeof selectedHistoryWorkout.sets } } = {};
+                selectedHistoryWorkout.sets.forEach((set) => {
+                  if (!groups[set.exercise_name]) {
+                    groups[set.exercise_name] = {
+                      muscleGroup: set.muscle_group,
+                      sets: []
+                    };
+                  }
+                  groups[set.exercise_name].sets.push(set);
+                });
+
+                return (
+                  <View style={styles.workoutHistoryDetailContent}>
+                    {Object.entries(groups).map(([exerciseName, groupInfo]) => {
+                      const sortedSets = groupInfo.sets.sort((a, b) => a.set_number - b.set_number);
+                      return (
+                        <View key={exerciseName} style={styles.historyDetailExerciseCard}>
+                          <View style={styles.historyDetailExerciseHeader}>
+                            <Text style={styles.historyDetailExerciseName}>{exerciseName}</Text>
+                            {groupInfo.muscleGroup && (
+                              <View style={styles.historyDetailMuscleBadge}>
+                                <Text style={styles.historyDetailMuscleBadgeText}>{groupInfo.muscleGroup}</Text>
+                              </View>
+                            )}
+                          </View>
+
+                          <View style={styles.historyDetailSetsList}>
+                            {/* Header for sets list */}
+                            <View style={styles.historyDetailSetsHeader}>
+                              <Text style={[styles.historyDetailHeaderCell, { width: 60, textAlign: 'left' }]}>Set</Text>
+                              <Text style={[styles.historyDetailHeaderCell, { flex: 1, textAlign: 'center' }]}>Weight</Text>
+                              <Text style={[styles.historyDetailHeaderCell, { flex: 1, textAlign: 'center' }]}>Reps</Text>
+                            </View>
+
+                            {/* Set rows */}
+                            {sortedSets.map((set, setIndex) => {
+                              const weightVal = set.weight_kg !== null
+                                ? formatWeight(isLbs ? set.weight_kg / 0.45359237 : set.weight_kg)
+                                : '—';
+                              return (
+                                <View key={set.id || setIndex} style={styles.historyDetailSetRow}>
+                                  <Text style={[styles.historyDetailCellText, { width: 60, textAlign: 'left', fontWeight: fontWeight.semiBold }]}>
+                                    Set {set.set_number}
+                                  </Text>
+                                  <Text style={[styles.historyDetailCellText, { flex: 1, textAlign: 'center' }]}>
+                                    {weightVal} {weightVal !== '—' ? (isLbs ? 'lbs' : 'kg') : ''}
+                                  </Text>
+                                  <Text style={[styles.historyDetailCellText, { flex: 1, textAlign: 'center' }]}>
+                                    {set.reps !== null ? set.reps : '—'} reps
+                                  </Text>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                );
+              })()}
             </ScrollView>
           </View>
         </TouchableOpacity>
@@ -4471,5 +4575,73 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
     fontWeight: fontWeight.bold,
     color: Colors.primary,
+  },
+  // Workout History Detail Styles (Phase 16 Extension)
+  workoutHistoryDetailContent: {
+    marginTop: spacing.sm,
+  },
+  historyDetailExerciseCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    padding: spacing.base,
+    marginBottom: spacing.base,
+  },
+  historyDetailExerciseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.15)',
+    paddingBottom: spacing.xs,
+  },
+  historyDetailExerciseName: {
+    fontSize: typography.base,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    flex: 1,
+  },
+  historyDetailMuscleBadge: {
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    borderRadius: radius.xs,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 2,
+  },
+  historyDetailMuscleBadgeText: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.primary,
+    textTransform: 'uppercase',
+  },
+  historyDetailSetsList: {
+    width: '100%',
+  },
+  historyDetailSetsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.1)',
+    marginBottom: 4,
+  },
+  historyDetailHeaderCell: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  historyDetailSetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.05)',
+  },
+  historyDetailCellText: {
+    fontSize: typography.sm,
+    color: Colors.onSurface,
   },
 });
