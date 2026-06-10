@@ -223,11 +223,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const [highlightMode, setHighlightMode] = useState<'none' | 'click' | 'exercise'>('none');
   const [primaryMuscleIds, setPrimaryMuscleIds] = useState<number[]>([]);
   const [secondaryMuscleIds, setSecondaryMuscleIds] = useState<number[]>([]);
-  const currentExerciseSets = setsList.filter((set) => set.exerciseId === currentExerciseId);
 
-  // Swipe state
-  const swipeAnimRefs = useRef<{ [key: string]: Animated.Value }>({});
-  const panResponderRefs = useRef<{ [key: string]: PanResponderInstance }>({});
   const routineModalScrollRef = useRef<ScrollView>(null);
   const uniqueIdRef = useRef(0);
   const isLoadingRoutinesRef = useRef(false);
@@ -743,6 +739,75 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     if (payload) {
       payload.name = nameToUse;
       saveCompletedWorkout(payload);
+    }
+  };
+
+  const handleCreateRoutineFromHistory = async () => {
+    if (!selectedHistoryWorkout) return;
+    const authUser = user ?? (await supabase.auth.getUser()).data.user;
+    if (!authUser) {
+      triggerToast('Please sign in to save routines');
+      return;
+    }
+
+    try {
+      const grouped = new Map<
+        string,
+        {
+          exerciseName: string;
+          muscleGroup: string | null;
+          sets: number;
+          reps: number;
+          weightKg: number;
+          firstSetNumber: number;
+        }
+      >();
+
+      selectedHistoryWorkout.sets.forEach((set) => {
+        const key = set.exercise_name.toLowerCase();
+        const existing = grouped.get(key);
+        if (existing) {
+          existing.sets += 1;
+        } else {
+          grouped.set(key, {
+            exerciseName: set.exercise_name,
+            muscleGroup: set.muscle_group,
+            sets: 1,
+            reps: set.reps || 10,
+            weightKg: set.weight_kg || 0,
+            firstSetNumber: set.set_number || 1,
+          });
+        }
+      });
+
+      const exercises = Array.from(grouped.values())
+        .sort((a, b) => a.firstSetNumber - b.firstSetNumber)
+        .map((ex, index) => ({
+          exerciseName: ex.exerciseName,
+          muscleGroup: ex.muscleGroup,
+          sortOrder: index,
+          sets: ex.sets,
+          reps: ex.reps,
+          weightKg: ex.weightKg,
+        }));
+
+      const localInput = {
+        routineName: selectedHistoryWorkout.name || 'Custom Routine',
+        remoteId: null,
+        remoteTemplateWorkoutId: null,
+        restTimeSeconds: 90,
+        exercises,
+      };
+
+      const localRoutine = await createRoutineWithExercisesLocal(authUser.id, localInput);
+      const nextRoutines = localRoutinesToViews(await getRoutinesByUser(authUser.id));
+      applyRoutinesToState(nextRoutines);
+      triggerToast('Routine created from workout history');
+      void syncRoutineToRemote(localRoutine);
+      setSelectedHistoryWorkout(null);
+    } catch (error) {
+      console.error('[LiftTab] Failed to save routine from history:', error);
+      triggerToast(`Failed to create routine: ${getErrorMessage(error)}`);
     }
   };
 
@@ -1505,7 +1570,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         };
       });
 
-      triggerToast('✓ Defaults updated');
+      triggerToast('Defaults updated');
       void syncRoutineToRemote(localRoutine);
     } catch (error) {
       console.error('[LiftTab] Failed to update local routine defaults:', error);
@@ -1513,99 +1578,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     }
   };
 
-  // Create swipe handler for a specific set
-  const createSwipeHandler = (setId: string) => {
-    if (!swipeAnimRefs.current[setId]) {
-      swipeAnimRefs.current[setId] = new Animated.Value(0);
-    }
 
-    if (!panResponderRefs.current[setId]) {
-      panResponderRefs.current[setId] = PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (evt, { dx }) => Math.abs(dx) > 10,
-        onPanResponderMove: (evt, { dx }) => {
-          if (dx > 0) {
-            swipeAnimRefs.current[setId]?.setValue(Math.min(dx, 100));
-          }
-        },
-        onPanResponderRelease: (evt, { dx }) => {
-          if (dx > 60) {
-            // Swiped far enough — toggle check
-            handleToggleCheck(setId);
-            triggerToast('Set marked as complete!');
-            Animated.timing(swipeAnimRefs.current[setId]!, {
-              toValue: 0,
-              duration: 300,
-              useNativeDriver: true,
-            }).start();
-          } else {
-            // Snap back
-            Animated.timing(swipeAnimRefs.current[setId]!, {
-              toValue: 0,
-              duration: 200,
-              useNativeDriver: true,
-            }).start();
-          }
-        },
-      });
-    }
-
-    return panResponderRefs.current[setId];
-  };
-
-  const handleLogSet = () => {
-    if (!currentExerciseId || !currentExercise.name.trim()) {
-      triggerToast('Add or select an exercise before logging sets');
-      return;
-    }
-
-    const w = parseFloat(inputWeight) || 0;
-    const r = isUnilateral ? parseInt(inputRepsLeft) || 0 : parseInt(inputReps) || 0;
-    const rL = isUnilateral ? parseInt(inputRepsLeft) || 0 : undefined;
-    const rR = isUnilateral ? parseInt(inputRepsRight) || 0 : undefined;
-    const rir = parseInt(inputRir) || 0;
-
-    if (w <= 0 || r <= 0) {
-      triggerToast('Please enter valid Weight and Reps!');
-      return;
-    }
-
-    const newSet: SetLog = {
-      id: createUniqueId('set'),
-      exerciseId: currentExerciseId,
-      exerciseName: currentExercise.name,
-      muscleGroup: currentExercise.muscleGroup ?? null,
-      setNum: currentExerciseSets.length + 1,
-      weight: w,
-      reps: r,
-      repsLeft: rL,
-      repsRight: rR,
-      rir,
-      isChecked: true,
-    };
-
-    setSetsList((prev) => [...prev, newSet]);
-    triggerToast(
-      isUnilateral
-        ? `Logged Set #${newSet.setNum}: ${w}${isLbs ? 'lbs' : 'kg'} × L${rL} R${rR}`
-        : `Logged Set #${newSet.setNum}: ${w}${isLbs ? 'lbs' : 'kg'} × ${r} reps`
-    );
-  };
-
-  // Auto-fill from previous set
-  const handleFillFromSet = (set: SetLog) => {
-    setInputWeight(String(set.weight));
-    if (set.repsLeft !== undefined && set.repsRight !== undefined) {
-      setIsUnilateral(true);
-      setInputRepsLeft(String(set.repsLeft));
-      setInputRepsRight(String(set.repsRight));
-    } else {
-      setIsUnilateral(false);
-      setInputReps(String(set.reps));
-    }
-    setInputRir(String(set.rir));
-    triggerToast('✓ Inputs auto-filled from previous set');
-  };
 
   const handleToggleFreestyleSet = (set: SetLog) => {
     const nextSets = setsList.map((s) => {
@@ -1737,7 +1710,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setCurrentExerciseId(newExercise.id);
     setCustomExerciseName('');
     setShowCustomExerciseModal(false);
-    triggerToast(`✓ Added custom exercise: ${customExerciseName}`);
+    triggerToast(`Added custom exercise: ${customExerciseName}`);
   };
 
   const handleBodyPartClick = (muscleId: number, muscleName: string) => {
@@ -1771,7 +1744,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setExercisesList((prev) => [...prev, newExercise]);
     setCurrentExerciseId(newExercise.id);
     setShowExerciseBrowser(false);
-    triggerToast(`✓ Added: ${newExercise.name}`);
+    triggerToast(`Added: ${newExercise.name}`);
   };
 
   const normalizeExerciseName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -1873,7 +1846,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       requestAnimationFrame(() => {
         routineModalScrollRef.current?.scrollToEnd({ animated: true });
       });
-      triggerToast(`✓ Added: ${exerciseName} — keep adding or save`);
+      triggerToast(`Added: ${exerciseName} — keep adding or save`);
       setShowExerciseConfigSheet(false);
       setPendingExercise(null);
       // Return to routine modal so user can keep adding more exercises
@@ -1918,7 +1891,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       }));
       setSetsList((prev) => [...prev, ...initialSets]);
 
-      triggerToast(`✓ Added: ${newExercise.name}`);
+      triggerToast(`Added: ${newExercise.name}`);
     }
 
     setShowExerciseConfigSheet(false);
@@ -2662,64 +2635,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           )}
         </View>
 
-        {/* Set History Table */}
-        {currentExerciseSets.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>SET HISTORY</Text>
 
-            <View style={styles.tableHeader}>
-              <Text style={[styles.thText, { flex: 0.6 }]}>Set #</Text>
-              <Text style={[styles.thText, { flex: 1.4 }]}>Previous</Text>
-              <Text style={[styles.thText, { flex: 2 }]}>Log</Text>
-              <Text style={[styles.thText, { flex: 0.8, textAlign: 'right' }]}>Done</Text>
-            </View>
-
-            <View style={styles.tableBody}>
-              {currentExerciseSets.map((set) => {
-                const animValue = swipeAnimRefs.current[set.id] || new Animated.Value(0);
-                const panResponder = createSwipeHandler(set.id);
-
-                return (
-                  <Animated.View
-                    key={set.id}
-                    style={[
-                      styles.tableRowWrapper,
-                      {
-                        transform: [{ translateX: animValue }],
-                        backgroundColor: animValue.interpolate({
-                          inputRange: [0, 100],
-                          outputRange: [set.isChecked ? 'rgba(16, 185, 129, 0.15)' : 'transparent', '#10b981'],
-                        }),
-                      },
-                    ]}
-                    {...panResponder.panHandlers}
-                  >
-                    <TouchableOpacity
-                      style={styles.tableRowContent}
-                      onPress={() => handleFillFromSet(set)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.tdSetNum, { flex: 0.6 }]}>{set.setNum}</Text>
-                      <Text style={[styles.tdPrevious, { flex: 1.4 }]}>
-                        {set.setNum === 1 ? '175 lbs × 8' : set.setNum === 2 ? '175 lbs × 8' : '—'}
-                      </Text>
-                      <Text style={[styles.tdLog, { flex: 2 }]}>
-                        {set.weight} {isLbs ? 'lbs' : 'kg'} ×{' '}
-                        {set.repsLeft !== undefined && set.repsRight !== undefined
-                          ? `L${set.repsLeft} R${set.repsRight}`
-                          : `${set.reps}`}{' '}
-                        (RIR {set.rir})
-                      </Text>
-                      <View style={{ flex: 0.8, alignItems: 'flex-end' }}>
-                        <Copy size={14} color={Colors.outline} opacity={0.5} />
-                      </View>
-                    </TouchableOpacity>
-                  </Animated.View>
-                );
-              })}
-            </View>
-          </View>
-        )}
 
         {completedWorkouts.length > 0 && (
           <View style={styles.card}>
@@ -3196,7 +3112,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       <Modal
         visible={!!exerciseDetailItem}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setExerciseDetailItem(null)}
       >
         <TouchableOpacity
@@ -3204,7 +3120,10 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           activeOpacity={1}
           onPress={() => setExerciseDetailItem(null)}
         >
-          <View style={styles.detailModalSheet}>
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.detailModalSheet}
+          >
             <View style={styles.routineModalHandleBar} />
             <View style={styles.detailModalHeader}>
               <Text style={styles.detailModalTitle}>{exerciseDetailItem?.name}</Text>
@@ -3280,7 +3199,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                 </>
               )}
             </ScrollView>
-          </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
@@ -3288,7 +3207,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       <Modal
         visible={!!selectedHistoryWorkout}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setSelectedHistoryWorkout(null)}
       >
         <TouchableOpacity
@@ -3296,7 +3215,10 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           activeOpacity={1}
           onPress={() => setSelectedHistoryWorkout(null)}
         >
-          <View style={[styles.detailModalSheet, { maxHeight: '85%' }]}>
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[styles.detailModalSheet, { maxHeight: '85%' }]}
+          >
             <View style={styles.routineModalHandleBar} />
             <View style={styles.detailModalHeader}>
               <View style={{ flex: 1 }}>
@@ -3310,6 +3232,18 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
               </View>
               <TouchableOpacity onPress={() => setSelectedHistoryWorkout(null)} activeOpacity={0.6}>
                 <X size={20} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            {/* "Save as Routine Template" Button Action Row */}
+            <View style={styles.historyModalActionRow}>
+              <TouchableOpacity
+                style={styles.historyMakeRoutineBtn}
+                onPress={handleCreateRoutineFromHistory}
+                activeOpacity={0.8}
+              >
+                <Plus size={14} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.historyMakeRoutineBtnText}>Save as Routine Template</Text>
               </TouchableOpacity>
             </View>
 
@@ -3381,7 +3315,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                 );
               })()}
             </ScrollView>
-          </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
@@ -5403,6 +5337,27 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   namingSaveBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#ffffff',
+  },
+  historyModalActionRow: {
+    paddingHorizontal: spacing.base,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.15)',
+    marginBottom: spacing.xs,
+  },
+  historyMakeRoutineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    borderRadius: radius.md,
+    height: 38,
+    width: '100%',
+  },
+  historyMakeRoutineBtnText: {
     fontSize: typography.sm,
     fontWeight: fontWeight.bold,
     color: '#ffffff',
