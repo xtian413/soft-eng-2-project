@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
-import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle, Info, Trash2 } from 'lucide-react-native';
+import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle, Info, Trash2, Search } from 'lucide-react-native';
 import { getMuscleDataForExercise } from './exerciseMuscles';
 import { BodyMuscleMap } from './BodyMuscleMap';
 import { WGERExerciseBrowser } from './WGERExerciseBrowser';
@@ -200,6 +200,11 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const [setsList, setSetsList] = useState<SetLog[]>([]);
   const [completedWorkouts, setCompletedWorkouts] = useState<LocalWorkoutWithSets[]>([]);
   const [selectedHistoryWorkout, setSelectedHistoryWorkout] = useState<LocalWorkoutWithSets | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<ExerciseDbExercise[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showNamingModal, setShowNamingModal] = useState(false);
+  const [customWorkoutName, setCustomWorkoutName] = useState('');
   const [isFinishingWorkout, setIsFinishingWorkout] = useState(false);
   const [showCustomExerciseModal, setShowCustomExerciseModal] = useState(false);
   const [showExerciseBrowser, setShowExerciseBrowser] = useState(false);
@@ -326,6 +331,28 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setRestNextSetNum(nextSet);
     setRestNextExerciseName(nextExerciseName);
   };
+
+  useEffect(() => {
+    if (searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const results = await exerciseDbService.searchExercises(searchQuery);
+        setSearchResults(results.slice(0, 15));
+      } catch (err) {
+        console.error('[LiftTab] Search failed:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchQuery]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -660,20 +687,8 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setSetsList([]);
   };
 
-  const handleFinishSession = async () => {
-    if (isFinishingWorkout) return;
-
-    if (!user?.id) {
-      triggerToast('Please sign in to save workouts');
-      return;
-    }
-
-    const payload = buildCompletedWorkoutPayload();
-    if (!payload || payload.sets.length === 0) {
-      triggerToast('Log at least one completed set before finishing');
-      return;
-    }
-
+  const saveCompletedWorkout = async (payload: CompletedWorkoutInput) => {
+    if (!user?.id) return;
     setIsFinishingWorkout(true);
     try {
       const localWorkout = await createWorkoutWithSetsLocal(user.id, payload);
@@ -686,6 +701,48 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       triggerToast(`Workout save failed: ${getErrorMessage(error)}`);
     } finally {
       setIsFinishingWorkout(false);
+    }
+  };
+
+  const handleFinishSession = async () => {
+    if (isFinishingWorkout) return;
+
+    if (!user?.id) {
+      triggerToast('Please sign in to save workouts');
+      return;
+    }
+
+    if (activeRoutine) {
+      const payload = buildCompletedWorkoutPayload();
+      if (!payload || payload.sets.length === 0) {
+        triggerToast('Log at least one completed set before finishing');
+        return;
+      }
+      saveCompletedWorkout(payload);
+    } else {
+      const checkedSets = setsList.filter((set) => set.isChecked);
+      if (checkedSets.length === 0) {
+        triggerToast('Log at least one completed set before finishing');
+        return;
+      }
+
+      const defaultName = exercisesList.length === 1
+        ? exercisesList[0].name
+        : exercisesList.length > 1
+        ? 'Custom Workout'
+        : currentExercise.name || 'Freestyle Workout';
+      setCustomWorkoutName(defaultName);
+      setShowNamingModal(true);
+    }
+  };
+
+  const handleSaveCustomFreestyleWorkout = () => {
+    setShowNamingModal(false);
+    const nameToUse = customWorkoutName.trim() || 'Freestyle Workout';
+    const payload = buildFreeformCompletedWorkoutPayload();
+    if (payload) {
+      payload.name = nameToUse;
+      saveCompletedWorkout(payload);
     }
   };
 
@@ -1550,6 +1607,112 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     triggerToast('✓ Inputs auto-filled from previous set');
   };
 
+  const handleToggleFreestyleSet = (set: SetLog) => {
+    const nextSets = setsList.map((s) => {
+      if (s.id === set.id) {
+        return { ...s, isChecked: !s.isChecked };
+      }
+      return s;
+    });
+    const wasChecked = set.isChecked;
+    
+    if (!wasChecked) {
+      if (restTimeRemaining !== null && restTimeRemaining > 0) {
+        Alert.alert(
+          'Restart Rest Timer?',
+          `A rest timer is already running. Would you like to restart the timer for Set ${set.setNum} of ${set.exerciseName}?`,
+          [
+            {
+              text: 'Cancel (Misclick)',
+              style: 'cancel',
+            },
+            {
+              text: 'Yes, Start Timer',
+              onPress: () => {
+                setSetsList(nextSets);
+                const tempExercise = {
+                  id: set.exerciseId,
+                  exercise_name: set.exerciseName,
+                  rest_time_seconds: 90,
+                };
+                handleStartRestTimer(tempExercise as any, set.setNum);
+              },
+            },
+          ]
+        );
+      } else {
+        setSetsList(nextSets);
+        const tempExercise = {
+          id: set.exerciseId,
+          exercise_name: set.exerciseName,
+          rest_time_seconds: 90,
+        };
+        handleStartRestTimer(tempExercise as any, set.setNum);
+      }
+    } else {
+      setSetsList(nextSets);
+    }
+  };
+
+  const handleFreestyleWeightChange = (setId: string, val: string) => {
+    setSetsList((prev) =>
+      prev.map((s) => (s.id === setId ? { ...s, weight: parseFloat(val) || 0 } : s))
+    );
+  };
+
+  const handleFreestyleRepsChange = (setId: string, val: string) => {
+    setSetsList((prev) =>
+      prev.map((s) => (s.id === setId ? { ...s, reps: parseInt(val, 10) || 0 } : s))
+    );
+  };
+
+  const handleDeleteFreestyleSet = (exerciseId: string, setId: string) => {
+    const exerciseSets = setsList.filter((s) => s.exerciseId === exerciseId);
+    if (exerciseSets.length <= 1) {
+      triggerToast('An exercise must have at least one set');
+      return;
+    }
+    
+    const filteredSets = setsList.filter((s) => s.id !== setId);
+    let count = 1;
+    const nextSets = filteredSets.map((s) => {
+      if (s.exerciseId === exerciseId) {
+         return { ...s, setNum: count++ };
+      }
+      return s;
+    });
+    setSetsList(nextSets);
+  };
+
+  const handleAddFreestyleSet = (exercise: Exercise) => {
+    const exerciseSets = setsList.filter((s) => s.exerciseId === exercise.id).sort((a, b) => a.setNum - b.setNum);
+    const lastSet = exerciseSets[exerciseSets.length - 1];
+    const defaultWeight = lastSet ? lastSet.weight : 0;
+    const defaultReps = lastSet ? lastSet.reps : 10;
+    
+    const newSet: SetLog = {
+      id: `${exercise.id}-set-${exerciseSets.length}-${Date.now()}-${Math.random()}`,
+      exerciseId: exercise.id,
+      exerciseName: exercise.name,
+      muscleGroup: exercise.muscleGroup ?? null,
+      setNum: exerciseSets.length + 1,
+      weight: defaultWeight,
+      reps: defaultReps,
+      rir: 0,
+      isChecked: false,
+    };
+    setSetsList((prev) => [...prev, newSet]);
+  };
+
+  const handleDeleteFreestyleExercise = (exerciseId: string) => {
+    setExercisesList((prev) => prev.filter((e) => e.id !== exerciseId));
+    setSetsList((prev) => prev.filter((s) => s.exerciseId !== exerciseId));
+    if (currentExerciseId === exerciseId) {
+      setCurrentExerciseId('');
+    }
+    triggerToast('Exercise removed from session');
+  };
+
   const handleToggleCheck = (id: string) => {
     setSetsList((prev) =>
       prev.map((s) => (s.id === id ? { ...s, isChecked: !s.isChecked } : s))
@@ -1739,6 +1902,22 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       setInputReps(configReps);
       setInputRepsLeft(configReps);
       setInputRepsRight(configReps);
+
+      // Initialize sets in setsList
+      const setsCount = parseInt(configSets, 10) || 3;
+      const initialSets: SetLog[] = Array.from({ length: setsCount }, (_, idx) => ({
+        id: `${newExercise.id}-set-${idx}-${Date.now()}-${Math.random()}`,
+        exerciseId: newExercise.id,
+        exerciseName: newExercise.name,
+        muscleGroup: newExercise.muscleGroup,
+        setNum: idx + 1,
+        weight: parseFloat(weightInCurrentUnit) || 0,
+        reps: parseInt(configReps, 10) || 10,
+        rir: 0,
+        isChecked: false,
+      }));
+      setSetsList((prev) => [...prev, ...initialSets]);
+
       triggerToast(`✓ Added: ${newExercise.name}`);
     }
 
@@ -1758,6 +1937,112 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     }, 0);
   }, [routineProgress]);
 
+  const renderSearchSection = (context: 'main' | 'routine') => {
+    const isMain = context === 'main';
+    const isFreestyleActive = isMain && isRunning && !activeRoutine;
+
+    const handleClearSearch = () => {
+      setSearchQuery('');
+      setSearchResults([]);
+    };
+
+    const handleAddClick = (exercise: ExerciseDbExercise) => {
+      if (context === 'routine') {
+        setExerciseBrowserTarget('routine');
+        handleAddExerciseFromBrowser(exercise);
+      } else if (isFreestyleActive) {
+        setExerciseBrowserTarget('workout');
+        handleAddExerciseFromBrowser(exercise);
+      }
+    };
+
+    return (
+      <View style={styles.searchSectionContainer}>
+        <View style={styles.searchBarWrapper}>
+          <Search size={16} color={Colors.outline} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInputField}
+            placeholder="Search exercises (e.g. Bench Press)..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor={Colors.outline}
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={handleClearSearch} style={styles.searchClearBtn} activeOpacity={0.6}>
+              <X size={16} color={Colors.outline} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {searchQuery.trim().length >= 2 && (
+          <View style={styles.searchResultsContainer}>
+            <View style={styles.searchResultsHeader}>
+              <Text style={styles.searchResultsTitle}>Search Results</Text>
+              {isSearching && <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 6 }} />}
+            </View>
+            
+            {searchResults.length === 0 ? (
+              <View style={styles.searchNoResults}>
+                <Text style={styles.searchNoResultsText}>
+                  {isSearching ? 'Searching...' : 'No matching exercises found'}
+                </Text>
+              </View>
+            ) : (
+              <ScrollView 
+                style={styles.searchResultsScroll} 
+                contentContainerStyle={styles.searchResultsScrollContent}
+                nestedScrollEnabled={true}
+                keyboardShouldPersistTaps="handled"
+              >
+                {searchResults.map((exercise) => {
+                  const showAddButton = context === 'routine' || isFreestyleActive;
+                  return (
+                    <TouchableOpacity
+                      key={exercise.id}
+                      style={styles.searchResultRow}
+                      onPress={() => setExerciseDetailItem(exercise)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.searchResultLeft}>
+                        <View style={styles.searchResultIconBox}>
+                          <Dumbbell size={14} color={Colors.primary} />
+                        </View>
+                        <View style={styles.searchResultInfo}>
+                          <Text style={styles.searchResultName} numberOfLines={1}>
+                            {exercise.name}
+                          </Text>
+                          <Text style={styles.searchResultMeta} numberOfLines={1}>
+                            {exercise.target ? exercise.target : 'General'} · {exercise.equipment}
+                          </Text>
+                        </View>
+                      </View>
+                      
+                      {showAddButton ? (
+                        <TouchableOpacity
+                          style={styles.searchResultAddBtn}
+                          onPress={() => handleAddClick(exercise)}
+                          activeOpacity={0.7}
+                        >
+                          <Plus size={12} color={Colors.primary} style={{ marginRight: 2 }} />
+                          <Text style={styles.searchResultAddText}>Add</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.searchResultChevron}>
+                          <Info size={14} color={Colors.outline} opacity={0.6} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const handleDiscardSession = () => {
     Alert.alert(
       'Discard Workout',
@@ -1776,7 +2061,10 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* Global Search Bar */}
+        {renderSearchSection('main')}
         {/* Session Timer Card */}
         <View style={[styles.timerCard, (activeRoutineId || elapsedSecs > 0) && styles.timerCardActive]}>
           {activeRoutineId || elapsedSecs > 0 ? (
@@ -2228,6 +2516,145 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                 })}
               </View>
             </>
+          ) : isRunning ? (
+            <>
+              <View style={styles.exerciseHeader}>
+                <View style={styles.routineHighlightBadge}>
+                  <View style={styles.tagChipContent}>
+                    <Shuffle size={10} color={Colors.primaryContainer} style={{ marginRight: 4 }} />
+                    <Text style={styles.tagChipText}>Freestyle</Text>
+                  </View>
+                  <View style={styles.unitToggleRow}>
+                    <TouchableOpacity onPress={() => toggleUnit(true)}>
+                      <Text style={[styles.unitBtn, isLbs && styles.unitBtnActive]}>lbs</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.unitSlash}>/</Text>
+                    <TouchableOpacity onPress={() => toggleUnit(false)}>
+                      <Text style={[styles.unitBtn, !isLbs && styles.unitBtnActive]}>kg</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <Text style={styles.exerciseTitle}>Freestyle Workout</Text>
+              </View>
+
+              {exercisesList.length === 0 ? (
+                <View style={styles.freestyleEmptyState}>
+                  <Text style={styles.freestyleEmptyText}>
+                    Use the search bar at the top to search and add exercises to this workout session.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.routineWorkoutList}>
+                  {exercisesList.map((exercise) => {
+                    const exerciseSets = setsList
+                      .filter((s) => s.exerciseId === exercise.id)
+                      .sort((a, b) => a.setNum - b.setNum);
+
+                    return (
+                      <View key={exercise.id} style={styles.routineWorkoutRow}>
+                        <View style={styles.routineWorkoutHeader}>
+                          <Text style={styles.routineWorkoutName}>{exercise.name}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <TouchableOpacity
+                              style={styles.instructionIconButton}
+                              onPress={() => handleOpenExerciseDetailByName(exercise.name)}
+                              activeOpacity={0.7}
+                            >
+                              <Info size={16} color={Colors.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.instructionIconButton, { marginLeft: 12 }]}
+                              onPress={() => handleDeleteFreestyleExercise(exercise.id)}
+                              activeOpacity={0.7}
+                            >
+                              <Trash2 size={16} color="#ef4444" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* Sets Table */}
+                        <View style={styles.setsTableContainer}>
+                          {/* Table Header */}
+                          <View style={styles.setsTableHeader}>
+                            <Text style={[styles.setsTableHeaderCell, styles.cellCheck]} />
+                            <Text style={[styles.setsTableHeaderCell, styles.cellLabel]}>Set</Text>
+                            <Text style={[styles.setsTableHeaderCell, styles.cellInput]}>{isLbs ? 'lbs' : 'kg'}</Text>
+                            <Text style={[styles.setsTableHeaderCell, styles.cellInput]}>Reps</Text>
+                            <Text style={[styles.setsTableHeaderCell, styles.cellAction]} />
+                          </View>
+
+                          {/* Table Rows */}
+                          {exerciseSets.map((setDetail, setIndex) => (
+                            <View key={setDetail.id} style={[styles.setsTableRow, setDetail.isChecked && styles.setsTableRowDone]}>
+                              {/* Checkbox */}
+                              <TouchableOpacity
+                                style={[styles.setRowCheckBtn, setDetail.isChecked && styles.setRowCheckBtnDone]}
+                                onPress={() => handleToggleFreestyleSet(setDetail)}
+                                activeOpacity={0.7}
+                              >
+                                {setDetail.isChecked && <Check size={10} color="#ffffff" strokeWidth={3} />}
+                              </TouchableOpacity>
+
+                              {/* Label */}
+                              <View style={styles.setRowLabelContainer}>
+                                <Text style={styles.setRowLabel}>Set {setDetail.setNum}</Text>
+                              </View>
+
+                              {/* Weight Input */}
+                              <TextInput
+                                style={[styles.setRowInput, setDetail.isChecked && styles.setRowInputDone]}
+                                value={String(setDetail.weight || '')}
+                                onChangeText={(val) => handleFreestyleWeightChange(setDetail.id, val)}
+                                keyboardType="decimal-pad"
+                                textAlign="center"
+                                editable={!setDetail.isChecked}
+                                placeholder="0"
+                                placeholderTextColor={Colors.outline}
+                              />
+
+                              {/* Reps Input */}
+                              <TextInput
+                                style={[styles.setRowInput, setDetail.isChecked && styles.setRowInputDone]}
+                                value={String(setDetail.reps || '')}
+                                onChangeText={(val) => handleFreestyleRepsChange(setDetail.id, val)}
+                                keyboardType="number-pad"
+                                textAlign="center"
+                                editable={!setDetail.isChecked}
+                                placeholder="0"
+                                placeholderTextColor={Colors.outline}
+                              />
+
+                              {/* Action Button */}
+                              {exerciseSets.length > 1 ? (
+                                <TouchableOpacity
+                                  style={styles.setRowDeleteBtn}
+                                  onPress={() => handleDeleteFreestyleSet(exercise.id, setDetail.id)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Trash2 size={14} color="#ef4444" />
+                                </TouchableOpacity>
+                              ) : (
+                                <View style={styles.setRowDeleteBtnPlaceholder} />
+                              )}
+                            </View>
+                          ))}
+                        </View>
+
+                        {/* Add Set Button */}
+                        <TouchableOpacity
+                          style={styles.addSetDashedBtn}
+                          onPress={() => handleAddFreestyleSet(exercise)}
+                          activeOpacity={0.7}
+                        >
+                          <Plus size={14} color={Colors.primary} style={{ marginRight: 4 }} />
+                          <Text style={styles.addSetDashedBtnText}>Add Set</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </>
           ) : (
             <View style={styles.routineEmptyState}>
               <Text style={styles.routineHint}>Start a routine to track sets, reps, and weight.</Text>
@@ -2398,6 +2825,8 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {/* Search Bar for Routine Builder */}
+            {renderSearchSection('routine')}
             {/* Body map picker */}
             <View style={styles.routinePickerCard}>
               <Text style={styles.routinePickerTitle}>Tap a muscle to add exercises</Text>
@@ -2816,6 +3245,38 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                   ) : (
                     <Text style={styles.detailNoSteps}>No instructions available.</Text>
                   )}
+
+                  {/* Context-aware CTA button at the bottom of the details */}
+                  {(() => {
+                    const isFreestyleActive = isRunning && !activeRoutine;
+                    const showAddButton = showRoutineModal || isFreestyleActive;
+                    if (!showAddButton) return null;
+
+                    const handleAddFromDetail = () => {
+                      const item = exerciseDetailItem;
+                      setExerciseDetailItem(null);
+                      if (showRoutineModal) {
+                        setExerciseBrowserTarget('routine');
+                        handleAddExerciseFromBrowser(item);
+                      } else if (isFreestyleActive) {
+                        setExerciseBrowserTarget('workout');
+                        handleAddExerciseFromBrowser(item);
+                      }
+                    };
+
+                    return (
+                      <TouchableOpacity
+                        style={styles.detailModalAddBtn}
+                        onPress={handleAddFromDetail}
+                        activeOpacity={0.8}
+                      >
+                        <Plus size={14} color="#ffffff" style={{ marginRight: 6 }} />
+                        <Text style={styles.detailModalAddBtnText}>
+                          {showRoutineModal ? 'Add to Routine' : 'Add to Workout'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
                 </>
               )}
             </ScrollView>
@@ -2921,6 +3382,66 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
               })()}
             </ScrollView>
           </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Workout Naming Modal (Phase 17) */}
+      <Modal
+        visible={showNamingModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNamingModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.namingModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowNamingModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.namingModalSheet}
+          >
+            <Text style={styles.namingModalTitle}>Save Workout</Text>
+            <Text style={styles.namingModalSubtitle}>
+              Give this workout session a name to record it to history.
+            </Text>
+
+            <View style={styles.namingInputContainer}>
+              <TextInput
+                style={styles.namingInputField}
+                placeholder="Workout Name (e.g. Legs Day)"
+                placeholderTextColor={Colors.outline}
+                value={customWorkoutName}
+                onChangeText={setCustomWorkoutName}
+                autoFocus
+              />
+              {customWorkoutName.length > 0 && (
+                <TouchableOpacity
+                  style={styles.namingClearBtn}
+                  onPress={() => setCustomWorkoutName('')}
+                >
+                  <X size={16} color={Colors.outline} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.namingBtnRow}>
+              <TouchableOpacity
+                style={styles.namingCancelBtn}
+                onPress={() => setShowNamingModal(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.namingCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.namingSaveBtn}
+                onPress={handleSaveCustomFreestyleWorkout}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.namingSaveBtnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
@@ -4643,5 +5164,247 @@ const styles = StyleSheet.create({
   historyDetailCellText: {
     fontSize: typography.sm,
     color: Colors.onSurface,
+  },
+  // Global Search Styles (Phase 17)
+  searchSectionContainer: {
+    marginHorizontal: spacing.base,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    zIndex: 100,
+  },
+  searchBarWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    paddingHorizontal: spacing.sm,
+    height: 44,
+  },
+  searchIcon: {
+    marginRight: spacing.xs,
+  },
+  searchInputField: {
+    flex: 1,
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    height: '100%',
+    paddingVertical: 0,
+  },
+  searchClearBtn: {
+    padding: 4,
+  },
+  searchResultsContainer: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+    marginTop: spacing.xs,
+    padding: spacing.sm,
+    maxHeight: 280,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  searchResultsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.15)',
+    paddingBottom: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  searchResultsTitle: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  searchNoResults: {
+    paddingVertical: spacing.base,
+    alignItems: 'center',
+  },
+  searchNoResultsText: {
+    fontSize: typography.sm,
+    color: Colors.outline,
+    fontStyle: 'italic',
+  },
+  searchResultsScroll: {
+    maxHeight: 220,
+  },
+  searchResultsScrollContent: {
+    paddingBottom: spacing.xs,
+  },
+  searchResultRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.08)',
+  },
+  searchResultLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  searchResultIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  searchResultInfo: {
+    flex: 1,
+  },
+  searchResultName: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  searchResultMeta: {
+    fontSize: typography.xs,
+    color: Colors.outline,
+    marginTop: 2,
+  },
+  searchResultAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(14, 165, 233, 0.25)',
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  searchResultAddText: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.primary,
+  },
+  searchResultChevron: {
+    padding: spacing.xs,
+  },
+  detailModalAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    borderRadius: radius.md,
+    height: 44,
+    marginTop: spacing.base,
+    marginBottom: spacing.xs,
+  },
+  detailModalAddBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#ffffff',
+  },
+  // Freestyle empty states (Phase 17)
+  freestyleEmptyState: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    borderStyle: 'dashed',
+    marginVertical: spacing.sm,
+  },
+  freestyleEmptyText: {
+    fontSize: typography.sm,
+    color: Colors.outline,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  // Naming Modal Styles (Phase 17)
+  namingModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.base,
+  },
+  namingModalSheet: {
+    backgroundColor: Colors.surface,
+    borderRadius: radius.lg,
+    width: '100%',
+    maxWidth: 340,
+    padding: spacing.base,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  namingModalTitle: {
+    fontSize: typography.md,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    marginBottom: spacing.xs,
+  },
+  namingModalSubtitle: {
+    fontSize: typography.sm,
+    color: Colors.outline,
+    marginBottom: spacing.base,
+  },
+  namingInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    paddingHorizontal: spacing.sm,
+    height: 44,
+    marginBottom: spacing.base,
+  },
+  namingInputField: {
+    flex: 1,
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    height: '100%',
+    paddingVertical: 0,
+  },
+  namingClearBtn: {
+    padding: 4,
+  },
+  namingBtnRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+  },
+  namingCancelBtn: {
+    paddingHorizontal: spacing.base,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+  },
+  namingCancelBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.semiBold,
+    color: Colors.outline,
+  },
+  namingSaveBtn: {
+    paddingHorizontal: spacing.base,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    backgroundColor: Colors.primary,
+  },
+  namingSaveBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#ffffff',
   },
 });
