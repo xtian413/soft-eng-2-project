@@ -344,6 +344,30 @@ export async function getUnsyncedNewWorkoutsByUser(userId: string): Promise<Loca
   }
 }
 
+export async function getRemoteCreatedFailedWorkoutsByUser(
+  userId: string
+): Promise<LocalWorkoutWithSets[]> {
+  try {
+    assertUserId(userId);
+
+    const db = await initializeLocalDatabase();
+    const workouts = await db.getAllAsync<LocalWorkout>(
+      `SELECT ${WORKOUT_COLUMNS}
+       FROM ${LOCAL_TABLES.workouts}
+       WHERE user_id = ?
+         AND deleted_at IS NULL
+         AND remote_id IS NOT NULL
+         AND sync_status = 'failed'
+       ORDER BY updated_at ASC, created_at ASC`,
+      userId
+    );
+
+    return await attachSets(userId, workouts);
+  } catch (error) {
+    wrapWorkoutError('read remote-created failed', error);
+  }
+}
+
 export async function softDeleteWorkout(userId: string, workoutId: string): Promise<void> {
   try {
     assertUserId(userId);
@@ -504,6 +528,18 @@ export async function markWorkoutSynced(
       if (workoutResult.changes === 0) {
         throw new Error('Workout was not found for the supplied user.');
       }
+
+      await db.runAsync(
+        `UPDATE ${LOCAL_TABLES.workoutSets}
+         SET sync_status = 'synced',
+             updated_at = ?,
+             last_synced_at = ?
+         WHERE workout_id = ? AND user_id = ? AND deleted_at IS NULL`,
+        now,
+        now,
+        workoutId,
+        userId
+      );
 
       for (const match of setMatches) {
         await db.runAsync(

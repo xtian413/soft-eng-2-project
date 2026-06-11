@@ -28,7 +28,7 @@ import { BodyMuscleMap } from './BodyMuscleMap';
 import { WGERExerciseBrowser } from './WGERExerciseBrowser';
 import { exerciseDbService, getGifSource, type ExerciseDbExercise } from '@/api/exerciseDbService';
 import { Image } from 'expo-image';
-import { createWorkout, fetchWorkoutById } from '@/api/workoutApi';
+import { createWorkout, fetchWorkoutById, type WorkoutSet } from '@/api/workoutApi';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import type { CompletedWorkoutInput, LocalRoutineWithExercises, LocalWorkoutWithSets } from '@/local/schema';
@@ -49,11 +49,13 @@ import {
 } from '@/local/routinesMapper';
 import {
   createWorkoutWithSetsLocal,
+  getRemoteCreatedFailedWorkoutsByUser,
   getWorkoutsByUserSince,
   getUnsyncedNewWorkoutsByUser,
   markWorkoutRemoteCreateIncomplete,
   markWorkoutSyncFailed,
   markWorkoutSynced,
+  type WorkoutSetRemoteMatch,
 } from '@/local/repositories/workoutsRepository';
 import {
   createRoutineWithExercisesLocal,
@@ -385,10 +387,48 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     return candidate?.message ?? String(error);
   };
 
+  const logWorkoutSyncDiagnostic = (event: string, details: Record<string, unknown>) => {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.log(`[LiftTab] ${event}`, details);
+    }
+  };
+
   type SyncWorkoutResult = {
     didSync: boolean;
     message?: string;
     skippedInFlight?: boolean;
+  };
+
+  const logWorkoutSetMatchDiagnostics = (
+    event: string,
+    {
+      localWorkout,
+      remoteWorkoutId,
+      remoteSets,
+      matches,
+      matchAttempted = true,
+    }: {
+      localWorkout: LocalWorkoutWithSets;
+      remoteWorkoutId: string;
+      remoteSets: WorkoutSet[];
+      matches: WorkoutSetRemoteMatch[];
+      matchAttempted?: boolean;
+    }
+  ) => {
+    const matchedLocalSetIds = new Set(matches.map((match) => match.localSetId));
+    logWorkoutSyncDiagnostic(event, {
+      localWorkoutId: localWorkout.id,
+      remoteWorkoutId,
+      localSetCount: localWorkout.sets.length,
+      remoteSetCount: remoteSets.length,
+      matchAttempted,
+      sets: localWorkout.sets.map((set) => ({
+        localSetId: set.id,
+        exerciseName: set.exercise_name,
+        setNumber: set.set_number,
+        matchedRemoteSet: matchedLocalSetIds.has(set.id),
+      })),
+    });
   };
 
   const logRoutineError = (label: string, error: unknown) => {
@@ -572,35 +612,86 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     inFlightWorkoutCreateIdsRef.current.add(localWorkout.id);
     let remoteWorkoutId: string | null = null;
     try {
+      logWorkoutSyncDiagnostic('workout_sync_begin', {
+        localWorkoutId: localWorkout.id,
+        remoteWorkoutId: null,
+        localSetCount: localWorkout.sets.length,
+        syncStatusBefore: localWorkout.sync_status,
+      });
+
       const remoteWorkout = await createWorkout(completedWorkoutToRemoteCreateInput(payload));
       remoteWorkoutId = remoteWorkout.id;
+      await markWorkoutRemoteCreateIncomplete(authenticatedUserId, localWorkout.id, remoteWorkout.id);
 
-      const remoteWithSets = await fetchWorkoutById(remoteWorkout.id);
-      const matchResult = matchRemoteWorkoutSets(localWorkout.sets, remoteWithSets.workout_sets ?? []);
-      if (matchResult.unmatchedLocalSetIds.length > 0) {
-        throw new Error(
-          `Remote workout saved, but ${matchResult.unmatchedLocalSetIds.length} local set(s) could not be matched.`
-        );
+      let setMatches: Parameters<typeof markWorkoutSynced>[3] = [];
+      try {
+        const remoteWithSets = await fetchWorkoutById(remoteWorkout.id);
+        const matchResult = matchRemoteWorkoutSets(localWorkout.sets, remoteWithSets.workout_sets ?? []);
+        setMatches = matchResult.matches;
+        logWorkoutSetMatchDiagnostics('workout_set_match_result', {
+          localWorkout,
+          remoteWorkoutId: remoteWorkout.id,
+          remoteSets: remoteWithSets.workout_sets ?? [],
+          matches: matchResult.matches,
+        });
+      } catch (matchError) {
+        logWorkoutSetMatchDiagnostics('workout_set_match_skipped', {
+          localWorkout,
+          remoteWorkoutId: remoteWorkout.id,
+          remoteSets: [],
+          matches: [],
+          matchAttempted: false,
+        });
+        logWorkoutSyncDiagnostic('workout_set_match_error', {
+          localWorkoutId: localWorkout.id,
+          remoteWorkoutId: remoteWorkout.id,
+          message: getErrorMessage(matchError),
+        });
       }
 
       const synced = await markWorkoutSynced(
         authenticatedUserId,
         localWorkout.id,
         remoteWorkout.id,
-        matchResult.matches
+        setMatches
       );
       if (updateVisibleHistory) {
         setCompletedWorkouts((prev) => [synced, ...prev.filter((workout) => workout.id !== synced.id)]);
       }
+      logWorkoutSyncDiagnostic('workout_sync_complete', {
+        localWorkoutId: localWorkout.id,
+        remoteWorkoutId: remoteWorkout.id,
+        localSetCount: localWorkout.sets.length,
+        remoteSetMatches: setMatches.length,
+        syncStatusBefore: localWorkout.sync_status,
+        syncStatusAfter: synced.sync_status,
+      });
       return { didSync: true };
     } catch (error) {
       console.error('[LiftTab] Failed to sync workout to backend:', getErrorMessage(error));
       if (remoteWorkoutId) {
-        await markWorkoutRemoteCreateIncomplete(authenticatedUserId, localWorkout.id, remoteWorkoutId).catch(
-          (markError) => {
-            console.error('[LiftTab] Failed to mark workout remote create incomplete:', markError);
+        try {
+          const synced = await markWorkoutSynced(authenticatedUserId, localWorkout.id, remoteWorkoutId);
+          if (updateVisibleHistory) {
+            setCompletedWorkouts((prev) => [synced, ...prev.filter((workout) => workout.id !== synced.id)]);
           }
-        );
+          logWorkoutSyncDiagnostic('workout_sync_complete_after_local_finalize_retry', {
+            localWorkoutId: localWorkout.id,
+            remoteWorkoutId,
+            localSetCount: localWorkout.sets.length,
+            remoteSetMatches: 0,
+            syncStatusBefore: localWorkout.sync_status,
+            syncStatusAfter: synced.sync_status,
+          });
+          return { didSync: true, message: getErrorMessage(error) };
+        } catch (markError) {
+          console.error('[LiftTab] Failed to finalize remotely-created workout locally:', markError);
+          await markWorkoutRemoteCreateIncomplete(authenticatedUserId, localWorkout.id, remoteWorkoutId).catch(
+            (incompleteMarkError) => {
+              console.error('[LiftTab] Failed to mark workout remote create incomplete:', incompleteMarkError);
+            }
+          );
+        }
       } else {
         await markWorkoutSyncFailed(authenticatedUserId, localWorkout.id).catch((markError) => {
           console.error('[LiftTab] Failed to mark workout sync failed:', markError);
@@ -609,7 +700,68 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       if (showFailureToast) {
         triggerToast(`Workout saved locally. Remote sync pending.`);
       }
+      logWorkoutSyncDiagnostic('workout_sync_incomplete', {
+        localWorkoutId: localWorkout.id,
+        remoteWorkoutId,
+        localSetCount: localWorkout.sets.length,
+        syncStatusBefore: localWorkout.sync_status,
+      });
       return { didSync: false, message: getErrorMessage(error) };
+    } finally {
+      inFlightWorkoutCreateIdsRef.current.delete(localWorkout.id);
+    }
+  };
+
+  const reconcileRemoteCreatedFailedWorkout = async (
+    localWorkout: LocalWorkoutWithSets,
+    authenticatedUserId: string
+  ) => {
+    const remoteWorkoutId = localWorkout.remote_id;
+    if (!remoteWorkoutId) return false;
+    if (inFlightWorkoutCreateIdsRef.current.has(localWorkout.id)) {
+      logWorkoutSyncDiagnostic('workout_reconcile_skipped_in_flight', {
+        localWorkoutId: localWorkout.id,
+        remoteWorkoutId,
+      });
+      return false;
+    }
+
+    inFlightWorkoutCreateIdsRef.current.add(localWorkout.id);
+    try {
+      logWorkoutSyncDiagnostic('workout_reconcile_begin', {
+        localWorkoutId: localWorkout.id,
+        remoteWorkoutId,
+        localSetCount: localWorkout.sets.length,
+        syncStatusBefore: localWorkout.sync_status,
+      });
+
+      const remoteWithSets = await fetchWorkoutById(remoteWorkoutId);
+      const matchResult = matchRemoteWorkoutSets(localWorkout.sets, remoteWithSets.workout_sets ?? []);
+      logWorkoutSetMatchDiagnostics('workout_reconcile_set_match_result', {
+        localWorkout,
+        remoteWorkoutId,
+        remoteSets: remoteWithSets.workout_sets ?? [],
+        matches: matchResult.matches,
+      });
+
+      const synced = await markWorkoutSynced(
+        authenticatedUserId,
+        localWorkout.id,
+        remoteWorkoutId,
+        matchResult.matches
+      );
+      logWorkoutSyncDiagnostic('workout_reconcile_complete', {
+        localWorkoutId: localWorkout.id,
+        remoteWorkoutId,
+        localSetCount: localWorkout.sets.length,
+        remoteSetMatches: matchResult.matches.length,
+        syncStatusBefore: localWorkout.sync_status,
+        syncStatusAfter: synced.sync_status,
+      });
+      return true;
+    } catch (error) {
+      console.warn('[LiftTab] Remote-created workout reconciliation left pending:', getErrorMessage(error));
+      return false;
     } finally {
       inFlightWorkoutCreateIdsRef.current.delete(localWorkout.id);
     }
@@ -626,7 +778,18 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       console.log('[LiftTab] Workout create retry begin');
       const unsyncedWorkouts = await getUnsyncedNewWorkoutsByUser(userId);
       console.log('[LiftTab] Unsynced new workouts found:', unsyncedWorkouts.length);
+      const remoteCreatedFailedWorkouts = await getRemoteCreatedFailedWorkoutsByUser(userId);
+      logWorkoutSyncDiagnostic('workout_reconcile_pending_found', {
+        count: remoteCreatedFailedWorkouts.length,
+      });
       let syncedAnyWorkout = false;
+
+      for (const workout of remoteCreatedFailedWorkouts) {
+        const didReconcile = await reconcileRemoteCreatedFailedWorkout(workout, userId);
+        if (didReconcile) {
+          syncedAnyWorkout = true;
+        }
+      }
 
       for (const workout of unsyncedWorkouts) {
         if (inFlightWorkoutCreateIdsRef.current.has(workout.id)) {
