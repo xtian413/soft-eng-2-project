@@ -457,6 +457,52 @@ const MIGRATIONS: Migration[] = [
       );
     },
   },
+  {
+    version: 12,
+    name: 'add_starting_and_current_weight_to_profiles',
+    apply: async (db) => {
+      const columns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${LOCAL_TABLES.profiles})`
+      );
+      const ensureColumn = async (columnName: string, definition: string) => {
+        const hasColumn = columns.some((column) => column.name === columnName);
+        if (!hasColumn) {
+          await db.execAsync(`ALTER TABLE ${LOCAL_TABLES.profiles} ADD COLUMN ${columnName} ${definition}`);
+        }
+      };
+
+      await ensureColumn('starting_weight_kg', 'REAL');
+      await ensureColumn('current_weight_kg', 'REAL');
+
+      // Initialize starting_weight_kg with existing weight_kg when present
+      await db.execAsync(`UPDATE ${LOCAL_TABLES.profiles} SET starting_weight_kg = weight_kg WHERE starting_weight_kg IS NULL`);
+      // Initialize current_weight_kg with existing weight_kg when present
+      await db.execAsync(`UPDATE ${LOCAL_TABLES.profiles} SET current_weight_kg = weight_kg WHERE current_weight_kg IS NULL`);
+
+      const dailyLogColumns = await db.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${LOCAL_TABLES.dailyLogs})`
+      );
+      const hasWaterGoal = dailyLogColumns.some((column) => column.name === 'water_goal_ml');
+
+      if (!hasWaterGoal) {
+        await db.execAsync(
+          `ALTER TABLE ${LOCAL_TABLES.dailyLogs} ADD COLUMN water_goal_ml REAL DEFAULT 2000`
+        );
+      }
+
+      await db.execAsync(
+        `UPDATE ${LOCAL_TABLES.dailyLogs}
+         SET water_goal_ml = 2000
+         WHERE water_goal_ml IS NULL`
+      );
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_daily_logs_remote_id ON ${LOCAL_TABLES.dailyLogs}(remote_id)`
+      );
+      await db.execAsync(
+        `CREATE INDEX IF NOT EXISTS idx_daily_logs_updated_at ON ${LOCAL_TABLES.dailyLogs}(updated_at)`
+      );
+    },
+  },
 ];
 
 type SchemaMigrationRow = {

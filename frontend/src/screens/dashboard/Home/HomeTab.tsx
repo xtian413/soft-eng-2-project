@@ -74,6 +74,8 @@ export function HomeTab({
 
   const [weightModalVisible, setWeightModalVisible] = useState(false);
   const [weightText, setWeightText] = useState('');
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg');
+
   const [isSavingWeight, setIsSavingWeight] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   // Pure derived calculations
@@ -104,7 +106,14 @@ export function HomeTab({
 
   const whisperText = rawWhisper.replace(/^[\s*"'`•#-]+|[\s*"'`•#-]+$/g, '').trim();
 
-  const currentWeight = useAuthStore((s) => s.profile?.weightKg ?? null);
+  const currentWeight = useAuthStore((s) => s.profile?.currentWeightKg ?? s.profile?.weightKg ?? null);
+
+  const displayWeight =
+    currentWeight == null
+      ? '--'
+      : weightUnit === 'lbs'
+      ? (currentWeight * 2.20462).toFixed(1)
+      : currentWeight.toFixed(1);
 
   return (
     <ScrollView
@@ -265,7 +274,11 @@ export function HomeTab({
         const today = normalizeRecordedDate(new Date().toISOString());
         const todayRow = await getBodyProgressByUserAndDate(userId, today);
         if (todayRow) {
-          setWeightText(String(todayRow.weight_kg ?? ''));
+          setWeightText(
+            weightUnit === 'lbs'
+              ? (todayRow.weight_kg * 2.20462).toFixed(1)
+              : String(todayRow.weight_kg ?? '')
+          );
         } else {
           setWeightText('');
         }
@@ -289,8 +302,8 @@ export function HomeTab({
       </View>
 
       <View style={styles.weightValueRow}>
-        <Text style={styles.weightValue}>{currentWeight ? `${currentWeight.toFixed(1)}` : '--'}</Text>
-        <Text style={styles.weightUnit}>kg</Text>
+        <Text style={styles.weightValue}>{displayWeight}</Text>
+        <Text style={styles.weightUnit}>{weightUnit}</Text>
       </View>
 
       
@@ -317,9 +330,37 @@ export function HomeTab({
         <Text style={styles.modalTitle}>Update Weight</Text>
 
         <Text style={styles.currentLabel}>Current weight</Text>
-        <Text style={styles.currentValue}>{currentWeight ? `${currentWeight.toFixed(1)} kg` : '—'}</Text>
+        <Text style={styles.currentValue}>
+          {currentWeight
+            ? `${(
+                weightUnit === 'lbs' ? currentWeight * 2.20462 : currentWeight
+              ).toFixed(1)} ${weightUnit}`
+            : '—'}
+        </Text>
 
         <Text style={styles.newLabel}>New weight</Text>
+
+        <View style={styles.unitRow}>
+          <TouchableOpacity
+            style={[
+              styles.unitButton,
+              weightUnit === 'kg' && styles.unitButtonActive,
+            ]}
+            onPress={() => setWeightUnit('kg')}
+          >
+          <Text>kg</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.unitButton,
+            weightUnit === 'lbs' && styles.unitButtonActive,
+          ]}
+          onPress={() => setWeightUnit('lbs')}
+  >
+    <Text>lbs</Text>
+  </TouchableOpacity>
+</View>
         <TextInput
           style={styles.modalInput}
           value={weightText}
@@ -342,9 +383,11 @@ export function HomeTab({
               setIsSavingWeight(true);
               try {
                 const recordedAt = new Date().toISOString();
+                const weightKg = weightUnit === 'lbs' ? parsed * 0.453592 : parsed;
+
                 await recordWeightLocalFirst({
                   userId,
-                  weightKg: parsed,
+                  weightKg,
                   recordedAt,
                 });
                 // refresh profile so UI updates
@@ -776,6 +819,23 @@ fatsDot: {
     fontSize: 12,
     color: Colors.onSurfaceVariant,
     marginBottom: 6,
+  },
+  unitRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  unitButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6',
+  },
+
+  unitButtonActive: {
+    backgroundColor: Colors.primary,
   },
   successToast: {
     marginTop: spacing.sm,

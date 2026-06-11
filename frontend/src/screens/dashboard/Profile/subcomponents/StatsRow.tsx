@@ -17,7 +17,7 @@ function formatVolume(kg: number): { value: string; suffix: string } {
   return { value: String(Math.round(kg)), suffix: '' };
 }
 
-/** Renders Total Volume and Week Streak side by side */
+/** Renders Total Volume and Streak side by side */
 export function StatsRow({ totalVolumeKg, weekStreak, loading }: StatsRowProps) {
   const vol = formatVolume(totalVolumeKg);
 
@@ -41,7 +41,7 @@ export function StatsRow({ totalVolumeKg, weekStreak, loading }: StatsRowProps) 
         <Text style={styles.label}>TOTAL VOLUME</Text>
       </View>
 
-      {/* Week Streak */}
+      {/* Streak */}
       <View style={styles.card}>
         <View style={[styles.iconWrap, { backgroundColor: 'rgba(157,67,0,0.1)' }]}>
           <Flame size={18} color={Colors.secondaryContainer} />
@@ -51,7 +51,7 @@ export function StatsRow({ totalVolumeKg, weekStreak, loading }: StatsRowProps) 
         ) : (
           <Text style={styles.value}>{weekStreak}</Text>
         )}
-        <Text style={styles.label}>WEEK STREAK</Text>
+        <Text style={styles.label}>STREAK</Text>
       </View>
     </View>
   );

@@ -57,11 +57,12 @@ export async function recordWeightLocalFirst({
         recorded_date: recordedDate,
       });
 
-  // profiles.weight_kg is only the latest-value cache; body_progress owns dated history.
+  // Body progress owns dated history; profile fields are latest-value caches.
   if (updateProfileCache) {
     await upsertLocalProfile({
       user_id: userId,
       weight_kg: weightKg,
+      current_weight_kg: weightKg,
     });
   }
 
