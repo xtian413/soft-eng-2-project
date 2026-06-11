@@ -177,7 +177,20 @@ class LfmModule(reactContext: ReactApplicationContext) :
     fun copyAsset(assetName: String, promise: Promise) {
         executor.execute {
             try {
-                val destFile = java.io.File(context.filesDir, assetName.substringAfterLast("/"))
+                val fileName = assetName.substringAfterLast("/")
+
+                // 1. Check App's External Files Directory (Android/data/com.anonymous.frontend/files/qwen2.5-3b-instruct-q4_k_m.gguf)
+                val externalDir = context.getExternalFilesDir(null)
+                if (externalDir != null) {
+                    val externalFile = java.io.File(externalDir, fileName)
+                    if (externalFile.exists() && externalFile.length() > 0) {
+                        promise.resolve(externalFile.absolutePath)
+                        return@execute
+                    }
+                }
+
+                // 2. Check App's Internal Files Directory (/data/user/0/com.anonymous.frontend/files/qwen2.5-3b-instruct-q4_k_m.gguf)
+                val destFile = java.io.File(context.filesDir, fileName)
                 val expectedSize = getAssetSize(assetName)
                 if (
                     destFile.exists() &&
@@ -217,6 +230,13 @@ class LfmModule(reactContext: ReactApplicationContext) :
                     return@execute
                 }
                 promise.resolve(destFile.absolutePath)
+            } catch (e: java.io.FileNotFoundException) {
+                val extPath = context.getExternalFilesDir(null)?.absolutePath ?: "Android/data/com.anonymous.frontend/files/"
+                val fileName = assetName.substringAfterLast("/")
+                promise.reject(
+                    "E_LFM_NOT_FOUND",
+                    "AI model file not found in APK assets. Please manually copy 'qwen2.5-3b-instruct-q4_k_m.gguf' using a file manager on your phone into: $extPath/$fileName"
+                )
             } catch (e: Exception) {
                 promise.reject("E_LFM_COPY", "Failed to copy asset $assetName: ${e.message}", e)
             }

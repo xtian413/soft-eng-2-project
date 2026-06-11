@@ -18,14 +18,16 @@ import {
   AppState,
   type AppStateStatus,
   Alert,
+  Vibration,
 } from 'react-native';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
-import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle, Sparkles } from 'lucide-react-native';
+import { Check, Dumbbell, Play, Pause, Plus, X, Copy, Shuffle, Info, Trash2, Search } from 'lucide-react-native';
 import { getMuscleDataForExercise } from './exerciseMuscles';
 import { BodyMuscleMap } from './BodyMuscleMap';
 import { WGERExerciseBrowser } from './WGERExerciseBrowser';
-import type { ExerciseDbExercise } from '@/api/exerciseDbService';
+import { exerciseDbService, getGifSource, type ExerciseDbExercise } from '@/api/exerciseDbService';
+import { Image } from 'expo-image';
 import { createWorkout, fetchWorkoutById } from '@/api/workoutApi';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -47,7 +49,7 @@ import {
 } from '@/local/routinesMapper';
 import {
   createWorkoutWithSetsLocal,
-  getRecentWorkoutsByUser,
+  getWorkoutsByUserSince,
   getUnsyncedNewWorkoutsByUser,
   markWorkoutRemoteCreateIncomplete,
   markWorkoutSyncFailed,
@@ -62,6 +64,7 @@ import {
   updateRoutineWithExercisesLocal,
   updateRoutineRemoteIds,
   upsertRemoteRoutineForUser,
+  softDeleteRoutine,
 } from '@/local/repositories/routinesRepository';
 
 interface LiftTabProps {
@@ -110,22 +113,33 @@ const formatWeight = (value: number): string => {
   return Number.isInteger(rounded) ? String(Math.round(rounded)) : String(rounded);
 };
 
+const getWorkoutDurationLabel = (notes: string | null | undefined): string | null => {
+  if (!notes) return null;
+  const match = notes.match(/duration:(\d+)/);
+  if (!match) return null;
+  const secs = parseInt(match[1], 10);
+  if (isNaN(secs) || secs <= 0) return null;
+  const mins = Math.round(secs / 60);
+  if (mins < 1) return '< 1m';
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  const remainingMins = mins % 60;
+  return remainingMins > 0 ? `${hrs}h ${remainingMins}m` : `${hrs}h`;
+};
+
 export function LiftTab({ triggerToast }: LiftTabProps) {
   const user = useAuthStore((state) => state.user);
   const profile = useAuthStore((state) => state.profile);
 
   const fullName = profile?.fullName || user?.user_metadata?.fullName || user?.user_metadata?.full_name || 'User';
 
-  const getGreeting = () => {
-    const hours = new Date().getHours();
-    if (hours < 12) return 'Good morning';
-    if (hours < 17) return 'Good afternoon';
-    return 'Good evening';
-  };
-
   // Timer state
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedSecs, setElapsedSecs] = useState(0);
+  const isRunningRef = useRef(isRunning);
+  useEffect(() => {
+    isRunningRef.current = isRunning;
+  }, [isRunning]);
   const [isLbs, setIsLbs] = useState(true);
 
   // Routine state
@@ -135,13 +149,37 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const [isRoutineLoading, setIsRoutineLoading] = useState(false);
   const [showRoutineModal, setShowRoutineModal] = useState(false);
   const [routineNameInput, setRoutineNameInput] = useState('');
+  const [routineRestTimeInput, setRoutineRestTimeInput] = useState('90');
   const [routineDraftExercises, setRoutineDraftExercises] = useState<RoutineDraftExercise[]>([]);
   const [isSavingRoutine, setIsSavingRoutine] = useState(false);
   const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
   const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
+
+  // Custom interface for individual set logging details
   const [routineProgress, setRoutineProgress] = useState<
-    Record<string, { sets: string; reps: string; weight: string; doneSets: boolean[] }>
+    Record<
+      string,
+      {
+        sets: string;
+        reps: string;
+        weight: string;
+        doneSets: boolean[];
+        setsDetails?: Array<{
+          id: string;
+          reps: string;
+          weight: string;
+          done: boolean;
+        }>;
+      }
+    >
   >({});
+
+  // Rest Timer State
+  const [restTimeRemaining, setRestTimeRemaining] = useState<number | null>(null);
+  const [restTimeTotal, setRestTimeTotal] = useState<number>(90);
+  const [restExerciseName, setRestExerciseName] = useState<string>('');
+  const [restNextSetNum, setRestNextSetNum] = useState<number>(1);
+  const [restNextExerciseName, setRestNextExerciseName] = useState<string>('');
 
   // Exercise management state
   const [exercisesList, setExercisesList] = useState<Exercise[]>([]);
@@ -161,11 +199,18 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   // UI state
   const [setsList, setSetsList] = useState<SetLog[]>([]);
   const [completedWorkouts, setCompletedWorkouts] = useState<LocalWorkoutWithSets[]>([]);
+  const [selectedHistoryWorkout, setSelectedHistoryWorkout] = useState<LocalWorkoutWithSets | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<ExerciseDbExercise[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showNamingModal, setShowNamingModal] = useState(false);
+  const [customWorkoutName, setCustomWorkoutName] = useState('');
   const [isFinishingWorkout, setIsFinishingWorkout] = useState(false);
   const [showCustomExerciseModal, setShowCustomExerciseModal] = useState(false);
   const [showExerciseBrowser, setShowExerciseBrowser] = useState(false);
   const [exerciseBrowserTarget, setExerciseBrowserTarget] = useState<'routine' | 'workout'>('workout');
   const [pendingExercise, setPendingExercise] = useState<ExerciseDbExercise | null>(null);
+  const [exerciseDetailItem, setExerciseDetailItem] = useState<ExerciseDbExercise | null>(null);
   const [showExerciseConfigSheet, setShowExerciseConfigSheet] = useState(false);
   const [configSets, setConfigSets] = useState('3');
   const [configReps, setConfigReps] = useState('10');
@@ -178,11 +223,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const [highlightMode, setHighlightMode] = useState<'none' | 'click' | 'exercise'>('none');
   const [primaryMuscleIds, setPrimaryMuscleIds] = useState<number[]>([]);
   const [secondaryMuscleIds, setSecondaryMuscleIds] = useState<number[]>([]);
-  const currentExerciseSets = setsList.filter((set) => set.exerciseId === currentExerciseId);
 
-  // Swipe state
-  const swipeAnimRefs = useRef<{ [key: string]: Animated.Value }>({});
-  const panResponderRefs = useRef<{ [key: string]: PanResponderInstance }>({});
   const routineModalScrollRef = useRef<ScrollView>(null);
   const uniqueIdRef = useRef(0);
   const isLoadingRoutinesRef = useRef(false);
@@ -203,7 +244,9 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   useEffect(() => {
     if (isRunning) {
       intervalRef.current = setInterval(() => {
-        setElapsedSecs((s) => s + 1);
+        if (isRunningRef.current) {
+          setElapsedSecs((s) => s + 1);
+        }
       }, 1000);
 
       Animated.loop(
@@ -228,6 +271,106 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [isRunning, scaleAnim]);
+
+  const playBeepSound = () => {
+    if (Platform.OS === 'web') {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          const ctx = new AudioContextClass();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          osc.frequency.setValueAtTime(800, ctx.currentTime);
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+
+          osc.start();
+          osc.stop(ctx.currentTime + 0.5);
+        }
+      } catch (e) {
+        console.warn('Failed to play web beep sound:', e);
+      }
+    }
+  };
+
+  const handleStartRestTimer = (exercise: RoutineExercise, completedSetNum: number) => {
+    if (!activeRoutine) return;
+
+    const isLastExercise = activeRoutine.exercises[activeRoutine.exercises.length - 1].id === exercise.id;
+    const setsForEx = routineProgress[exercise.id]?.doneSets?.length || exercise.sets || 1;
+    const isLastSet = completedSetNum >= setsForEx;
+
+    if (isLastExercise && isLastSet) {
+      return;
+    }
+
+    const restTime = activeRoutine.rest_time_seconds ?? 90;
+    if (restTime <= 0) return;
+
+    setRestTimeRemaining(restTime);
+    setRestTimeTotal(restTime);
+    setRestExerciseName(exercise.exercise_name);
+
+    let nextSet = completedSetNum + 1;
+    let nextExerciseName = exercise.exercise_name;
+    if (isLastSet) {
+      const currentExIdx = activeRoutine.exercises.findIndex((e) => e.id === exercise.id);
+      const nextEx = activeRoutine.exercises[currentExIdx + 1];
+      if (nextEx) {
+        nextSet = 1;
+        nextExerciseName = nextEx.exercise_name;
+      }
+    }
+    setRestNextSetNum(nextSet);
+    setRestNextExerciseName(nextExerciseName);
+  };
+
+  useEffect(() => {
+    if (searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    const delayDebounce = setTimeout(async () => {
+      try {
+        const results = await exerciseDbService.searchExercises(searchQuery);
+        setSearchResults(results.slice(0, 15));
+      } catch (err) {
+        console.error('[LiftTab] Search failed:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 200);
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (restTimeRemaining !== null && restTimeRemaining > 0) {
+      interval = setInterval(() => {
+        setRestTimeRemaining((prev) => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            clearInterval(interval!);
+            Vibration.vibrate([0, 500, 200, 500]);
+            playBeepSound();
+            triggerToast(`Rest complete! Start Set ${restNextSetNum} of ${restNextExerciseName}`);
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [restTimeRemaining, restNextSetNum, restNextExerciseName]);
 
   const formatTime = (secs: number): string => {
     const h = Math.floor(secs / 3600);
@@ -282,7 +425,8 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     }
 
     try {
-      const workouts = await getRecentWorkoutsByUser(user.id, 10);
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const workouts = await getWorkoutsByUserSince(user.id, sevenDaysAgo);
       setCompletedWorkouts(workouts);
     } catch (error) {
       console.error('[LiftTab] Failed to load local workout history:', error);
@@ -299,6 +443,27 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     const sets: CompletedWorkoutInput['sets'] = activeRoutine.exercises.flatMap((exercise) => {
       const progress = routineProgress[exercise.id];
       if (!progress) return [];
+
+      const details = progress.setsDetails || [];
+      if (details.length > 0) {
+        return details
+          .map((setDetail, index) => {
+            if (!setDetail.done) return null;
+            const reps = Math.max(1, parseInt(setDetail.reps, 10) || 1);
+            const weight = parseFloat(setDetail.weight) || 0;
+            const weightKg = isLbs ? weight * 0.45359237 : weight;
+            return {
+              exerciseName: exercise.exercise_name,
+              muscleGroup: exercise.muscle_group ?? null,
+              setNumber: index + 1,
+              reps,
+              weightKg: weightKg > 0 ? weightKg : null,
+              rir: 0,
+              estimated1rm: estimateOneRepMax(weightKg, reps),
+            };
+          })
+          .filter((s): s is NonNullable<typeof s> => s !== null);
+      }
 
       const reps = Math.max(1, parseInt(progress.reps, 10) || 1);
       const weight = parseFloat(progress.weight) || 0;
@@ -324,7 +489,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     return {
       name: activeRoutine.name,
       performedAt: new Date().toISOString(),
-      notes: 'routine_session',
+      notes: `routine_session|duration:${elapsedSecs}`,
       sets,
     };
   };
@@ -343,6 +508,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     return {
       name: workoutName,
       performedAt: new Date().toISOString(),
+      notes: `duration:${elapsedSecs}`,
       sets: checkedSets.map((set) => {
         const weightKg = convertInputWeightToKg(set.weight);
         return {
@@ -488,7 +654,8 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       }
 
       if (syncedAnyWorkout) {
-        const recentWorkouts = await getRecentWorkoutsByUser(userId, 10);
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const recentWorkouts = await getWorkoutsByUserSince(userId, sevenDaysAgo);
         setCompletedWorkouts(recentWorkouts);
       }
       console.log('[LiftTab] Workout create retry complete');
@@ -503,6 +670,10 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setIsRunning(false);
     setElapsedSecs(0);
     scaleAnim.setValue(1);
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
     if (activeRoutineId) {
       setActiveRoutineId(null);
       setRoutineProgress({});
@@ -510,6 +681,23 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setExercisesList([]);
     setCurrentExerciseId('');
     setSetsList([]);
+  };
+
+  const saveCompletedWorkout = async (payload: CompletedWorkoutInput) => {
+    if (!user?.id) return;
+    setIsFinishingWorkout(true);
+    try {
+      const localWorkout = await createWorkoutWithSetsLocal(user.id, payload);
+      setCompletedWorkouts((prev) => [localWorkout, ...prev.filter((workout) => workout.id !== localWorkout.id)]);
+      resetFinishedSessionState();
+      triggerToast('Workout saved');
+      void syncWorkoutToRemote(localWorkout, payload);
+    } catch (error) {
+      console.error('[LiftTab] Failed to save local workout:', error);
+      triggerToast(`Workout save failed: ${getErrorMessage(error)}`);
+    } finally {
+      setIsFinishingWorkout(false);
+    }
   };
 
   const handleFinishSession = async () => {
@@ -520,24 +708,106 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       return;
     }
 
-    const payload = buildCompletedWorkoutPayload();
-    if (!payload || payload.sets.length === 0) {
-      triggerToast('Log at least one completed set before finishing');
+    if (activeRoutine) {
+      const payload = buildCompletedWorkoutPayload();
+      if (!payload || payload.sets.length === 0) {
+        triggerToast('Log at least one completed set before finishing');
+        return;
+      }
+      saveCompletedWorkout(payload);
+    } else {
+      const checkedSets = setsList.filter((set) => set.isChecked);
+      if (checkedSets.length === 0) {
+        triggerToast('Log at least one completed set before finishing');
+        return;
+      }
+
+      const defaultName = exercisesList.length === 1
+        ? exercisesList[0].name
+        : exercisesList.length > 1
+        ? 'Custom Workout'
+        : currentExercise.name || 'Freestyle Workout';
+      setCustomWorkoutName(defaultName);
+      setShowNamingModal(true);
+    }
+  };
+
+  const handleSaveCustomFreestyleWorkout = () => {
+    setShowNamingModal(false);
+    const nameToUse = customWorkoutName.trim() || 'Freestyle Workout';
+    const payload = buildFreeformCompletedWorkoutPayload();
+    if (payload) {
+      payload.name = nameToUse;
+      saveCompletedWorkout(payload);
+    }
+  };
+
+  const handleCreateRoutineFromHistory = async () => {
+    if (!selectedHistoryWorkout) return;
+    const authUser = user ?? (await supabase.auth.getUser()).data.user;
+    if (!authUser) {
+      triggerToast('Please sign in to save routines');
       return;
     }
 
-    setIsFinishingWorkout(true);
     try {
-      const localWorkout = await createWorkoutWithSetsLocal(user.id, payload);
-      setCompletedWorkouts((prev) => [localWorkout, ...prev.filter((workout) => workout.id !== localWorkout.id)]);
-      resetFinishedSessionState();
-      triggerToast('✓ Workout saved');
-      void syncWorkoutToRemote(localWorkout, payload);
+      const grouped = new Map<
+        string,
+        {
+          exerciseName: string;
+          muscleGroup: string | null;
+          sets: number;
+          reps: number;
+          weightKg: number;
+          firstSetNumber: number;
+        }
+      >();
+
+      selectedHistoryWorkout.sets.forEach((set) => {
+        const key = set.exercise_name.toLowerCase();
+        const existing = grouped.get(key);
+        if (existing) {
+          existing.sets += 1;
+        } else {
+          grouped.set(key, {
+            exerciseName: set.exercise_name,
+            muscleGroup: set.muscle_group,
+            sets: 1,
+            reps: set.reps || 10,
+            weightKg: set.weight_kg || 0,
+            firstSetNumber: set.set_number || 1,
+          });
+        }
+      });
+
+      const exercises = Array.from(grouped.values())
+        .sort((a, b) => a.firstSetNumber - b.firstSetNumber)
+        .map((ex, index) => ({
+          exerciseName: ex.exerciseName,
+          muscleGroup: ex.muscleGroup,
+          sortOrder: index,
+          sets: ex.sets,
+          reps: ex.reps,
+          weightKg: ex.weightKg,
+        }));
+
+      const localInput = {
+        routineName: selectedHistoryWorkout.name || 'Custom Routine',
+        remoteId: null,
+        remoteTemplateWorkoutId: null,
+        restTimeSeconds: 90,
+        exercises,
+      };
+
+      const localRoutine = await createRoutineWithExercisesLocal(authUser.id, localInput);
+      const nextRoutines = localRoutinesToViews(await getRoutinesByUser(authUser.id));
+      applyRoutinesToState(nextRoutines);
+      triggerToast('Routine created from workout history');
+      void syncRoutineToRemote(localRoutine);
+      setSelectedHistoryWorkout(null);
     } catch (error) {
-      console.error('[LiftTab] Failed to save local workout:', error);
-      triggerToast(`Workout save failed: ${getErrorMessage(error)}`);
-    } finally {
-      setIsFinishingWorkout(false);
+      console.error('[LiftTab] Failed to save routine from history:', error);
+      triggerToast(`Failed to create routine: ${getErrorMessage(error)}`);
     }
   };
 
@@ -549,11 +819,20 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     if (nextIsLbs === isLbs) return;
     setIsLbs(nextIsLbs);
     setRoutineProgress((prev) => {
-      const updated: Record<string, { sets: string; reps: string; weight: string; doneSets: boolean[] }> = {};
+      const updated: typeof prev = {};
       Object.entries(prev).forEach(([key, value]) => {
         const currentWeight = parseFloat(value.weight) || 0;
         const nextWeight = convertWeightValue(currentWeight, nextIsLbs);
-        updated[key] = { ...value, weight: formatWeight(nextWeight) };
+        const updatedDetails = (value.setsDetails || []).map((detail) => {
+          const detailWeight = parseFloat(detail.weight) || 0;
+          const nextDetailWeight = convertWeightValue(detailWeight, nextIsLbs);
+          return { ...detail, weight: formatWeight(nextDetailWeight) };
+        });
+        updated[key] = {
+          ...value,
+          weight: formatWeight(nextWeight),
+          setsDetails: updatedDetails,
+        };
       });
       return updated;
     });
@@ -574,7 +853,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const fetchRemoteRoutineInputs = async (userId: string) => {
     const { data: routineRows, error: routineError } = await supabase
       .from('routines')
-      .select('id,routine_name,routines_id')
+      .select('id,routine_name,routines_id,rest_time_seconds')
       .eq('user_id', userId);
 
     if (routineError) throw routineError;
@@ -591,9 +870,11 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
     if (setError) throw setError;
 
-    return routinesWithTemplates.map((routine) =>
-      remoteRoutineToLocalInput(routine, (setRows || []) as RemoteRoutineSetRow[])
-    );
+    return routinesWithTemplates
+      .map((routine) =>
+        remoteRoutineToLocalInput(routine, (setRows || []) as RemoteRoutineSetRow[])
+      )
+      .filter((input) => input.exercises.length > 0);
   };
 
   const refreshRemoteRoutines = async (userId: string) => {
@@ -601,7 +882,11 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       const remoteInputs = await fetchRemoteRoutineInputs(userId);
 
       for (const remoteInput of remoteInputs) {
-        await upsertRemoteRoutineForUser(userId, remoteInput);
+        try {
+          await upsertRemoteRoutineForUser(userId, remoteInput);
+        } catch (innerError) {
+          console.warn(`[LiftTab] Skipping remote routine "${remoteInput.routineName}":`, innerError);
+        }
       }
 
       const mergedLocalRows = await getRoutinesByUser(userId);
@@ -696,9 +981,74 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
   const resetRoutineDraft = () => {
     setRoutineNameInput('');
+    setRoutineRestTimeInput('90');
     setRoutineDraftExercises([]);
     setEditingRoutineId(null);
     setEditingWorkoutId(null);
+  };
+
+  const handleDeleteRoutine = async (routine: Routine) => {
+    Alert.alert(
+      'Delete Routine',
+      `Are you sure you want to delete ${routine.name}? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const authUser = user ?? (await supabase.auth.getUser()).data.user;
+              if (!authUser) {
+                triggerToast('Authentication error.');
+                return;
+              }
+              // 1. Soft delete locally
+              await softDeleteRoutine(authUser.id, routine.id);
+
+              // 2. Reset active training session if this routine is running
+              if (activeRoutineId === routine.id) {
+                resetFinishedSessionState();
+              }
+
+              // 3. Remove from UI state list
+              setRoutines((prev) => prev.filter((r) => r.id !== routine.id));
+
+              // 4. Clear selection state
+              if (selectedRoutineId === routine.id) {
+                setSelectedRoutineId(null);
+              }
+
+              triggerToast('Routine deleted successfully.');
+
+              // 5. Remote delete sync to Supabase
+              if (routine.remote_id) {
+                const { error: routineErr } = await supabase
+                  .from('routines')
+                  .delete()
+                  .eq('id', routine.remote_id);
+                if (routineErr) {
+                  console.error('[LiftTab] Remote routine delete failed:', routineErr);
+                }
+              }
+              if (routine.routines_id) {
+                const { error: workoutErr } = await supabase
+                  .from('workouts')
+                  .delete()
+                  .eq('id', routine.routines_id);
+                if (workoutErr) {
+                  console.error('[LiftTab] Remote workout delete failed:', workoutErr);
+                }
+              }
+            } catch (error) {
+              console.error('[LiftTab] Error deleting routine:', error);
+              triggerToast('Failed to delete routine.');
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const startEditRoutine = (routine: Routine) => {
@@ -706,6 +1056,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setEditingRoutineId(routine.id);
     setEditingWorkoutId(workoutId ?? null);
     setRoutineNameInput(routine.name);
+    setRoutineRestTimeInput(String(routine.rest_time_seconds ?? 90));
 
     const draftExercises = routine.exercises.map((exercise) => {
       const weightValue = isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg;
@@ -817,7 +1168,10 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         });
         const { error: routineUpdateError } = await supabase
           .from('routines')
-          .update({ routine_name: localRoutine.routine_name })
+          .update({
+            routine_name: localRoutine.routine_name,
+            rest_time_seconds: localRoutine.rest_time_seconds,
+          })
           .eq('id', routineId)
           .eq('user_id', authUser.id);
 
@@ -825,7 +1179,12 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       } else {
         const { data: routine, error: routineError } = await supabase
           .from('routines')
-          .insert({ user_id: authUser.id, routine_name: localRoutine.routine_name, routines_id: workoutId })
+          .insert({
+            user_id: authUser.id,
+            routine_name: localRoutine.routine_name,
+            routines_id: workoutId,
+            rest_time_seconds: localRoutine.rest_time_seconds,
+          })
           .select('id,routines_id')
           .single();
 
@@ -978,6 +1337,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       const localInput = routineDraftsToLocalInput(trimmedName, cleanedExercises, {
         remoteId: existingRoutine?.remote_id ?? null,
         remoteTemplateWorkoutId: existingRoutine?.routines_id ?? editingWorkoutId ?? null,
+        restTimeSeconds: parseInt(routineRestTimeInput, 10) || 90,
       });
       const localRoutine = editingRoutineId
         ? await updateRoutineWithExercisesLocal(authUser.id, editingRoutineId, localInput)
@@ -987,7 +1347,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
       resetRoutineDraft();
       setShowRoutineModal(false);
-      triggerToast(editingRoutineId ? '✓ Routine updated' : '✓ Routine saved');
+      triggerToast(editingRoutineId ? 'Routine updated' : 'Routine saved');
       void syncRoutineToRemote(localRoutine);
     } catch (error) {
       console.error('[LiftTab] Failed to save local routine:', error);
@@ -1010,15 +1370,23 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const handleStartRoutine = (routine: Routine) => {
     if (routine.exercises.length === 0) return;
 
-    const initialProgress: Record<string, { sets: string; reps: string; weight: string; doneSets: boolean[] }> = {};
+    const initialProgress: typeof routineProgress = {};
     routine.exercises.forEach((exercise) => {
       const weightValue = isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg;
       const setCount = Math.max(1, exercise.sets);
+      const repsVal = String(exercise.reps);
+      const weightVal = formatWeight(weightValue);
       initialProgress[exercise.id] = {
         sets: String(setCount),
-        reps: String(exercise.reps),
-        weight: formatWeight(weightValue),
+        reps: repsVal,
+        weight: weightVal,
         doneSets: Array.from({ length: setCount }, () => false),
+        setsDetails: Array.from({ length: setCount }, (_, idx) => ({
+          id: `${exercise.id}-set-${idx}-${Date.now()}-${Math.random()}`,
+          reps: repsVal,
+          weight: weightVal,
+          done: false,
+        })),
       };
     });
 
@@ -1047,22 +1415,72 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     applyRoutineDefaults(exercise);
   };
 
+  const handleOpenExerciseDetailByName = async (exerciseName: string) => {
+    try {
+      const allExercises = await exerciseDbService.getExercises();
+      const normalizedName = exerciseName.toLowerCase().trim();
+      const matched = allExercises.find(ex => ex.name.toLowerCase().trim() === normalizedName);
+      if (matched) {
+        setExerciseDetailItem(matched);
+      } else {
+        const results = await exerciseDbService.searchExercises(exerciseName);
+        if (results && results.length > 0) {
+          setExerciseDetailItem(results[0]);
+        } else {
+          triggerToast('Exercise instructions not found');
+        }
+      }
+    } catch (e) {
+      console.error('[LiftTab] Failed to lookup exercise details:', e);
+      triggerToast('Error loading instructions');
+    }
+  };
+
   const updateRoutineProgress = (
     exerciseId: string,
-    patch: Partial<{ sets: string; reps: string; weight: string; doneSets: boolean[] }>
+    patch: Partial<{
+      sets: string;
+      reps: string;
+      weight: string;
+      doneSets: boolean[];
+      setsDetails: Array<{ id: string; reps: string; weight: string; done: boolean }>;
+    }>
   ) => {
     setRoutineProgress((prev) => {
       const current = prev[exerciseId];
       if (!current) return prev;
 
       let nextDoneSets = current.doneSets;
+      let nextDetails = current.setsDetails || [];
+
+      if (patch.setsDetails !== undefined) {
+        nextDetails = patch.setsDetails;
+        nextDoneSets = nextDetails.map((s) => s.done);
+      } else if (patch.doneSets !== undefined) {
+        nextDoneSets = patch.doneSets;
+        nextDetails = nextDetails.map((s, idx) => ({
+          ...s,
+          done: nextDoneSets[idx] !== undefined ? nextDoneSets[idx] : s.done,
+        }));
+      }
+
       if (patch.sets !== undefined) {
         const nextCount = Math.max(1, parseInt(patch.sets, 10) || 1);
-        if (nextCount > nextDoneSets.length) {
-          nextDoneSets = [...nextDoneSets, ...Array.from({ length: nextCount - nextDoneSets.length }, () => false)];
-        } else if (nextCount < nextDoneSets.length) {
-          nextDoneSets = nextDoneSets.slice(0, nextCount);
+        if (nextCount > nextDetails.length) {
+          const lastSet = nextDetails[nextDetails.length - 1];
+          const defaultReps = lastSet ? lastSet.reps : current.reps;
+          const defaultWeight = lastSet ? lastSet.weight : current.weight;
+          const newSets = Array.from({ length: nextCount - nextDetails.length }, (_, idx) => ({
+            id: `${exerciseId}-set-${nextDetails.length + idx}-${Date.now()}-${Math.random()}`,
+            reps: defaultReps,
+            weight: defaultWeight,
+            done: false,
+          }));
+          nextDetails = [...nextDetails, ...newSets];
+        } else if (nextCount < nextDetails.length) {
+          nextDetails = nextDetails.slice(0, nextCount);
         }
+        nextDoneSets = nextDetails.map((s) => s.done);
       }
 
       return {
@@ -1070,7 +1488,9 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         [exerciseId]: {
           ...current,
           ...patch,
-          doneSets: patch.doneSets ?? nextDoneSets,
+          doneSets: nextDoneSets,
+          setsDetails: nextDetails,
+          sets: String(nextDetails.length),
         },
       };
     });
@@ -1150,7 +1570,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         };
       });
 
-      triggerToast('✓ Defaults updated');
+      triggerToast('Defaults updated');
       void syncRoutineToRemote(localRoutine);
     } catch (error) {
       console.error('[LiftTab] Failed to update local routine defaults:', error);
@@ -1158,98 +1578,112 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     }
   };
 
-  // Create swipe handler for a specific set
-  const createSwipeHandler = (setId: string) => {
-    if (!swipeAnimRefs.current[setId]) {
-      swipeAnimRefs.current[setId] = new Animated.Value(0);
-    }
 
-    if (!panResponderRefs.current[setId]) {
-      panResponderRefs.current[setId] = PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: (evt, { dx }) => Math.abs(dx) > 10,
-        onPanResponderMove: (evt, { dx }) => {
-          if (dx > 0) {
-            swipeAnimRefs.current[setId]?.setValue(Math.min(dx, 100));
-          }
-        },
-        onPanResponderRelease: (evt, { dx }) => {
-          if (dx > 60) {
-            // Swiped far enough — toggle check
-            handleToggleCheck(setId);
-            triggerToast('Set marked as complete!');
-            Animated.timing(swipeAnimRefs.current[setId]!, {
-              toValue: 0,
-              duration: 300,
-              useNativeDriver: true,
-            }).start();
-          } else {
-            // Snap back
-            Animated.timing(swipeAnimRefs.current[setId]!, {
-              toValue: 0,
-              duration: 200,
-              useNativeDriver: true,
-            }).start();
-          }
-        },
-      });
-    }
 
-    return panResponderRefs.current[setId];
+  const handleToggleFreestyleSet = (set: SetLog) => {
+    const nextSets = setsList.map((s) => {
+      if (s.id === set.id) {
+        return { ...s, isChecked: !s.isChecked };
+      }
+      return s;
+    });
+    const wasChecked = set.isChecked;
+
+    if (!wasChecked) {
+      if (restTimeRemaining !== null && restTimeRemaining > 0) {
+        Alert.alert(
+          'Restart Rest Timer?',
+          `A rest timer is already running. Would you like to restart the timer for Set ${set.setNum} of ${set.exerciseName}?`,
+          [
+            {
+              text: 'Cancel (Misclick)',
+              style: 'cancel',
+            },
+            {
+              text: 'Yes, Start Timer',
+              onPress: () => {
+                setSetsList(nextSets);
+                const tempExercise = {
+                  id: set.exerciseId,
+                  exercise_name: set.exerciseName,
+                  rest_time_seconds: 90,
+                };
+                handleStartRestTimer(tempExercise as any, set.setNum);
+              },
+            },
+          ]
+        );
+      } else {
+        setSetsList(nextSets);
+        const tempExercise = {
+          id: set.exerciseId,
+          exercise_name: set.exerciseName,
+          rest_time_seconds: 90,
+        };
+        handleStartRestTimer(tempExercise as any, set.setNum);
+      }
+    } else {
+      setSetsList(nextSets);
+    }
   };
 
-  const handleLogSet = () => {
-    if (!currentExerciseId || !currentExercise.name.trim()) {
-      triggerToast('Add or select an exercise before logging sets');
-      return;
-    }
-
-    const w = parseFloat(inputWeight) || 0;
-    const r = isUnilateral ? parseInt(inputRepsLeft) || 0 : parseInt(inputReps) || 0;
-    const rL = isUnilateral ? parseInt(inputRepsLeft) || 0 : undefined;
-    const rR = isUnilateral ? parseInt(inputRepsRight) || 0 : undefined;
-    const rir = parseInt(inputRir) || 0;
-
-    if (w <= 0 || r <= 0) {
-      triggerToast('Please enter valid Weight and Reps!');
-      return;
-    }
-
-    const newSet: SetLog = {
-      id: createUniqueId('set'),
-      exerciseId: currentExerciseId,
-      exerciseName: currentExercise.name,
-      muscleGroup: currentExercise.muscleGroup ?? null,
-      setNum: currentExerciseSets.length + 1,
-      weight: w,
-      reps: r,
-      repsLeft: rL,
-      repsRight: rR,
-      rir,
-      isChecked: true,
-    };
-
-    setSetsList((prev) => [...prev, newSet]);
-    triggerToast(
-      isUnilateral
-        ? `Logged Set #${newSet.setNum}: ${w}${isLbs ? 'lbs' : 'kg'} × L${rL} R${rR}`
-        : `Logged Set #${newSet.setNum}: ${w}${isLbs ? 'lbs' : 'kg'} × ${r} reps`
+  const handleFreestyleWeightChange = (setId: string, val: string) => {
+    setSetsList((prev) =>
+      prev.map((s) => (s.id === setId ? { ...s, weight: parseFloat(val) || 0 } : s))
     );
   };
 
-  // Auto-fill from previous set
-  const handleFillFromSet = (set: SetLog) => {
-    setInputWeight(String(set.weight));
-    if (set.repsLeft !== undefined && set.repsRight !== undefined) {
-      setIsUnilateral(true);
-      setInputRepsLeft(String(set.repsLeft));
-      setInputRepsRight(String(set.repsRight));
-    } else {
-      setIsUnilateral(false);
-      setInputReps(String(set.reps));
+  const handleFreestyleRepsChange = (setId: string, val: string) => {
+    setSetsList((prev) =>
+      prev.map((s) => (s.id === setId ? { ...s, reps: parseInt(val, 10) || 0 } : s))
+    );
+  };
+
+  const handleDeleteFreestyleSet = (exerciseId: string, setId: string) => {
+    const exerciseSets = setsList.filter((s) => s.exerciseId === exerciseId);
+    if (exerciseSets.length <= 1) {
+      triggerToast('An exercise must have at least one set');
+      return;
     }
-    setInputRir(String(set.rir));
-    triggerToast('✓ Inputs auto-filled from previous set');
+
+    const filteredSets = setsList.filter((s) => s.id !== setId);
+    let count = 1;
+    const nextSets = filteredSets.map((s) => {
+      if (s.exerciseId === exerciseId) {
+         return { ...s, setNum: count++ };
+      }
+      return s;
+    });
+    setSetsList(nextSets);
+  };
+
+  const handleAddFreestyleSet = (exercise: Exercise) => {
+    const exerciseSets = setsList.filter((s) => s.exerciseId === exercise.id).sort((a, b) => a.setNum - b.setNum);
+    const lastSet = exerciseSets[exerciseSets.length - 1];
+    const defaultWeight = lastSet ? lastSet.weight : 0;
+    const defaultReps = lastSet ? lastSet.reps : 10;
+
+    const newSet: SetLog = {
+      id: `${exercise.id}-set-${exerciseSets.length}-${Date.now()}-${Math.random()}`,
+      exerciseId: exercise.id,
+      exerciseName: exercise.name,
+      muscleGroup: exercise.muscleGroup ?? null,
+      setNum: exerciseSets.length + 1,
+      weight: defaultWeight,
+      reps: defaultReps,
+      rir: 0,
+      isChecked: false,
+    };
+    setSetsList((prev) => [...prev, newSet]);
+  };
+
+  const handleDeleteFreestyleExercise = (exerciseId: string) => {
+    setExercisesList((prev) => prev.filter((e) => e.id !== exerciseId));
+    setSetsList((prev) => prev.filter((s) => s.exerciseId !== exerciseId));
+    if (currentExerciseId === exerciseId) {
+      setCurrentExerciseId('');
+    }
+    triggerToast('Exercise removed from session');
   };
 
   const handleToggleCheck = (id: string) => {
@@ -1276,7 +1710,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setCurrentExerciseId(newExercise.id);
     setCustomExerciseName('');
     setShowCustomExerciseModal(false);
-    triggerToast(`✓ Added custom exercise: ${customExerciseName}`);
+    triggerToast(`Added custom exercise: ${customExerciseName}`);
   };
 
   const handleBodyPartClick = (muscleId: number, muscleName: string) => {
@@ -1310,14 +1744,13 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     setExercisesList((prev) => [...prev, newExercise]);
     setCurrentExerciseId(newExercise.id);
     setShowExerciseBrowser(false);
-    triggerToast(`✓ Added: ${newExercise.name}`);
+    triggerToast(`Added: ${newExercise.name}`);
   };
 
   const normalizeExerciseName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
   const getRoutineDraftDefaults = (exerciseName: string) => {
     const normalized = normalizeExerciseName(exerciseName);
-    const lastDraft = routineDraftExercises[routineDraftExercises.length - 1];
 
     const previousMatch = routines
       .flatMap((routine) => routine.exercises)
@@ -1329,14 +1762,6 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         sets: String(Math.max(1, previousMatch.sets)),
         reps: String(Math.max(1, previousMatch.reps)),
         weight: formatWeight(weightValue),
-      };
-    }
-
-    if (lastDraft) {
-      return {
-        sets: lastDraft.sets || '3',
-        reps: lastDraft.reps || '10',
-        weight: lastDraft.weight || '',
       };
     }
 
@@ -1366,6 +1791,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         reps: defaults.reps,
         weight: defaults.weight,
         weightUnit: isLbs ? 'lbs' : 'kg',
+        restTimeSeconds: '90',
         muscleGroup,
       },
     ]);
@@ -1413,13 +1839,14 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           reps: configReps,
           weight: configWeight,
           weightUnit: configWeightUnit,
+          restTimeSeconds: '90',
           muscleGroup,
         },
       ]);
       requestAnimationFrame(() => {
         routineModalScrollRef.current?.scrollToEnd({ animated: true });
       });
-      triggerToast(`✓ Added: ${exerciseName} — keep adding or save`);
+      triggerToast(`Added: ${exerciseName} — keep adding or save`);
       setShowExerciseConfigSheet(false);
       setPendingExercise(null);
       // Return to routine modal so user can keep adding more exercises
@@ -1448,7 +1875,23 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       setInputReps(configReps);
       setInputRepsLeft(configReps);
       setInputRepsRight(configReps);
-      triggerToast(`✓ Added: ${newExercise.name}`);
+
+      // Initialize sets in setsList
+      const setsCount = parseInt(configSets, 10) || 3;
+      const initialSets: SetLog[] = Array.from({ length: setsCount }, (_, idx) => ({
+        id: `${newExercise.id}-set-${idx}-${Date.now()}-${Math.random()}`,
+        exerciseId: newExercise.id,
+        exerciseName: newExercise.name,
+        muscleGroup: newExercise.muscleGroup,
+        setNum: idx + 1,
+        weight: parseFloat(weightInCurrentUnit) || 0,
+        reps: parseInt(configReps, 10) || 10,
+        rir: 0,
+        isChecked: false,
+      }));
+      setSetsList((prev) => [...prev, ...initialSets]);
+
+      triggerToast(`Added: ${newExercise.name}`);
     }
 
     setShowExerciseConfigSheet(false);
@@ -1466,6 +1909,112 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       return acc + progress.doneSets.length;
     }, 0);
   }, [routineProgress]);
+
+  const renderSearchSection = (context: 'main' | 'routine') => {
+    const isMain = context === 'main';
+    const isFreestyleActive = isMain && isRunning && !activeRoutine;
+
+    const handleClearSearch = () => {
+      setSearchQuery('');
+      setSearchResults([]);
+    };
+
+    const handleAddClick = (exercise: ExerciseDbExercise) => {
+      if (context === 'routine') {
+        setExerciseBrowserTarget('routine');
+        handleAddExerciseFromBrowser(exercise);
+      } else if (isFreestyleActive) {
+        setExerciseBrowserTarget('workout');
+        handleAddExerciseFromBrowser(exercise);
+      }
+    };
+
+    return (
+      <View style={styles.searchSectionContainer}>
+        <View style={styles.searchBarWrapper}>
+          <Search size={16} color={Colors.outline} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInputField}
+            placeholder="Search exercises (e.g. Bench Press)..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor={Colors.outline}
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={handleClearSearch} style={styles.searchClearBtn} activeOpacity={0.6}>
+              <X size={16} color={Colors.outline} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {searchQuery.trim().length >= 2 && (
+          <View style={styles.searchResultsContainer}>
+            <View style={styles.searchResultsHeader}>
+              <Text style={styles.searchResultsTitle}>Search Results</Text>
+              {isSearching && <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 6 }} />}
+            </View>
+
+            {searchResults.length === 0 ? (
+              <View style={styles.searchNoResults}>
+                <Text style={styles.searchNoResultsText}>
+                  {isSearching ? 'Searching...' : 'No matching exercises found'}
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.searchResultsScroll}
+                contentContainerStyle={styles.searchResultsScrollContent}
+                nestedScrollEnabled={true}
+                keyboardShouldPersistTaps="handled"
+              >
+                {searchResults.map((exercise) => {
+                  const showAddButton = context === 'routine' || isFreestyleActive;
+                  return (
+                    <TouchableOpacity
+                      key={exercise.id}
+                      style={styles.searchResultRow}
+                      onPress={() => setExerciseDetailItem(exercise)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.searchResultLeft}>
+                        <View style={styles.searchResultIconBox}>
+                          <Dumbbell size={14} color={Colors.primary} />
+                        </View>
+                        <View style={styles.searchResultInfo}>
+                          <Text style={styles.searchResultName} numberOfLines={1}>
+                            {exercise.name}
+                          </Text>
+                          <Text style={styles.searchResultMeta} numberOfLines={1}>
+                            {exercise.target ? exercise.target : 'General'} · {exercise.equipment}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {showAddButton ? (
+                        <TouchableOpacity
+                          style={styles.searchResultAddBtn}
+                          onPress={() => handleAddClick(exercise)}
+                          activeOpacity={0.7}
+                        >
+                          <Plus size={12} color={Colors.primary} style={{ marginRight: 2 }} />
+                          <Text style={styles.searchResultAddText}>Add</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.searchResultChevron}>
+                          <Info size={14} color={Colors.outline} opacity={0.6} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        )}
+      </View>
+    );
+  };
 
   const handleDiscardSession = () => {
     Alert.alert(
@@ -1485,20 +2034,10 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Dynamic Header Greeting */}
-        <View style={styles.welcomeSection}>
-          <View style={styles.welcomeGreetingRow}>
-            <Text style={styles.welcomeTitle}>
-              {getGreeting()}, {fullName.split(' ')[0]}!
-            </Text>
-            <Sparkles size={18} color="#eab308" fill="#eab308" style={styles.greetingSparkle} />
-          </View>
-          <Text style={styles.welcomeSubtitle}>
-            Track your routines and daily training sessions.
-          </Text>
-        </View>
-
+        {/* Global Search Bar */}
+        {renderSearchSection('main')}
         {/* Session Timer Card */}
         <View style={[styles.timerCard, (activeRoutineId || elapsedSecs > 0) && styles.timerCardActive]}>
           {activeRoutineId || elapsedSecs > 0 ? (
@@ -1528,7 +2067,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                   </Text>
                   <Text style={styles.activeProgressText}>
                     {totalSetsCount > 0
-                      ? `✓ ${completedSetsCount} of ${totalSetsCount} sets completed`
+                      ? `${completedSetsCount} of ${totalSetsCount} sets completed`
                       : 'No sets logged yet'
                     }
                   </Text>
@@ -1575,7 +2114,6 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                   onPress={handleFinishSession}
                   activeOpacity={0.8}
                 >
-                  <Check size={14} color={Colors.onPrimary} strokeWidth={2.5} style={{ marginRight: 6 }} />
                   <Text style={styles.btnFinishText}>Finish Session</Text>
                 </TouchableOpacity>
               </View>
@@ -1676,9 +2214,14 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                           styles.routineExerciseRow,
                           isActiveExercise && styles.routineExerciseRowActive,
                         ]}
-                        onPress={() => handleSelectRoutineExercise(exercise.id)}
+                        onPress={() => {
+                          if (activeRoutineId === selectedRoutine.id) {
+                            handleSelectRoutineExercise(exercise.id);
+                          } else {
+                            handleOpenExerciseDetailByName(exercise.exercise_name);
+                          }
+                        }}
                         activeOpacity={0.8}
-                        disabled={activeRoutineId !== selectedRoutine.id}
                       >
                         <View style={styles.routineExerciseInfo}>
                           <Text style={styles.routineExerciseName}>{exercise.exercise_name}</Text>
@@ -1709,17 +2252,27 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                     activeRoutineId === selectedRoutine.id && styles.routineStartTextActive,
                   ]}
                 >
-                  {activeRoutineId === selectedRoutine.id ? '✓ Routine Active' : 'Start Routine'}
+                  {activeRoutineId === selectedRoutine.id ? 'Routine Active' : 'Start Routine'}
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.routineEditButton}
-                onPress={() => startEditRoutine(selectedRoutine)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.routineEditText}>Edit Routine</Text>
-              </TouchableOpacity>
+              <View style={styles.routineActionRow}>
+                <TouchableOpacity
+                  style={styles.routineEditButton}
+                  onPress={() => startEditRoutine(selectedRoutine)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.routineEditText}>Edit Routine</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.routineDeleteButton}
+                  onPress={() => handleDeleteRoutine(selectedRoutine)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.routineDeleteText}>Delete Routine</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>
@@ -1729,16 +2282,11 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           {activeRoutine ? (
             <>
               <View style={styles.exerciseHeader}>
-                <View style={styles.exerciseTitleRow}>
-                  <View style={styles.tagChip}>
-                    <View style={styles.tagChipContent}>
-                      <Dumbbell size={10} color={Colors.primaryContainer} style={{ marginRight: 4 }} />
-                      <Text style={styles.tagChipText}>Routine</Text>
-                    </View>
+                <View style={styles.routineHighlightBadge}>
+                  <View style={styles.tagChipContent}>
+                    <Dumbbell size={10} color={Colors.primaryContainer} style={{ marginRight: 4 }} />
+                    <Text style={styles.tagChipText}>Routine</Text>
                   </View>
-                  <Text style={styles.exerciseTitle}>{activeRoutine.name}</Text>
-                </View>
-                <View style={styles.exerciseActions}>
                   <View style={styles.unitToggleRow}>
                     <TouchableOpacity onPress={() => toggleUnit(true)}>
                       <Text style={[styles.unitBtn, isLbs && styles.unitBtnActive]}>lbs</Text>
@@ -1749,92 +2297,336 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                     </TouchableOpacity>
                   </View>
                 </View>
+                <Text style={styles.exerciseTitle}>{activeRoutine.name}</Text>
               </View>
 
               <View style={styles.routineWorkoutList}>
                 {activeRoutine.exercises.map((exercise) => {
-                  const progress = routineProgress[exercise.id] || {
-                    sets: String(exercise.sets),
-                    reps: String(exercise.reps),
-                    weight: formatWeight(isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg),
-                    doneSets: Array.from({ length: Math.max(1, exercise.sets) }, () => false),
+                  const progress = routineProgress[exercise.id] || (() => {
+                    const weightValue = isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg;
+                    const setCount = Math.max(1, exercise.sets);
+                    const repsVal = String(exercise.reps || 10);
+                    const weightVal = formatWeight(weightValue);
+                    return {
+                      sets: String(setCount),
+                      reps: repsVal,
+                      weight: weightVal,
+                      doneSets: Array.from({ length: setCount }, () => false),
+                      setsDetails: Array.from({ length: setCount }, (_, idx) => ({
+                        id: `${exercise.id}-set-${idx}-${Date.now()}-${Math.random()}`,
+                        reps: repsVal,
+                        weight: weightVal,
+                        done: false,
+                      })),
+                    };
+                  })();
+
+                  const details = progress.setsDetails || [];
+
+                  const handleToggleSet = (setIdx: number) => {
+                    const nextDetails = details.map((s, sIdx) =>
+                      sIdx === setIdx ? { ...s, done: !s.done } : s
+                    );
+                    const wasDone = details[setIdx].done;
+
+                    if (!wasDone) {
+                      if (restTimeRemaining !== null && restTimeRemaining > 0) {
+                        Alert.alert(
+                          'Restart Rest Timer?',
+                          `A rest timer is already running. Would you like to restart the timer for Set ${setIdx + 1} of ${exercise.exercise_name}?`,
+                          [
+                            {
+                              text: 'Cancel (Misclick)',
+                              style: 'cancel',
+                            },
+                            {
+                              text: 'Yes, Start Timer',
+                              onPress: () => {
+                                updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
+                                handleStartRestTimer(exercise, setIdx + 1);
+                              },
+                            },
+                          ]
+                        );
+                      } else {
+                        updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
+                        handleStartRestTimer(exercise, setIdx + 1);
+                      }
+                    } else {
+                      updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
+                    }
+                  };
+
+                  const handleWeightChange = (setIdx: number, val: string) => {
+                    const nextDetails = details.map((s, sIdx) =>
+                      sIdx === setIdx ? { ...s, weight: val } : s
+                    );
+                    updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
+                  };
+
+                  const handleRepsChange = (setIdx: number, val: string) => {
+                    const nextDetails = details.map((s, sIdx) =>
+                      sIdx === setIdx ? { ...s, reps: val } : s
+                    );
+                    updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
+                  };
+
+                  const handleDeleteSet = (setIdx: number) => {
+                    if (details.length <= 1) {
+                      triggerToast('An exercise must have at least one set');
+                      return;
+                    }
+                    const nextDetails = details.filter((_, sIdx) => sIdx !== setIdx);
+                    updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
+                  };
+
+                  const handleAddSet = () => {
+                    const lastSet = details[details.length - 1];
+                    const defaultReps = lastSet ? lastSet.reps : String(exercise.reps || 10);
+                    const defaultWeight = lastSet ? lastSet.weight : formatWeight(isLbs ? exercise.weight_kg / 0.45359237 : exercise.weight_kg);
+                    const newSet = {
+                      id: `${exercise.id}-set-${details.length}-${Date.now()}-${Math.random()}`,
+                      reps: defaultReps,
+                      weight: defaultWeight,
+                      done: false,
+                    };
+                    const nextDetails = [...details, newSet];
+                    updateRoutineProgress(exercise.id, { setsDetails: nextDetails });
                   };
 
                   return (
                     <View key={exercise.id} style={styles.routineWorkoutRow}>
                       <View style={styles.routineWorkoutHeader}>
                         <Text style={styles.routineWorkoutName}>{exercise.exercise_name}</Text>
+                        <TouchableOpacity
+                          style={styles.instructionIconButton}
+                          onPress={() => handleOpenExerciseDetailByName(exercise.exercise_name)}
+                          activeOpacity={0.7}
+                        >
+                          <Info size={16} color={Colors.primary} />
+                        </TouchableOpacity>
                       </View>
 
-                      <View style={styles.routineWorkoutInputs}>
-                        <View style={styles.routineInputCol}>
-                          <Text style={styles.routineInputLabel}>Sets</Text>
-                          <TextInput
-                            style={styles.routineInput}
-                            value={progress.sets}
-                            onChangeText={(value) => updateRoutineProgress(exercise.id, { sets: value })}
-                            onBlur={() => handleSaveRoutineDefaults(exercise.id)}
-                            keyboardType="numeric"
-                          />
+                      {/* Sets Table */}
+                      <View style={styles.setsTableContainer}>
+                        {/* Table Header */}
+                        <View style={styles.setsTableHeader}>
+                          <Text style={[styles.setsTableHeaderCell, styles.cellCheck]} />
+                          <Text style={[styles.setsTableHeaderCell, styles.cellLabel]}>Set</Text>
+                          <Text style={[styles.setsTableHeaderCell, styles.cellInput]}>{isLbs ? 'lbs' : 'kg'}</Text>
+                          <Text style={[styles.setsTableHeaderCell, styles.cellInput]}>Reps</Text>
+                          <Text style={[styles.setsTableHeaderCell, styles.cellAction]} />
                         </View>
-                        <View style={styles.routineInputCol}>
-                          <Text style={styles.routineInputLabel}>Reps</Text>
-                          <TextInput
-                            style={styles.routineInput}
-                            value={progress.reps}
-                            onChangeText={(value) => updateRoutineProgress(exercise.id, { reps: value })}
-                            onBlur={() => handleSaveRoutineDefaults(exercise.id)}
-                            keyboardType="numeric"
-                          />
-                        </View>
-                        <View style={styles.routineInputCol}>
-                          <Text style={styles.routineInputLabel}>Weight</Text>
-                          <TextInput
-                            style={styles.routineInput}
-                            value={progress.weight}
-                            onChangeText={(value) => updateRoutineProgress(exercise.id, { weight: value })}
-                            onBlur={() => handleSaveRoutineDefaults(exercise.id)}
-                            keyboardType="numeric"
-                          />
-                        </View>
-                      </View>
 
-                      <View style={styles.routineSetRow}>
-                        <Text style={styles.routineSetHint}>Tap any set to mark complete</Text>
-                        <View style={styles.routineSetGrid}>
-                        {progress.doneSets.map((isDone, index) => (
-                          <TouchableOpacity
-                            key={`${exercise.id}-set-${index}`}
-                            style={[
-                              styles.routineSetCard,
-                              isDone && styles.routineSetCardDone,
-                            ]}
-                            onPress={() => {
-                              const nextDone = [...progress.doneSets];
-                              nextDone[index] = !nextDone[index];
-                              updateRoutineProgress(exercise.id, { doneSets: nextDone });
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <Text style={[styles.routineSetCardNum, isDone && styles.routineSetCardNumDone]}>
-                              {index + 1}
-                            </Text>
-                            <Text style={[styles.routineSetCardMeta, isDone && styles.routineSetCardMetaDone]}>
-                              {progress.reps} reps
-                            </Text>
-                            {isDone && (
-                              <View style={styles.routineSetCardCheck}>
-                                <Check size={10} color="#ffffff" strokeWidth={3} />
-                              </View>
+                        {/* Table Rows */}
+                        {details.map((setDetail, setIndex) => (
+                          <View key={setDetail.id} style={[styles.setsTableRow, setDetail.done && styles.setsTableRowDone]}>
+                            {/* Checkbox */}
+                            <TouchableOpacity
+                              style={[styles.setRowCheckBtn, setDetail.done && styles.setRowCheckBtnDone]}
+                              onPress={() => handleToggleSet(setIndex)}
+                              activeOpacity={0.7}
+                            >
+                              {setDetail.done && <Check size={10} color="#ffffff" strokeWidth={3} />}
+                            </TouchableOpacity>
+
+                            {/* Label */}
+                            <View style={styles.setRowLabelContainer}>
+                              <Text style={styles.setRowLabel}>Set {setIndex + 1}</Text>
+                            </View>
+
+                            {/* Weight Input */}
+                            <TextInput
+                              style={[styles.setRowInput, setDetail.done && styles.setRowInputDone]}
+                              value={setDetail.weight}
+                              onChangeText={(val) => handleWeightChange(setIndex, val)}
+                              keyboardType="decimal-pad"
+                              textAlign="center"
+                              editable={!setDetail.done}
+                              placeholder="0"
+                              placeholderTextColor={Colors.outline}
+                            />
+
+                            {/* Reps Input */}
+                            <TextInput
+                              style={[styles.setRowInput, setDetail.done && styles.setRowInputDone]}
+                              value={setDetail.reps}
+                              onChangeText={(val) => handleRepsChange(setIndex, val)}
+                              keyboardType="number-pad"
+                              textAlign="center"
+                              editable={!setDetail.done}
+                              placeholder="0"
+                              placeholderTextColor={Colors.outline}
+                            />
+
+                            {/* Action Button */}
+                            {details.length > 1 ? (
+                              <TouchableOpacity
+                                style={styles.setRowDeleteBtn}
+                                onPress={() => handleDeleteSet(setIndex)}
+                                activeOpacity={0.7}
+                              >
+                                <Trash2 size={14} color="#ef4444" />
+                              </TouchableOpacity>
+                            ) : (
+                              <View style={styles.setRowDeleteBtnPlaceholder} />
                             )}
-                          </TouchableOpacity>
+                          </View>
                         ))}
-                        </View>
                       </View>
+
+                      {/* Add Set Button */}
+                      <TouchableOpacity
+                        style={styles.addSetDashedBtn}
+                        onPress={handleAddSet}
+                        activeOpacity={0.7}
+                      >
+                        <Plus size={14} color={Colors.primary} style={{ marginRight: 4 }} />
+                        <Text style={styles.addSetDashedBtnText}>Add Set</Text>
+                      </TouchableOpacity>
                     </View>
                   );
                 })}
               </View>
+            </>
+          ) : isRunning ? (
+            <>
+              <View style={styles.exerciseHeader}>
+                <View style={styles.routineHighlightBadge}>
+                  <View style={styles.tagChipContent}>
+                    <Shuffle size={10} color={Colors.primaryContainer} style={{ marginRight: 4 }} />
+                    <Text style={styles.tagChipText}>Freestyle</Text>
+                  </View>
+                  <View style={styles.unitToggleRow}>
+                    <TouchableOpacity onPress={() => toggleUnit(true)}>
+                      <Text style={[styles.unitBtn, isLbs && styles.unitBtnActive]}>lbs</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.unitSlash}>/</Text>
+                    <TouchableOpacity onPress={() => toggleUnit(false)}>
+                      <Text style={[styles.unitBtn, !isLbs && styles.unitBtnActive]}>kg</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <Text style={styles.exerciseTitle}>Freestyle Workout</Text>
+              </View>
+
+              {exercisesList.length === 0 ? (
+                <View style={styles.freestyleEmptyState}>
+                  <Text style={styles.freestyleEmptyText}>
+                    Use the search bar at the top to search and add exercises to this workout session.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.routineWorkoutList}>
+                  {exercisesList.map((exercise) => {
+                    const exerciseSets = setsList
+                      .filter((s) => s.exerciseId === exercise.id)
+                      .sort((a, b) => a.setNum - b.setNum);
+
+                    return (
+                      <View key={exercise.id} style={styles.routineWorkoutRow}>
+                        <View style={styles.routineWorkoutHeader}>
+                          <Text style={styles.routineWorkoutName}>{exercise.name}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <TouchableOpacity
+                              style={styles.instructionIconButton}
+                              onPress={() => handleOpenExerciseDetailByName(exercise.name)}
+                              activeOpacity={0.7}
+                            >
+                              <Info size={16} color={Colors.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.instructionIconButton, { marginLeft: 12 }]}
+                              onPress={() => handleDeleteFreestyleExercise(exercise.id)}
+                              activeOpacity={0.7}
+                            >
+                              <Trash2 size={16} color="#ef4444" />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        {/* Sets Table */}
+                        <View style={styles.setsTableContainer}>
+                          {/* Table Header */}
+                          <View style={styles.setsTableHeader}>
+                            <Text style={[styles.setsTableHeaderCell, styles.cellCheck]} />
+                            <Text style={[styles.setsTableHeaderCell, styles.cellLabel]}>Set</Text>
+                            <Text style={[styles.setsTableHeaderCell, styles.cellInput]}>{isLbs ? 'lbs' : 'kg'}</Text>
+                            <Text style={[styles.setsTableHeaderCell, styles.cellInput]}>Reps</Text>
+                            <Text style={[styles.setsTableHeaderCell, styles.cellAction]} />
+                          </View>
+
+                          {/* Table Rows */}
+                          {exerciseSets.map((setDetail, setIndex) => (
+                            <View key={setDetail.id} style={[styles.setsTableRow, setDetail.isChecked && styles.setsTableRowDone]}>
+                              {/* Checkbox */}
+                              <TouchableOpacity
+                                style={[styles.setRowCheckBtn, setDetail.isChecked && styles.setRowCheckBtnDone]}
+                                onPress={() => handleToggleFreestyleSet(setDetail)}
+                                activeOpacity={0.7}
+                              >
+                                {setDetail.isChecked && <Check size={10} color="#ffffff" strokeWidth={3} />}
+                              </TouchableOpacity>
+
+                              {/* Label */}
+                              <View style={styles.setRowLabelContainer}>
+                                <Text style={styles.setRowLabel}>Set {setDetail.setNum}</Text>
+                              </View>
+
+                              {/* Weight Input */}
+                              <TextInput
+                                style={[styles.setRowInput, setDetail.isChecked && styles.setRowInputDone]}
+                                value={String(setDetail.weight || '')}
+                                onChangeText={(val) => handleFreestyleWeightChange(setDetail.id, val)}
+                                keyboardType="decimal-pad"
+                                textAlign="center"
+                                editable={!setDetail.isChecked}
+                                placeholder="0"
+                                placeholderTextColor={Colors.outline}
+                              />
+
+                              {/* Reps Input */}
+                              <TextInput
+                                style={[styles.setRowInput, setDetail.isChecked && styles.setRowInputDone]}
+                                value={String(setDetail.reps || '')}
+                                onChangeText={(val) => handleFreestyleRepsChange(setDetail.id, val)}
+                                keyboardType="number-pad"
+                                textAlign="center"
+                                editable={!setDetail.isChecked}
+                                placeholder="0"
+                                placeholderTextColor={Colors.outline}
+                              />
+
+                              {/* Action Button */}
+                              {exerciseSets.length > 1 ? (
+                                <TouchableOpacity
+                                  style={styles.setRowDeleteBtn}
+                                  onPress={() => handleDeleteFreestyleSet(exercise.id, setDetail.id)}
+                                  activeOpacity={0.7}
+                                >
+                                  <Trash2 size={14} color="#ef4444" />
+                                </TouchableOpacity>
+                              ) : (
+                                <View style={styles.setRowDeleteBtnPlaceholder} />
+                              )}
+                            </View>
+                          ))}
+                        </View>
+
+                        {/* Add Set Button */}
+                        <TouchableOpacity
+                          style={styles.addSetDashedBtn}
+                          onPress={() => handleAddFreestyleSet(exercise)}
+                          activeOpacity={0.7}
+                        >
+                          <Plus size={14} color={Colors.primary} style={{ marginRight: 4 }} />
+                          <Text style={styles.addSetDashedBtnText}>Add Set</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
             </>
           ) : (
             <View style={styles.routineEmptyState}>
@@ -1843,78 +2635,23 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           )}
         </View>
 
-        {/* Set History Table */}
-        {currentExerciseSets.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>SET HISTORY</Text>
 
-            <View style={styles.tableHeader}>
-              <Text style={[styles.thText, { flex: 0.6 }]}>Set #</Text>
-              <Text style={[styles.thText, { flex: 1.4 }]}>Previous</Text>
-              <Text style={[styles.thText, { flex: 2 }]}>Log</Text>
-              <Text style={[styles.thText, { flex: 0.8, textAlign: 'right' }]}>Done</Text>
-            </View>
-
-            <View style={styles.tableBody}>
-              {currentExerciseSets.map((set) => {
-                const animValue = swipeAnimRefs.current[set.id] || new Animated.Value(0);
-                const panResponder = createSwipeHandler(set.id);
-
-                return (
-                  <Animated.View
-                    key={set.id}
-                    style={[
-                      styles.tableRowWrapper,
-                      {
-                        transform: [{ translateX: animValue }],
-                        backgroundColor: animValue.interpolate({
-                          inputRange: [0, 100],
-                          outputRange: [set.isChecked ? 'rgba(16, 185, 129, 0.15)' : 'transparent', '#10b981'],
-                        }),
-                      },
-                    ]}
-                    {...panResponder.panHandlers}
-                  >
-                    <TouchableOpacity
-                      style={styles.tableRowContent}
-                      onPress={() => handleFillFromSet(set)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.tdSetNum, { flex: 0.6 }]}>{set.setNum}</Text>
-                      <Text style={[styles.tdPrevious, { flex: 1.4 }]}>
-                        {set.setNum === 1 ? '175 lbs × 8' : set.setNum === 2 ? '175 lbs × 8' : '—'}
-                      </Text>
-                      <Text style={[styles.tdLog, { flex: 2 }]}>
-                        {set.weight} {isLbs ? 'lbs' : 'kg'} ×{' '}
-                        {set.repsLeft !== undefined && set.repsRight !== undefined
-                          ? `L${set.repsLeft} R${set.repsRight}`
-                          : `${set.reps}`}{' '}
-                        (RIR {set.rir})
-                      </Text>
-                      <View style={{ flex: 0.8, alignItems: 'flex-end' }}>
-                        <Copy size={14} color={Colors.outline} opacity={0.5} />
-                      </View>
-                    </TouchableOpacity>
-                  </Animated.View>
-                );
-              })}
-            </View>
-          </View>
-        )}
 
         {completedWorkouts.length > 0 && (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>RECENT SAVED WORKOUTS</Text>
+            <Text style={styles.cardTitle}>WORKOUT HISTORY</Text>
             <View style={styles.savedWorkoutList}>
               {completedWorkouts.map((workout, index) => {
                 const syncStatus = workout.sync_status || 'pending';
                 return (
-                  <View
+                  <TouchableOpacity
                     key={workout.id}
                     style={[
                       styles.savedWorkoutRow,
                       index > 0 && styles.savedWorkoutRowBorder
                     ]}
+                    onPress={() => setSelectedHistoryWorkout(workout)}
+                    activeOpacity={0.7}
                   >
                     <View style={styles.savedWorkoutLeft}>
                       <View style={styles.savedWorkoutIconWrapper}>
@@ -1931,6 +2668,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                         </View>
                         <Text style={styles.savedWorkoutDate}>
                           {workout.performed_at.split('T')[0]}
+                          {getWorkoutDurationLabel(workout.notes) ? ` · ${getWorkoutDurationLabel(workout.notes)}` : ''}
                         </Text>
                         <Text style={styles.savedWorkoutSetsText} numberOfLines={1}>
                           {[...new Set(workout.sets.map((s) => s.exercise_name))]
@@ -1943,7 +2681,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                       <Text style={styles.savedWorkoutSetsNumber}>{workout.sets.length}</Text>
                       <Text style={styles.savedWorkoutSetsLabel}>sets</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </View>
@@ -1959,7 +2697,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         onRequestClose={() => setShowRoutineModal(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.routineModalShell}
         >
           {/* Fixed header — always visible */}
@@ -1981,6 +2719,18 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
               onChangeText={setRoutineNameInput}
               placeholderTextColor={Colors.outline}
             />
+
+            <View style={styles.routineRestTimeRow}>
+              <Text style={styles.routineRestTimeLabel}>Rest duration (seconds):</Text>
+              <TextInput
+                style={styles.routineRestTimeInput}
+                placeholder="90"
+                value={routineRestTimeInput}
+                onChangeText={setRoutineRestTimeInput}
+                keyboardType="number-pad"
+                placeholderTextColor={Colors.outline}
+              />
+            </View>
           </View>
 
           {/* Scrollable body — map + exercises flow together */}
@@ -1991,6 +2741,8 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {/* Search Bar for Routine Builder */}
+            {renderSearchSection('routine')}
             {/* Body map picker */}
             <View style={styles.routinePickerCard}>
               <Text style={styles.routinePickerTitle}>Tap a muscle to add exercises</Text>
@@ -2080,6 +2832,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                           textAlign="center"
                         />
                       </View>
+
                       <View style={styles.metricCol}>
                         <Text style={styles.metricLabel}>Unit</Text>
                         <View style={styles.unitToggleRowSmall}>
@@ -2140,7 +2893,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         onRequestClose={() => setShowCustomExerciseModal(false)}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
         >
           <View style={styles.modalContent}>
@@ -2223,7 +2976,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         }}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.modalOverlay}
         >
           <View style={styles.configSheet}>
@@ -2354,6 +3107,327 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Exercise Detail Modal */}
+      <Modal
+        visible={!!exerciseDetailItem}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setExerciseDetailItem(null)}
+      >
+        <TouchableOpacity
+          style={styles.detailModalOverlay}
+          activeOpacity={1}
+          onPress={() => setExerciseDetailItem(null)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.detailModalSheet}
+          >
+            <View style={styles.routineModalHandleBar} />
+            <View style={styles.detailModalHeader}>
+              <Text style={styles.detailModalTitle}>{exerciseDetailItem?.name}</Text>
+              <TouchableOpacity onPress={() => setExerciseDetailItem(null)} activeOpacity={0.6}>
+                <X size={20} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={styles.detailModalScroll}
+              contentContainerStyle={styles.detailModalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {exerciseDetailItem && (
+                <>
+                  <View style={styles.detailBadgesRow}>
+                    <View style={styles.detailBadge}>
+                      <Text style={styles.detailBadgeText}>{exerciseDetailItem.target}</Text>
+                    </View>
+                    <View style={[styles.detailBadge, styles.detailBadgeEquipment]}>
+                      <Text style={styles.detailBadgeText}>{exerciseDetailItem.equipment}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.detailGifContainer}>
+                    <Image
+                      source={getGifSource(exerciseDetailItem)}
+                      style={styles.detailGif}
+                      contentFit="contain"
+                    />
+                  </View>
+                  <Text style={styles.detailSectionTitle}>Instructions</Text>
+                  {exerciseDetailItem.instructions && exerciseDetailItem.instructions.length > 0 ? (
+                    exerciseDetailItem.instructions.map((step, idx) => (
+                      <View key={idx} style={styles.detailStepRow}>
+                        <Text style={styles.detailStepNumber}>{idx + 1}</Text>
+                        <Text style={styles.detailStepText}>{step}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.detailNoSteps}>No instructions available.</Text>
+                  )}
+
+                  {/* Context-aware CTA button at the bottom of the details */}
+                  {(() => {
+                    const isFreestyleActive = isRunning && !activeRoutine;
+                    const showAddButton = showRoutineModal || isFreestyleActive;
+                    if (!showAddButton) return null;
+
+                    const handleAddFromDetail = () => {
+                      const item = exerciseDetailItem;
+                      setExerciseDetailItem(null);
+                      if (showRoutineModal) {
+                        setExerciseBrowserTarget('routine');
+                        handleAddExerciseFromBrowser(item);
+                      } else if (isFreestyleActive) {
+                        setExerciseBrowserTarget('workout');
+                        handleAddExerciseFromBrowser(item);
+                      }
+                    };
+
+                    return (
+                      <TouchableOpacity
+                        style={styles.detailModalAddBtn}
+                        onPress={handleAddFromDetail}
+                        activeOpacity={0.8}
+                      >
+                        <Plus size={14} color="#ffffff" style={{ marginRight: 6 }} />
+                        <Text style={styles.detailModalAddBtnText}>
+                          {showRoutineModal ? 'Add to Routine' : 'Add to Workout'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
+                </>
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Workout History Detail Modal */}
+      <Modal
+        visible={!!selectedHistoryWorkout}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedHistoryWorkout(null)}
+      >
+        <TouchableOpacity
+          style={styles.detailModalOverlay}
+          activeOpacity={1}
+          onPress={() => setSelectedHistoryWorkout(null)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[styles.detailModalSheet, { maxHeight: '85%' }]}
+          >
+            <View style={styles.routineModalHandleBar} />
+            <View style={styles.detailModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.detailModalTitle}>{selectedHistoryWorkout?.name}</Text>
+                <Text style={styles.savedWorkoutDate}>
+                  {selectedHistoryWorkout?.performed_at.split('T')[0]}
+                  {selectedHistoryWorkout && getWorkoutDurationLabel(selectedHistoryWorkout.notes)
+                    ? ` · ${getWorkoutDurationLabel(selectedHistoryWorkout.notes)}`
+                    : ''}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedHistoryWorkout(null)} activeOpacity={0.6}>
+                <X size={20} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            {/* "Save as Routine Template" Button Action Row */}
+            <View style={styles.historyModalActionRow}>
+              <TouchableOpacity
+                style={styles.historyMakeRoutineBtn}
+                onPress={handleCreateRoutineFromHistory}
+                activeOpacity={0.8}
+              >
+                <Plus size={14} color="#ffffff" style={{ marginRight: 6 }} />
+                <Text style={styles.historyMakeRoutineBtnText}>Save as Routine Template</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.detailModalScroll}
+              contentContainerStyle={styles.detailModalScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {selectedHistoryWorkout && (() => {
+                // Group sets by exercise name
+                const groups: { [exerciseName: string]: { muscleGroup: string | null; sets: typeof selectedHistoryWorkout.sets } } = {};
+                selectedHistoryWorkout.sets.forEach((set) => {
+                  if (!groups[set.exercise_name]) {
+                    groups[set.exercise_name] = {
+                      muscleGroup: set.muscle_group,
+                      sets: []
+                    };
+                  }
+                  groups[set.exercise_name].sets.push(set);
+                });
+
+                return (
+                  <View style={styles.workoutHistoryDetailContent}>
+                    {Object.entries(groups).map(([exerciseName, groupInfo]) => {
+                      const sortedSets = groupInfo.sets.sort((a, b) => a.set_number - b.set_number);
+                      return (
+                        <View key={exerciseName} style={styles.historyDetailExerciseCard}>
+                          <View style={styles.historyDetailExerciseHeader}>
+                            <Text style={styles.historyDetailExerciseName}>{exerciseName}</Text>
+                            {groupInfo.muscleGroup && (
+                              <View style={styles.historyDetailMuscleBadge}>
+                                <Text style={styles.historyDetailMuscleBadgeText}>{groupInfo.muscleGroup}</Text>
+                              </View>
+                            )}
+                          </View>
+
+                          <View style={styles.historyDetailSetsList}>
+                            {/* Header for sets list */}
+                            <View style={styles.historyDetailSetsHeader}>
+                              <Text style={[styles.historyDetailHeaderCell, { width: 60, textAlign: 'left' }]}>Set</Text>
+                              <Text style={[styles.historyDetailHeaderCell, { flex: 1, textAlign: 'center' }]}>Weight</Text>
+                              <Text style={[styles.historyDetailHeaderCell, { flex: 1, textAlign: 'center' }]}>Reps</Text>
+                            </View>
+
+                            {/* Set rows */}
+                            {sortedSets.map((set, setIndex) => {
+                              const weightVal = set.weight_kg !== null
+                                ? formatWeight(isLbs ? set.weight_kg / 0.45359237 : set.weight_kg)
+                                : '—';
+                              return (
+                                <View key={set.id || setIndex} style={styles.historyDetailSetRow}>
+                                  <Text style={[styles.historyDetailCellText, { width: 60, textAlign: 'left', fontWeight: fontWeight.semiBold }]}>
+                                    Set {set.set_number}
+                                  </Text>
+                                  <Text style={[styles.historyDetailCellText, { flex: 1, textAlign: 'center' }]}>
+                                    {weightVal} {weightVal !== '—' ? (isLbs ? 'lbs' : 'kg') : ''}
+                                  </Text>
+                                  <Text style={[styles.historyDetailCellText, { flex: 1, textAlign: 'center' }]}>
+                                    {set.reps !== null ? set.reps : '—'} reps
+                                  </Text>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                );
+              })()}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Workout Naming Modal (Phase 17) */}
+      <Modal
+        visible={showNamingModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNamingModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.namingModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowNamingModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.namingModalSheet}
+          >
+            <Text style={styles.namingModalTitle}>Save Workout</Text>
+            <Text style={styles.namingModalSubtitle}>
+              Give this workout session a name to record it to history.
+            </Text>
+
+            <View style={styles.namingInputContainer}>
+              <TextInput
+                style={styles.namingInputField}
+                placeholder="Workout Name (e.g. Legs Day)"
+                placeholderTextColor={Colors.outline}
+                value={customWorkoutName}
+                onChangeText={setCustomWorkoutName}
+                autoFocus
+              />
+              {customWorkoutName.length > 0 && (
+                <TouchableOpacity
+                  style={styles.namingClearBtn}
+                  onPress={() => setCustomWorkoutName('')}
+                >
+                  <X size={16} color={Colors.outline} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <View style={styles.namingBtnRow}>
+              <TouchableOpacity
+                style={styles.namingCancelBtn}
+                onPress={() => setShowNamingModal(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.namingCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.namingSaveBtn}
+                onPress={handleSaveCustomFreestyleWorkout}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.namingSaveBtnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Rest Timer Floating Panel */}
+      {restTimeRemaining !== null && (
+        <View style={styles.restFloatingContainer}>
+          <View style={styles.restFloatingHeader}>
+            <Text style={styles.restFloatingTitle}>REST TIMER</Text>
+            <Text style={styles.restFloatingExercise} numberOfLines={1}>
+              {restExerciseName}
+            </Text>
+          </View>
+
+          <View style={styles.restCountdownRow}>
+            <Text style={styles.restCountdownText}>
+              Resting: {Math.floor(restTimeRemaining / 60)}:{String(restTimeRemaining % 60).padStart(2, '0')} remaining
+            </Text>
+            <Text style={styles.restNextSetText}>
+              Next: Set {restNextSetNum} of {restNextExerciseName}
+            </Text>
+          </View>
+
+          {/* Progress bar container */}
+          <View style={styles.restProgressContainer}>
+            <View
+              style={[
+                styles.restProgressBarFill,
+                { width: `${((restTimeTotal - restTimeRemaining) / restTimeTotal) * 100}%` }
+              ]}
+            />
+          </View>
+
+          <View style={styles.restButtonRow}>
+            <TouchableOpacity
+              style={styles.restActionBtn}
+              onPress={() => setRestTimeRemaining((prev) => (prev !== null ? prev + 30 : null))}
+            >
+              <Text style={styles.restActionBtnText}>+30s</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.restActionBtn, styles.restSkipBtn]}
+              onPress={() => {
+                setRestTimeRemaining(null);
+                triggerToast('Rest timer skipped');
+              }}
+            >
+              <Text style={styles.restSkipBtnText}>Skip</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </>
   );
 }
@@ -2679,9 +3753,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(186, 26, 26, 0.08)',
   },
   exerciseHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: 'column',
+    alignItems: 'stretch',
     marginBottom: spacing.md,
   },
   exerciseTitleRow: {
@@ -2692,8 +3765,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  tagChip: {
+  routineHighlightBadge: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    paddingHorizontal: spacing.base,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    marginBottom: spacing.sm,
+  },
+  tagChip: {
+    backgroundColor: 'rgba(14, 165, 233, 0.18)',
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radius.full,
@@ -2906,28 +3989,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  welcomeSection: {
-    marginBottom: spacing.base,
-    marginTop: spacing.xs,
-  },
-  welcomeGreetingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  greetingSparkle: {
-    marginTop: -2,
-  },
-  welcomeTitle: {
-    fontSize: typography.xl,
-    fontWeight: fontWeight.bold,
-    color: Colors.onSurface,
-  },
-  welcomeSubtitle: {
-    fontSize: typography.sm,
-    color: Colors.onSurfaceVariant,
-    marginTop: 2,
-  },
   routineCard: {
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: radius.lg,
@@ -3053,12 +4114,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     minHeight: layout.minTouchTarget,
     justifyContent: 'center',
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
     marginTop: spacing.xs,
+    ...Platform.select({
+      ios: {
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 0,
+      },
+    }),
   },
   routineStartButtonActive: {
     backgroundColor: 'rgba(16, 185, 129, 0.15)',
@@ -3075,20 +4142,43 @@ const styles = StyleSheet.create({
   routineStartTextActive: {
     color: '#10b981',
   },
+  routineActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
   routineEditButton: {
-    paddingVertical: spacing.sm,
+    flex: 1,
+    paddingVertical: spacing.xs,
     borderRadius: radius.full,
     alignItems: 'center',
     backgroundColor: Colors.surfaceContainerLowest,
     borderWidth: 1,
     borderColor: 'rgba(0, 101, 145, 0.25)',
-    minHeight: layout.minTouchTarget,
+    minHeight: 36,
     justifyContent: 'center',
   },
   routineEditText: {
-    fontSize: typography.sm,
+    fontSize: typography.xs,
     fontWeight: fontWeight.bold,
     color: Colors.primary,
+  },
+  routineDeleteButton: {
+    flex: 1,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.25)',
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  routineDeleteText: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: '#ef4444',
   },
   routineWorkoutList: {
     gap: spacing.sm,
@@ -3310,6 +4400,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     fontSize: typography.base,
     color: Colors.onSurface,
+  },
+  routineRestTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+  },
+  routineRestTimeLabel: {
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    fontWeight: fontWeight.medium,
+  },
+  routineRestTimeInput: {
+    height: 36,
+    width: 80,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+    borderRadius: radius.md,
+    backgroundColor: Colors.background,
+    paddingHorizontal: spacing.sm,
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    textAlign: 'center',
   },
   routineModalScroll: {
     backgroundColor: Colors.surfaceContainerLowest,
@@ -3596,5 +4709,657 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
     marginTop: 6,
+  },
+  detailModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  detailModalSheet: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.base,
+    maxHeight: '82%',
+    minHeight: '60%',
+  },
+  detailModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  detailModalTitle: {
+    fontSize: typography.base + 2,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    flex: 1,
+    marginRight: spacing.base,
+    textTransform: 'capitalize',
+  },
+  detailModalScroll: {
+    flex: 1,
+  },
+  detailModalScrollContent: {
+    paddingBottom: spacing.xxl,
+  },
+  detailBadgesRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginBottom: spacing.base,
+  },
+  detailBadge: {
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+  },
+  detailBadgeEquipment: {
+    backgroundColor: 'rgba(0, 101, 145, 0.08)',
+    borderColor: 'rgba(0, 101, 145, 0.15)',
+  },
+  detailBadgeText: {
+    fontSize: typography.xs,
+    color: Colors.primary,
+    fontWeight: fontWeight.medium,
+    textTransform: 'capitalize',
+  },
+  detailGifContainer: {
+    width: '100%',
+    height: 260,
+    backgroundColor: '#f8fafc',
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.base,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.1)',
+  },
+  detailGif: {
+    width: '100%',
+    height: '100%',
+  },
+  detailSectionTitle: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  detailStepRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    alignItems: 'flex-start',
+  },
+  detailStepNumber: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0, 101, 145, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    textAlign: 'center',
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.primary,
+    lineHeight: 22,
+  },
+  detailStepText: {
+    flex: 1,
+    fontSize: typography.sm,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 20,
+  },
+  detailNoSteps: {
+    fontSize: typography.sm,
+    color: Colors.outline,
+    fontStyle: 'italic',
+  },
+  instructionIconButton: {
+    padding: spacing.xs,
+    marginRight: -spacing.xs,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Rest Timer HUD Styling
+  restFloatingContainer: {
+    position: 'absolute',
+    bottom: 90, // Positioned above the bottom navigation tab bar (clears Gym tab bar)
+    left: spacing.lg,
+    right: spacing.lg,
+    backgroundColor: '#0c1a30',
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1.5,
+    borderColor: 'rgba(14, 165, 233, 0.3)',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+  },
+  restFloatingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  restFloatingTitle: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: '#38bdf8',
+    letterSpacing: 1,
+  },
+  restFloatingExercise: {
+    fontSize: typography.xs,
+    color: 'rgba(255, 255, 255, 0.7)',
+    maxWidth: '60%',
+  },
+  restCountdownRow: {
+    flexDirection: 'column',
+    marginBottom: spacing.sm,
+    gap: 2,
+  },
+  restCountdownText: {
+    fontSize: typography.lg,
+    fontWeight: fontWeight.bold,
+    color: '#ffffff',
+  },
+  restNextSetText: {
+    fontSize: typography.sm,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: fontWeight.medium,
+  },
+  restProgressContainer: {
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: radius.full,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+  },
+  restProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#0ea5e9',
+    borderRadius: radius.full,
+  },
+  restButtonRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  restActionBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(14, 165, 233, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(14, 165, 233, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  restActionBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#38bdf8',
+  },
+  restSkipBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  restSkipBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#f87171',
+  },
+  // Sets Table Styles (Phase 16)
+  setsTableContainer: {
+    width: '100%',
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  setsTableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.15)',
+    marginBottom: spacing.xs,
+  },
+  setsTableHeaderCell: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+  },
+  cellCheck: {
+    width: 32,
+  },
+  cellLabel: {
+    flex: 1.2,
+    textAlign: 'left',
+    paddingLeft: spacing.xs,
+  },
+  cellInput: {
+    flex: 2,
+  },
+  cellAction: {
+    width: 36,
+  },
+  setsTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    borderRadius: radius.md,
+    marginVertical: 2,
+    backgroundColor: 'transparent',
+  },
+  setsTableRowDone: {
+    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+  },
+  setRowCheckBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: 'rgba(190, 200, 210, 0.5)',
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  setRowCheckBtnDone: {
+    borderColor: '#10b981',
+    backgroundColor: '#10b981',
+  },
+  setRowLabelContainer: {
+    flex: 1.2,
+    justifyContent: 'center',
+    paddingLeft: spacing.xs,
+  },
+  setRowLabel: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.semiBold,
+    color: Colors.onSurface,
+  },
+  setRowInput: {
+    flex: 2,
+    height: 36,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+    borderRadius: radius.md,
+    backgroundColor: Colors.surfaceContainerLow,
+    marginHorizontal: 4,
+    fontSize: typography.sm,
+    fontWeight: fontWeight.semiBold,
+    color: Colors.onSurface,
+  },
+  setRowInputDone: {
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'rgba(16, 185, 129, 0.02)',
+    color: Colors.outline,
+  },
+  setRowDeleteBtn: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  setRowDeleteBtnPlaceholder: {
+    width: 36,
+  },
+  addSetDashedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 36,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(14, 165, 233, 0.4)',
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(14, 165, 233, 0.03)',
+    marginTop: spacing.xs,
+  },
+  addSetDashedBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.primary,
+  },
+  // Workout History Detail Styles (Phase 16 Extension)
+  workoutHistoryDetailContent: {
+    marginTop: spacing.sm,
+  },
+  historyDetailExerciseCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    padding: spacing.base,
+    marginBottom: spacing.base,
+  },
+  historyDetailExerciseHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.15)',
+    paddingBottom: spacing.xs,
+  },
+  historyDetailExerciseName: {
+    fontSize: typography.base,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    flex: 1,
+  },
+  historyDetailMuscleBadge: {
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    borderRadius: radius.xs,
+    paddingHorizontal: spacing.xs + 2,
+    paddingVertical: 2,
+  },
+  historyDetailMuscleBadgeText: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.primary,
+    textTransform: 'uppercase',
+  },
+  historyDetailSetsList: {
+    width: '100%',
+  },
+  historyDetailSetsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.1)',
+    marginBottom: 4,
+  },
+  historyDetailHeaderCell: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  historyDetailSetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.05)',
+  },
+  historyDetailCellText: {
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+  },
+  // Global Search Styles (Phase 17)
+  searchSectionContainer: {
+    marginHorizontal: spacing.base,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    zIndex: 100,
+  },
+  searchBarWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    paddingHorizontal: spacing.sm,
+    height: 44,
+  },
+  searchIcon: {
+    marginRight: spacing.xs,
+  },
+  searchInputField: {
+    flex: 1,
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    height: '100%',
+    paddingVertical: 0,
+  },
+  searchClearBtn: {
+    padding: 4,
+  },
+  searchResultsContainer: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+    marginTop: spacing.xs,
+    padding: spacing.sm,
+    maxHeight: 280,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+  },
+  searchResultsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.15)',
+    paddingBottom: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  searchResultsTitle: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  searchNoResults: {
+    paddingVertical: spacing.base,
+    alignItems: 'center',
+  },
+  searchNoResultsText: {
+    fontSize: typography.sm,
+    color: Colors.outline,
+    fontStyle: 'italic',
+  },
+  searchResultsScroll: {
+    maxHeight: 220,
+  },
+  searchResultsScrollContent: {
+    paddingBottom: spacing.xs,
+  },
+  searchResultRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.08)',
+  },
+  searchResultLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  searchResultIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.sm,
+  },
+  searchResultInfo: {
+    flex: 1,
+  },
+  searchResultName: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+  },
+  searchResultMeta: {
+    fontSize: typography.xs,
+    color: Colors.outline,
+    marginTop: 2,
+  },
+  searchResultAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(14, 165, 233, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(14, 165, 233, 0.25)',
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  searchResultAddText: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.primary,
+  },
+  searchResultChevron: {
+    padding: spacing.xs,
+  },
+  detailModalAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    borderRadius: radius.md,
+    height: 44,
+    marginTop: spacing.base,
+    marginBottom: spacing.xs,
+  },
+  detailModalAddBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#ffffff',
+  },
+  // Freestyle empty states (Phase 17)
+  freestyleEmptyState: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    borderStyle: 'dashed',
+    marginVertical: spacing.sm,
+  },
+  freestyleEmptyText: {
+    fontSize: typography.sm,
+    color: Colors.outline,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  // Naming Modal Styles (Phase 17)
+  namingModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.base,
+  },
+  namingModalSheet: {
+    backgroundColor: Colors.surface,
+    borderRadius: radius.lg,
+    width: '100%',
+    maxWidth: 340,
+    padding: spacing.base,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+  },
+  namingModalTitle: {
+    fontSize: typography.md,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    marginBottom: spacing.xs,
+  },
+  namingModalSubtitle: {
+    fontSize: typography.sm,
+    color: Colors.outline,
+    marginBottom: spacing.base,
+  },
+  namingInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.15)',
+    paddingHorizontal: spacing.sm,
+    height: 44,
+    marginBottom: spacing.base,
+  },
+  namingInputField: {
+    flex: 1,
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    height: '100%',
+    paddingVertical: 0,
+  },
+  namingClearBtn: {
+    padding: 4,
+  },
+  namingBtnRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+  },
+  namingCancelBtn: {
+    paddingHorizontal: spacing.base,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+  },
+  namingCancelBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.semiBold,
+    color: Colors.outline,
+  },
+  namingSaveBtn: {
+    paddingHorizontal: spacing.base,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    backgroundColor: Colors.primary,
+  },
+  namingSaveBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#ffffff',
+  },
+  historyModalActionRow: {
+    paddingHorizontal: spacing.base,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(190, 200, 210, 0.15)',
+    marginBottom: spacing.xs,
+  },
+  historyMakeRoutineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    borderRadius: radius.md,
+    height: 38,
+    width: '100%',
+  },
+  historyMakeRoutineBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#ffffff',
   },
 });

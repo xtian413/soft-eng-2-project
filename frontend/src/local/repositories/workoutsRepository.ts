@@ -299,6 +299,29 @@ export async function getRecentWorkoutsByUser(
   }
 }
 
+export async function getWorkoutsByUserSince(
+  userId: string,
+  sinceDate: string
+): Promise<LocalWorkoutWithSets[]> {
+  try {
+    assertUserId(userId);
+
+    const db = await initializeLocalDatabase();
+    const workouts = await db.getAllAsync<LocalWorkout>(
+      `SELECT ${WORKOUT_COLUMNS}
+       FROM ${LOCAL_TABLES.workouts}
+       WHERE user_id = ? AND performed_at >= ? AND deleted_at IS NULL
+       ORDER BY performed_at DESC`,
+      userId,
+      sinceDate
+    );
+
+    return await attachSets(userId, workouts);
+  } catch (error) {
+    wrapWorkoutError('read workouts since', error);
+  }
+}
+
 export async function getUnsyncedNewWorkoutsByUser(userId: string): Promise<LocalWorkoutWithSets[]> {
   try {
     assertUserId(userId);

@@ -13,9 +13,9 @@ const DIET_STORAGE_KEY = 'gemi:dietLogs';
 // The Android emulator reaches the host machine via the special 10.0.2.2 gateway.
 const DEFAULT_INSIGHT_MAX_TOKENS = 96;
 const DEFAULT_FITNESS_INSIGHT_MAX_TOKENS = 300;
-const DEFAULT_FITNESS_INSIGHT_TIMEOUT_MS = 90_000;
+const DEFAULT_FITNESS_INSIGHT_TIMEOUT_MS = 180_000;
 const DEFAULT_INSIGHT_CHAT_MAX_TOKENS = 128;
-const DEFAULT_INSIGHT_CHAT_TIMEOUT_MS = 90_000;
+const DEFAULT_INSIGHT_CHAT_TIMEOUT_MS = 180_000;
 const DEFAULT_TEMPERATURE = 0.7;
 import { Platform } from 'react-native';
 

@@ -1,4 +1,5 @@
 import { Asset } from 'expo-asset';
+import { LOCAL_GIFS } from './localGifs';
 
 const EXERCISE_CSV = require('../../assets/exercises.csv');
 
@@ -444,3 +445,18 @@ class ExerciseDbService {
 }
 
 export const exerciseDbService = new ExerciseDbService();
+
+export function getGifSource(item: ExerciseDbExercise): any {
+  if (!item) return null;
+  const localGif = LOCAL_GIFS[item.id];
+  if (localGif) {
+    return localGif;
+  }
+
+  // Fallback to official high-speed CloudFront CDN if URL points to broken exercisedb.io domain
+  if (item.gifUrl && item.gifUrl.includes('exercisedb.io/image')) {
+    return { uri: `https://d205bpvrqc9yn1.cloudfront.net/${item.id}.gif` };
+  }
+
+  return item.gifUrl ? { uri: item.gifUrl } : null;
+}

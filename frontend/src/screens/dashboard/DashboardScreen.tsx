@@ -822,7 +822,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(33, 49, 69, 0.95)',
+    backgroundColor: Colors.primary,
     paddingHorizontal: spacing.base,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
@@ -830,12 +830,12 @@ const styles = StyleSheet.create({
     maxWidth: '90%',
     ...Platform.select({
       web: {
-        boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.15)',
+        boxShadow: '0px 4px 10px rgba(0, 101, 145, 0.25)',
       },
       default: {
-        shadowColor: '#000',
+        shadowColor: Colors.primary,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
+        shadowOpacity: 0.2,
         shadowRadius: 10,
         elevation: 10,
       },
@@ -845,7 +845,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.xs,
   },
   toastText: {
-    color: Colors.inverseOnSurface,
+    color: '#ffffff',
     fontSize: typography.sm,
     fontWeight: fontWeight.semiBold,
   },

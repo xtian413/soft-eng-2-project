@@ -22,6 +22,7 @@ export interface RoutineView {
   routines_id?: string | null;
   remote_id?: string | null;
   sync_status?: SyncStatus;
+  rest_time_seconds?: number | null;
   exercises: RoutineViewExercise[];
 }
 
@@ -31,6 +32,7 @@ export interface RoutineDraftLike {
   reps: string;
   weight: string;
   weightUnit: 'lbs' | 'kg';
+  restTimeSeconds?: string | null;
   muscleGroup?: string | null;
 }
 
@@ -38,6 +40,7 @@ export interface RemoteRoutineRow {
   id: string;
   routine_name: string;
   routines_id: string | null;
+  rest_time_seconds?: number | null;
 }
 
 export interface RemoteRoutineSetRow {
@@ -64,12 +67,14 @@ export function routineDraftsToLocalInput(
   options?: {
     remoteId?: string | null;
     remoteTemplateWorkoutId?: string | null;
+    restTimeSeconds?: number | null;
   }
 ): CreateLocalRoutineInput {
   return {
     routineName,
     remoteId: options?.remoteId ?? null,
     remoteTemplateWorkoutId: options?.remoteTemplateWorkoutId ?? null,
+    restTimeSeconds: options?.restTimeSeconds ?? null,
     exercises: drafts
       .filter((draft) => draft.name.trim().length > 0)
       .map((draft, index) => {
@@ -93,6 +98,7 @@ export function localRoutineToView(routine: LocalRoutineWithExercises): RoutineV
     routines_id: routine.remote_template_workout_id,
     remote_id: routine.remote_id,
     sync_status: routine.sync_status,
+    rest_time_seconds: routine.rest_time_seconds,
     exercises: routine.exercises
       .slice()
       .sort((left, right) => left.sort_order - right.sort_order)
@@ -117,6 +123,7 @@ export function routineViewToLocalInput(routine: RoutineView): CreateLocalRoutin
     routineName: routine.name,
     remoteId: routine.remote_id ?? null,
     remoteTemplateWorkoutId: routine.routines_id ?? null,
+    restTimeSeconds: routine.rest_time_seconds ?? null,
     exercises: routine.exercises.map((exercise, index) => ({
       id: exercise.id,
       exerciseName: exercise.exercise_name,
@@ -150,32 +157,36 @@ export function remoteRoutineToLocalInput(
   >();
 
   setRows
-    .filter((row) => row.workout_id === routine.routines_id)
+    .filter((row) => row && row.workout_id && routine && row.workout_id === routine.routines_id)
     .forEach((row) => {
-      const key = `${row.workout_id}:${row.exercise_name.trim().toLowerCase()}`;
+      const exerciseName = (row.exercise_name || '').trim();
+      if (!exerciseName) return;
+
+      const key = `${row.workout_id}:${exerciseName.toLowerCase()}`;
       const existing = grouped.get(key);
 
       if (existing) {
         existing.sets += 1;
-        existing.firstSetNumber = Math.min(existing.firstSetNumber, row.set_number);
+        existing.firstSetNumber = Math.min(existing.firstSetNumber, row.set_number || 1);
         return;
       }
 
       grouped.set(key, {
         remoteId: row.id ?? null,
-        exerciseName: row.exercise_name.trim(),
+        exerciseName,
         muscleGroup: row.muscle_group ?? null,
         sets: 1,
         reps: row.reps,
         weightKg: row.weight_kg,
-        firstSetNumber: row.set_number,
+        firstSetNumber: row.set_number || 1,
       });
     });
 
   return {
-    routineName: routine.routine_name,
+    routineName: routine.routine_name || 'Unnamed Routine',
     remoteId: routine.id,
     remoteTemplateWorkoutId: routine.routines_id ?? '',
+    restTimeSeconds: routine.rest_time_seconds ?? 90,
     exercises: [...grouped.values()]
       .sort((left, right) => left.firstSetNumber - right.firstSetNumber)
       .map((exercise, index) => ({
