@@ -6,7 +6,10 @@ import {
   normalizeRecordedDate,
   updateBodyProgressLocal,
 } from '@/local/repositories/bodyProgressRepository';
-import { upsertLocalProfile } from '@/local/repositories/profilesRepository';
+import {
+  upsertLocalProfile,
+  getProfileByUser,
+} from '@/local/repositories/profilesRepository';
 import type { LocalBodyProgress } from '@/local/schema';
 
 const LOG_PREFIX = '[GEMI_BODY_PROGRESS_SYNC]';
@@ -59,10 +62,23 @@ export async function recordWeightLocalFirst({
 
   // Body progress owns dated history; profile fields are latest-value caches.
   if (updateProfileCache) {
+    const profile = await getProfileByUser(userId);
+    const currentBaseWeight = profile?.weight_kg;
+    let shouldUpdateBaseWeight = false;
+
+    if (!currentBaseWeight) {
+      shouldUpdateBaseWeight = true;
+    } else {
+      const diff = Math.abs(weightKg - currentBaseWeight);
+      if (diff >= 2.0) {
+        shouldUpdateBaseWeight = true;
+      }
+    }
+
     await upsertLocalProfile({
       user_id: userId,
-      weight_kg: weightKg,
       current_weight_kg: weightKg,
+      ...(shouldUpdateBaseWeight ? { weight_kg: weightKg } : {}),
     });
   }
 

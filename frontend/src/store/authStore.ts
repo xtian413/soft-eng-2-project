@@ -80,14 +80,14 @@ let authSubscription: { unsubscribe: () => void } | null = null;
 
 function localProfileToState(
   profile: LocalProfile,
-  weightKg: number | null
+  latestWeightKg: number | null
 ): ProfileState {
   return {
     fullName: profile.full_name,
     heightCm: profile.height_cm,
-    weightKg,
+    weightKg: profile.weight_kg ?? null,
     startingWeightKg: (profile as any).starting_weight_kg ?? profile.weight_kg ?? null,
-    currentWeightKg: weightKg,
+    currentWeightKg: latestWeightKg ?? profile.current_weight_kg ?? profile.weight_kg ?? null,
     gender: profile.gender,
     goal: profile.goal,
     age: profile.age,
@@ -441,6 +441,7 @@ export const useAuthStore = create<AuthState>()(
           const safeProfile = await upsertRemoteProfileForUser(userId, {
             full_name: typeof data.full_name === 'string' ? data.full_name : null,
             height_cm: normalizeNumber(data.height_cm),
+            weight_kg: normalizeNumber(data.weight_kg),
             current_weight_kg: remoteWeightKg,
             gender: normalizeGender(data.gender),
             goal: normalizeGoal(data.goal),
