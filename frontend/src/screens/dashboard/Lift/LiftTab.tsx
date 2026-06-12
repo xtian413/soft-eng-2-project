@@ -2595,7 +2595,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
                             {/* Label */}
                             <View style={styles.setRowLabelContainer}>
-                              <Text style={styles.setRowLabel}>Set {setIndex + 1}</Text>
+                              <Text style={styles.setRowLabel} numberOfLines={1} ellipsizeMode="tail">Set {setIndex + 1}</Text>
                             </View>
 
                             {/* Weight Input */}
@@ -2733,7 +2733,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
 
                               {/* Label */}
                               <View style={styles.setRowLabelContainer}>
-                                <Text style={styles.setRowLabel}>Set {setDetail.setNum}</Text>
+                                <Text style={styles.setRowLabel} numberOfLines={1} ellipsizeMode="tail">Set {setDetail.setNum}</Text>
                               </View>
 
                               {/* Weight Input */}
@@ -5108,9 +5108,11 @@ const styles = StyleSheet.create({
     flex: 1.2,
     textAlign: 'left',
     paddingLeft: spacing.xs,
+    minWidth: 45,
   },
   cellInput: {
     flex: 2,
+    marginHorizontal: 4,
   },
   cellAction: {
     width: 36,
@@ -5136,6 +5138,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 4,
+    marginRight: 4,
   },
   setRowCheckBtnDone: {
     borderColor: '#10b981',
@@ -5145,6 +5148,7 @@ const styles = StyleSheet.create({
     flex: 1.2,
     justifyContent: 'center',
     paddingLeft: spacing.xs,
+    minWidth: 45,
   },
   setRowLabel: {
     fontSize: typography.sm,
@@ -5162,6 +5166,9 @@ const styles = StyleSheet.create({
     fontSize: typography.sm,
     fontWeight: fontWeight.semiBold,
     color: Colors.onSurface,
+    paddingHorizontal: 4,
+    paddingVertical: 0,
+    minWidth: 0,
   },
   setRowInputDone: {
     borderColor: 'rgba(16, 185, 129, 0.2)',
