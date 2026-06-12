@@ -14,6 +14,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Pressable,
   View,
   AppState,
   type AppStateStatus,
@@ -1081,7 +1082,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
       // Reconcile remote-deleted routines to local SQLite
       const currentLocalRoutines = await getRoutinesByUser(userId);
       for (const localOf of currentLocalRoutines) {
-        if (localOf.sync_status === 'synced' && localOf.remote_id && !remoteIds.has(localOf.remote_id)) {
+        if (localOf.remote_id && !remoteIds.has(localOf.remote_id)) {
           console.log('[LiftTab] Deleting local routine since it was deleted on remote:', localOf.id);
           await hardDeleteRoutineLocal(userId, localOf.id);
         }
@@ -3689,14 +3690,13 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
         animationType="fade"
         onRequestClose={() => setConfirmationModal((prev) => ({ ...prev, visible: false }))}
       >
-        <TouchableOpacity
+        <Pressable
           style={styles.confirmModalOverlay}
-          activeOpacity={1}
           onPress={() => setConfirmationModal((prev) => ({ ...prev, visible: false }))}
         >
-          <TouchableOpacity
-            activeOpacity={1}
+          <Pressable
             style={styles.confirmModalContent}
+            onPress={(e) => e.stopPropagation()}
           >
             <Text style={styles.confirmModalTitle}>{confirmationModal.title}</Text>
             <Text style={styles.confirmModalMessage}>{confirmationModal.message}</Text>
@@ -3726,8 +3726,8 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
                 </Text>
               </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
     </>
   );
