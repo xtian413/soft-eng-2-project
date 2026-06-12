@@ -1,27 +1,29 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import {
   buildWorkoutInsightPrompt,
   type DietLog,
   type WorkoutLog,
 } from './prompts';
 import { scanModelOutput } from './safety/safetyClassifier';
+import { useAuthStore } from '../store/authStore';
+import { getLfmModule, ensureModelInitialized } from './lfmInit';
 
 const WORKOUT_STORAGE_KEY = 'gemi:workouts';
 const DIET_STORAGE_KEY = 'gemi:dietLogs';
 
-// All inference is handled by the laptop-hosted Ollama server.
-// The Android emulator reaches the host machine via the special 10.0.2.2 gateway.
 const DEFAULT_INSIGHT_MAX_TOKENS = 96;
 const DEFAULT_FITNESS_INSIGHT_MAX_TOKENS = 300;
 const DEFAULT_FITNESS_INSIGHT_TIMEOUT_MS = 180_000;
 const DEFAULT_INSIGHT_CHAT_MAX_TOKENS = 128;
 const DEFAULT_INSIGHT_CHAT_TIMEOUT_MS = 180_000;
 const DEFAULT_TEMPERATURE = 0.7;
-import { Platform } from 'react-native';
 
 const DEFAULT_TOP_P = 0.9;
 const DEFAULT_TOP_K = 40;
 const DEFAULT_REPEAT_PENALTY = 1.05;
+
+let activeAbortController: AbortController | null = null;
 
 const getHostLlmUrl = () => {
   const envUrl = process.env.EXPO_PUBLIC_LLM_API_URL;
@@ -126,7 +128,29 @@ export function sanitizeCoachResponse(response: string) {
     .trim();
 }
 
+/**
+ * Lightweight reachability check to verify if the hosted server is running.
+ */
+async function isHostReachable(timeoutMs = 2500): Promise<boolean> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
 
+  try {
+    const baseUrl = HOST_LLM_API.replace('/api/generate', '');
+    const response = await fetch(baseUrl, {
+      method: 'GET',
+      headers: HOST_LLM_HEADERS,
+      signal: controller.signal,
+    });
+    // Ollama returns 200 or status text "Ollama is running"
+    return response.ok;
+  } catch (err) {
+    console.log('[Gemi] Host reachability check failed:', err);
+    return false;
+  } finally {
+    clearTimeout(id);
+  }
+}
 
 export async function generateWorkoutInsight(userName: string) {
   const [workouts, dietLogs] = await Promise.all([
@@ -156,45 +180,108 @@ async function generateResponseWithTimeout(
   repeatPenalty: number,
   timeoutMs: number,
 ) {
-  const startedAt = Date.now();
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const { aiMode, setLastGenerationSource } = useAuthStore.getState();
+  let routeToLocal = false;
 
-  try {
-    console.log(`[Gemi] Routing inference to host bridge: ${HOST_LLM_API}`);
-    const response = await fetch(HOST_LLM_API, {
-      method: 'POST',
-      headers: HOST_LLM_HEADERS,
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: 'qwen2.5:3b-instruct',
-        prompt,
-        stream: false,
-        keep_alive: '20m', // Keep model in memory for 20 minutes to avoid reload latency
-        options: {
-          temperature,
-          top_p: topP,
-          top_k: topK,
-          repeat_penalty: repeatPenalty,
-          num_predict: maxTokens,
-          num_ctx: 2048, // Limit context window allocation to speed up processing
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Host LLM API returned HTTP ${response.status}`);
+  if (aiMode === 'local') {
+    routeToLocal = true;
+  } else if (aiMode === 'hosted') {
+    routeToLocal = false;
+  } else {
+    // Mode is 'auto': check reachability of host
+    const reachable = await isHostReachable(2500);
+    if (!reachable) {
+      console.warn('[Gemi] Host Ollama bridge is unreachable. Falling back to on-device local inference.');
+      routeToLocal = true;
     }
+  }
 
-    const data = await response.json();
-    console.log(`[Gemi] Host bridge response in ${Date.now() - startedAt} ms`);
-    return (data.response || data.content || '') as string;
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error(`[Gemi] Host bridge request failed: ${msg}`);
-    throw new Error(`Host LLM bridge failed: ${msg}`);
-  } finally {
-    clearTimeout(timeoutId);
+  if (routeToLocal) {
+    // Ensure the model is copied and native library is initialized
+    await ensureModelInitialized();
+
+    const startedAt = Date.now();
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const module = getLfmModule();
+
+    try {
+      console.log('[Gemi] Routing inference to local on-device LfmModule');
+      setLastGenerationSource('local');
+
+      const generationPromise = module.generateResponse(
+        prompt,
+        maxTokens,
+        temperature,
+        topP,
+        topK,
+        repeatPenalty,
+      );
+
+      const timeoutPromise = new Promise<string>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          module.cancelGeneration().catch((err) => {
+            console.warn('[Gemi] Failed to cancel timed-out generation:', err);
+          });
+          reject(new Error(`On-device generation exceeded ${Math.round(timeoutMs / 1000)} seconds.`));
+        }, timeoutMs);
+      });
+
+      const response = await Promise.race([generationPromise, timeoutPromise]);
+      console.log(`[Gemi] Local response completed in ${Date.now() - startedAt} ms`);
+      return response;
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
+  } else {
+    // Route to hosted Ollama bridge
+    const startedAt = Date.now();
+    const controller = new AbortController();
+    activeAbortController = controller;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      console.log(`[Gemi] Routing inference to host bridge: ${HOST_LLM_API}`);
+      setLastGenerationSource('hosted');
+
+      const response = await fetch(HOST_LLM_API, {
+        method: 'POST',
+        headers: HOST_LLM_HEADERS,
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: 'qwen2.5:3b-instruct',
+          prompt,
+          stream: false,
+          keep_alive: '20m', // Keep model in memory for 20 minutes to avoid reload latency
+          options: {
+            temperature,
+            top_p: topP,
+            top_k: topK,
+            repeat_penalty: repeatPenalty,
+            num_predict: maxTokens,
+            num_ctx: 2048, // Limit context window allocation to speed up processing
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Host LLM API returned HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`[Gemi] Host bridge response in ${Date.now() - startedAt} ms`);
+      return (data.response || data.content || '') as string;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`[Gemi] Host bridge request failed: ${msg}`);
+      throw new Error(`Host LLM bridge failed: ${msg}`);
+    } finally {
+      clearTimeout(timeoutId);
+      if (activeAbortController === controller) {
+        activeAbortController = null;
+      }
+    }
   }
 }
 
@@ -226,9 +313,18 @@ export async function generateInsightChatResponse(prompt: string) {
   return cleanLfmResponse(response);
 }
 
-/** No-op: host bridge requests are cancelled via AbortController timeout. */
 export async function cancelLfmGeneration(): Promise<void> {
-  // nothing to cancel — the fetch AbortController handles timeouts
+  console.log('[Gemi] Initiating execution cancellation...');
+  if (activeAbortController) {
+    activeAbortController.abort();
+    activeAbortController = null;
+  }
+  try {
+    const module = getLfmModule();
+    await module.cancelGeneration();
+  } catch (error) {
+    console.warn('[Gemi] Native cancelGeneration skipped/failed:', error);
+  }
 }
 
 export async function saveWorkoutLogs(workouts: WorkoutLog[]) {

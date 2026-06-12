@@ -69,6 +69,10 @@ interface AuthState {
     macroCarbsPct?: number | null,
     macroFatsPct?: number | null
   ) => Promise<{ message: string } | null>;
+  aiMode: 'auto' | 'hosted' | 'local';
+  lastGenerationSource: 'hosted' | 'local' | null;
+  setAiMode: (mode: 'auto' | 'hosted' | 'local') => void;
+  setLastGenerationSource: (source: 'hosted' | 'local' | null) => void;
 }
 
 type AuthError = {
@@ -131,6 +135,10 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       profile: null,
       isLoading: true,
+      aiMode: 'auto',
+      lastGenerationSource: null,
+      setAiMode: (mode) => set({ aiMode: mode }),
+      setLastGenerationSource: (source) => set({ lastGenerationSource: source }),
       initializeAuth: async () => {
         if (authSubscription) {
           return;
@@ -485,6 +493,7 @@ export const useAuthStore = create<AuthState>()(
         session: state.session,
         user: state.user,
         profile: state.profile,
+        aiMode: state.aiMode,
       }),
     }
   )

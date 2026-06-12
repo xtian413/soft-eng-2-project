@@ -64,7 +64,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
     .toUpperCase()
     .slice(0, 2);
 
-  const { updatePhysicalStats, profile, user } = useAuthStore();
+  const { updatePhysicalStats, profile, user, aiMode, setAiMode } = useAuthStore();
   const [isEditModalVisible, setEditModalVisible] = useState(false);
   const [isSignOutModalVisible, setSignOutModalVisible] = useState(false);
   const [editHeight, setEditHeight] = useState(String(heightCm));
@@ -518,6 +518,31 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
           </View>
         )}
       </View>
+
+      {/* AI Configuration */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>AI Configuration</Text>
+        <Text style={styles.descText}>Select the inference mode for generating fitness insights and chat responses.</Text>
+        <View style={styles.toggleRowDouble}>
+          {[
+            { key: 'auto', label: 'Auto' },
+            { key: 'hosted', label: 'Hosted' },
+            { key: 'local', label: 'Local' },
+          ].map((mode) => (
+            <TouchableOpacity
+              key={mode.key}
+              activeOpacity={0.8}
+              style={[styles.toggleButton, aiMode === mode.key && styles.toggleButtonActive]}
+              onPress={() => setAiMode(mode.key as 'auto' | 'hosted' | 'local')}
+            >
+              <Text style={[styles.toggleButtonText, aiMode === mode.key && styles.toggleButtonTextActive]}>
+                {mode.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
 
       {/* Sign Out */}
       <TouchableOpacity

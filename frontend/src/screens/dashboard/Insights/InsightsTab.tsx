@@ -17,6 +17,7 @@ import { MessageCircle, RefreshCw, Send, Sparkles, X } from 'lucide-react-native
 import { Colors } from '@/theme/colors';
 import { fontWeight, layout, radius, spacing, typography } from '@/theme/typography';
 import type { FitnessInsight, FitnessInsightChatMessage } from '@/ai/insights/fitnessInsight';
+import { useAuthStore } from '@/store/authStore';
 
 type InsightsTabProps = {
   insight: FitnessInsight;
@@ -60,6 +61,7 @@ export function InsightsTab({
   onRegenerate,
   onSendChat,
 }: InsightsTabProps) {
+  const { aiMode, lastGenerationSource } = useAuthStore();
   const chatScrollRef = useRef<ScrollView>(null);
   const [isChatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
@@ -161,6 +163,16 @@ export function InsightsTab({
             </TouchableOpacity>
           </View>
         </View>
+
+        {lastGenerationSource === 'local' && (
+          <View style={styles.fallbackBanner}>
+            <Text style={styles.fallbackBannerText}>
+              {aiMode === 'local'
+                ? '⚡ Running on-device Local AI'
+                : '⚡ Running on-device Local AI (Offline fallback)'}
+            </Text>
+          </View>
+        )}
 
         <View style={styles.insightCard}>
           <Text style={styles.cardLabel}>Summary</Text>
@@ -633,5 +645,20 @@ const styles = StyleSheet.create({
   },
   chatSendButtonDisabled: {
     opacity: 0.45,
+  },
+  fallbackBanner: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.2)',
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.base,
+    marginBottom: spacing.base,
+    alignItems: 'center',
+  },
+  fallbackBannerText: {
+    color: '#D97706',
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
   },
 });
