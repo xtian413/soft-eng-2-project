@@ -160,6 +160,51 @@ export function WeightTrendCard({ entries, loading }: WeightTrendCardProps) {
               // Rules/Grid lines
               rulesColor="rgba(190,200,210,0.12)"
               rulesType="dashed"
+
+              // Interactive tooltip on hover/press
+              pointerConfig={{
+                pointerStripUptoDataPoint: true,
+                pointerStripColor: 'rgba(14,165,233,0.2)',
+                pointerStripWidth: 1.5,
+                pointerColor: Colors.primary,
+                radius: 4,
+                pointerLabelWidth: 80,
+                pointerLabelHeight: 30,
+                activatePointersOnLongPress: false,
+                autoAdjustPointerLabelPosition: true,
+                pointerLabelComponent: (items: any) => {
+                  if (!items || items.length === 0) return null;
+                  return (
+                    <View
+                      style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        backgroundColor: Colors.surfaceContainerLowest,
+                        borderRadius: 4,
+                        borderWidth: 1,
+                        borderColor: Colors.primary,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.1,
+                        shadowRadius: 4,
+                        elevation: 3,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: Colors.onSurface,
+                          fontSize: 9,
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        {items[0].value} kg
+                      </Text>
+                    </View>
+                  );
+                },
+              }}
             />
           )
         )}
