@@ -112,7 +112,7 @@ export function WeightTrendCard({ entries, loading }: WeightTrendCardProps) {
           chartWidth > 0 && (
             <LineChart
               data={chartData}
-              width={chartWidth - 25}
+              width={chartWidth - 40}
               height={100}
               areaChart
               curved
