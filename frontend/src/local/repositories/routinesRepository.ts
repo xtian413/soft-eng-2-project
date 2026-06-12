@@ -678,3 +678,42 @@ export async function upsertRemoteRoutineForUser(
     wrapRoutineError('upsert remote', error);
   }
 }
+
+export async function getUnsyncedDeletedRoutinesByUser(userId: string): Promise<LocalRoutine[]> {
+  try {
+    assertUserId(userId);
+    const db = await initializeLocalDatabase();
+    return await db.getAllAsync<LocalRoutine>(
+      `SELECT ${ROUTINE_COLUMNS}
+       FROM ${LOCAL_TABLES.routines}
+       WHERE user_id = ?
+         AND deleted_at IS NOT NULL
+         AND sync_status IN ('pending', 'failed')`,
+      userId
+    );
+  } catch (error) {
+    wrapRoutineError('read unsynced deleted', error);
+  }
+}
+
+export async function hardDeleteRoutineLocal(userId: string, routineId: string): Promise<void> {
+  try {
+    assertUserId(userId);
+    const db = await initializeLocalDatabase();
+    await db.withTransactionAsync(async () => {
+      await db.runAsync(
+        `DELETE FROM ${LOCAL_TABLES.routineExercises} WHERE routine_id = ? AND user_id = ?`,
+        routineId,
+        userId
+      );
+      await db.runAsync(
+        `DELETE FROM ${LOCAL_TABLES.routines} WHERE id = ? AND user_id = ?`,
+        routineId,
+        userId
+      );
+    });
+  } catch (error) {
+    wrapRoutineError('hard delete local', error);
+  }
+}
+

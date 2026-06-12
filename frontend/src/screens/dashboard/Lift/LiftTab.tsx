@@ -67,6 +67,8 @@ import {
   updateRoutineRemoteIds,
   upsertRemoteRoutineForUser,
   softDeleteRoutine,
+  getUnsyncedDeletedRoutinesByUser,
+  hardDeleteRoutineLocal,
 } from '@/local/repositories/routinesRepository';
 
 interface LiftTabProps {
@@ -156,6 +158,37 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const [isSavingRoutine, setIsSavingRoutine] = useState(false);
   const [editingRoutineId, setEditingRoutineId] = useState<string | null>(null);
   const [editingWorkoutId, setEditingWorkoutId] = useState<string | null>(null);
+
+  // Confirmation Modal State
+  const [confirmationModal, setConfirmationModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmText: string;
+    cancelText?: string;
+    isDestructive?: boolean;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    confirmText: '',
+    onConfirm: () => {},
+  });
+
+  const showConfirm = (options: {
+    title: string;
+    message: string;
+    confirmText: string;
+    cancelText?: string;
+    isDestructive?: boolean;
+    onConfirm: () => void;
+  }) => {
+    setConfirmationModal({
+      visible: true,
+      ...options,
+    });
+  };
 
   // Custom interface for individual set logging details
   const [routineProgress, setRoutineProgress] = useState<
@@ -1043,6 +1076,16 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   const refreshRemoteRoutines = async (userId: string) => {
     try {
       const remoteInputs = await fetchRemoteRoutineInputs(userId);
+      const remoteIds = new Set(remoteInputs.map((input) => input.remoteId).filter(Boolean));
+
+      // Reconcile remote-deleted routines to local SQLite
+      const currentLocalRoutines = await getRoutinesByUser(userId);
+      for (const localOf of currentLocalRoutines) {
+        if (localOf.sync_status === 'synced' && localOf.remote_id && !remoteIds.has(localOf.remote_id)) {
+          console.log('[LiftTab] Deleting local routine since it was deleted on remote:', localOf.id);
+          await hardDeleteRoutineLocal(userId, localOf.id);
+        }
+      }
 
       for (const remoteInput of remoteInputs) {
         try {
@@ -1151,67 +1194,73 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   };
 
   const handleDeleteRoutine = async (routine: Routine) => {
-    Alert.alert(
-      'Delete Routine',
-      `Are you sure you want to delete ${routine.name}? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const authUser = user ?? (await supabase.auth.getUser()).data.user;
-              if (!authUser) {
-                triggerToast('Authentication error.');
-                return;
-              }
-              // 1. Soft delete locally
-              await softDeleteRoutine(authUser.id, routine.id);
+    showConfirm({
+      title: 'Delete Routine',
+      message: `Are you sure you want to delete ${routine.name}? This action cannot be undone.`,
+      confirmText: 'Delete',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          const authUser = user ?? (await supabase.auth.getUser()).data.user;
+          if (!authUser) {
+            triggerToast('Authentication error.');
+            return;
+          }
+          // 1. Soft delete locally
+          await softDeleteRoutine(authUser.id, routine.id);
 
-              // 2. Reset active training session if this routine is running
-              if (activeRoutineId === routine.id) {
-                resetFinishedSessionState();
-              }
+          // 2. Reset active training session if this routine is running
+          if (activeRoutineId === routine.id) {
+            resetFinishedSessionState();
+          }
 
-              // 3. Remove from UI state list
-              setRoutines((prev) => prev.filter((r) => r.id !== routine.id));
+          // Reset editing routine if this was being edited
+          if (editingRoutineId === routine.id) {
+            resetRoutineDraft();
+            setShowRoutineModal(false);
+          }
 
-              // 4. Clear selection state
-              if (selectedRoutineId === routine.id) {
-                setSelectedRoutineId(null);
-              }
+          // 3. Remove from UI list and update selection (auto-falls back to next routine)
+          const remaining = routines.filter((r) => r.id !== routine.id);
+          applyRoutinesToState(remaining);
 
-              triggerToast('Routine deleted successfully.');
+          triggerToast('Routine deleted successfully.');
 
-              // 5. Remote delete sync to Supabase
-              if (routine.remote_id) {
-                const { error: routineErr } = await supabase
-                  .from('routines')
-                  .delete()
-                  .eq('id', routine.remote_id);
-                if (routineErr) {
-                  console.error('[LiftTab] Remote routine delete failed:', routineErr);
-                }
-              }
-              if (routine.routines_id) {
-                const { error: workoutErr } = await supabase
-                  .from('workouts')
-                  .delete()
-                  .eq('id', routine.routines_id);
-                if (workoutErr) {
-                  console.error('[LiftTab] Remote workout delete failed:', workoutErr);
-                }
-              }
-            } catch (error) {
-              console.error('[LiftTab] Error deleting routine:', error);
-              triggerToast('Failed to delete routine.');
+          // 5. Remote delete sync to Supabase (attempt immediately)
+          let remoteSucceeded = true;
+          if (routine.remote_id) {
+            const { error: routineErr } = await supabase
+              .from('routines')
+              .delete()
+              .eq('id', routine.remote_id);
+            if (routineErr) {
+              remoteSucceeded = false;
+              console.error('[LiftTab] Remote routine delete failed:', routineErr);
             }
-          },
-        },
-      ],
-      { cancelable: true }
-    );
+          }
+          if (routine.routines_id) {
+            const { error: workoutErr } = await supabase
+              .from('workouts')
+              .delete()
+              .eq('id', routine.routines_id);
+            if (workoutErr) {
+              remoteSucceeded = false;
+              console.error('[LiftTab] Remote workout delete failed:', workoutErr);
+            }
+          }
+
+          if (remoteSucceeded) {
+            await hardDeleteRoutineLocal(authUser.id, routine.id);
+            console.log('[LiftTab] Routine fully deleted locally and remotely.');
+          } else {
+            await markRoutineSyncFailed(authUser.id, routine.id);
+          }
+        } catch (error) {
+          console.error('[LiftTab] Error deleting routine:', error);
+          triggerToast('Failed to delete routine.');
+        }
+      },
+    });
   };
 
   const startEditRoutine = (routine: Routine) => {
@@ -1451,8 +1500,50 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
     isRetryingRoutineSyncsRef.current = true;
     try {
       console.log('[LiftTab] Routine retry begin');
+      
+      // 1. Sync routine deletions
+      const deletedRoutines = await getUnsyncedDeletedRoutinesByUser(userId);
+      console.log('[LiftTab] Unsynced deleted routines found:', deletedRoutines.length);
+      for (const routine of deletedRoutines) {
+        try {
+          console.log('[LiftTab] Retrying deletion for routine:', routine.id);
+          let remoteSucceeded = true;
+          if (routine.remote_id) {
+            const { error: routineErr } = await supabase
+              .from('routines')
+              .delete()
+              .eq('id', routine.remote_id);
+            if (routineErr) {
+              remoteSucceeded = false;
+              console.error('[LiftTab] Remote routine delete retry failed:', routineErr);
+            }
+          }
+          if (routine.remote_template_workout_id) {
+            const { error: workoutErr } = await supabase
+              .from('workouts')
+              .delete()
+              .eq('id', routine.remote_template_workout_id);
+            if (workoutErr) {
+              remoteSucceeded = false;
+              console.error('[LiftTab] Remote workout delete retry failed:', workoutErr);
+            }
+          }
+
+          if (remoteSucceeded) {
+            await hardDeleteRoutineLocal(userId, routine.id);
+            console.log('[LiftTab] Routine fully cleaned up locally after deletion sync.');
+          } else {
+            await markRoutineSyncFailed(userId, routine.id);
+          }
+        } catch (err) {
+          console.error('[LiftTab] Failed to sync routine deletion to remote:', err);
+          await markRoutineSyncFailed(userId, routine.id);
+        }
+      }
+
+      // 2. Sync routine creates/updates
       const unsyncedRoutines = await getUnsyncedRoutinesByUser(userId);
-      console.log('[LiftTab] Unsynced routines found:', unsyncedRoutines.length);
+      console.log('[LiftTab] Unsynced active routines found:', unsyncedRoutines.length);
 
       for (const routine of unsyncedRoutines) {
         console.log('[LiftTab] Retrying routine:', {
@@ -2180,15 +2271,14 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   };
 
   const handleDiscardSession = () => {
-    Alert.alert(
-      'Discard Workout',
-      'Are you sure you want to discard this training session? Progress will not be saved.',
-      [
-        { text: 'Keep Training', style: 'cancel' },
-        { text: 'Discard', style: 'destructive', onPress: () => resetFinishedSessionState() },
-      ],
-      { cancelable: true }
-    );
+    showConfirm({
+      title: 'Discard Workout',
+      message: 'Are you sure you want to discard this training session? Progress will not be saved.',
+      confirmText: 'Discard',
+      cancelText: 'Keep Training',
+      isDestructive: true,
+      onConfirm: () => resetFinishedSessionState(),
+    });
   };
 
   return (
@@ -3591,6 +3681,54 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
           </View>
         </View>
       )}
+
+      {/* Custom Confirmation Modal */}
+      <Modal
+        visible={confirmationModal.visible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmationModal((prev) => ({ ...prev, visible: false }))}
+      >
+        <TouchableOpacity
+          style={styles.confirmModalOverlay}
+          activeOpacity={1}
+          onPress={() => setConfirmationModal((prev) => ({ ...prev, visible: false }))}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.confirmModalContent}
+          >
+            <Text style={styles.confirmModalTitle}>{confirmationModal.title}</Text>
+            <Text style={styles.confirmModalMessage}>{confirmationModal.message}</Text>
+            <View style={styles.confirmModalButtonRow}>
+              <TouchableOpacity
+                style={styles.confirmModalCancelButton}
+                onPress={() => setConfirmationModal((prev) => ({ ...prev, visible: false }))}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.confirmModalCancelText}>
+                  {confirmationModal.cancelText || 'Cancel'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.confirmModalConfirmButton,
+                  confirmationModal.isDestructive ? styles.confirmDestructiveBtn : styles.confirmPrimaryBtn
+                ]}
+                onPress={() => {
+                  setConfirmationModal((prev) => ({ ...prev, visible: false }));
+                  confirmationModal.onConfirm();
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.confirmModalConfirmText}>
+                  {confirmationModal.confirmText}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </>
   );
 }
@@ -5521,6 +5659,72 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   historyMakeRoutineBtnText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: '#ffffff',
+  },
+  confirmModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.base * 1.5,
+  },
+  confirmModalContent: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: radius.lg,
+    padding: spacing.base * 1.25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  confirmModalTitle: {
+    fontSize: typography.lg,
+    fontWeight: fontWeight.bold,
+    color: Colors.onSurface,
+    marginBottom: spacing.sm,
+  },
+  confirmModalMessage: {
+    fontSize: typography.base,
+    color: Colors.onSurfaceVariant,
+    lineHeight: typography.base * 1.4,
+    marginBottom: spacing.lg,
+  },
+  confirmModalButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+  },
+  confirmModalCancelButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.base,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 200, 210, 0.25)',
+  },
+  confirmModalCancelText: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.semiBold,
+    color: Colors.outline,
+  },
+  confirmModalConfirmButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.base,
+    borderRadius: radius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmDestructiveBtn: {
+    backgroundColor: '#dc2626',
+  },
+  confirmPrimaryBtn: {
+    backgroundColor: Colors.primary,
+  },
+  confirmModalConfirmText: {
     fontSize: typography.sm,
     fontWeight: fontWeight.bold,
     color: '#ffffff',
