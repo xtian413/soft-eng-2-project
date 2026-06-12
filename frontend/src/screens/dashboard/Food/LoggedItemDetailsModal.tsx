@@ -657,6 +657,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.12)',
     overflow: 'visible',
+    zIndex: 10,
   },
   detailCardRow: {
     flexDirection: 'row',

@@ -112,8 +112,8 @@ export function HomeTab({
     currentWeight == null
       ? '--'
       : weightUnit === 'lbs'
-      ? (currentWeight * 2.20462).toFixed(1)
-      : currentWeight.toFixed(1);
+        ? (currentWeight * 2.20462).toFixed(1)
+        : currentWeight.toFixed(1);
 
   return (
     <ScrollView
@@ -129,7 +129,7 @@ export function HomeTab({
           </Text>
           <Sparkles size={16}
             color={Colors.primary}
-            fill={Colors.primary} 
+            fill={Colors.primary}
           />
         </View>
         <Text style={styles.welcomeSubtitle}>
@@ -187,240 +187,240 @@ export function HomeTab({
         </View>
       </View>
 
-     {/* Macro Bento Grid (2 Columns on Mobile) */}
-<View style={styles.bentoGrid}>
-  {/* Protein Card */}
-  <View style={[styles.bentoCard, styles.proteinCard]}>
-    <View style={styles.labelRow}>
-      <View style={styles.proteinDot} />
-      <Text style={styles.bentoCardLabel}>PROTEIN</Text>
-    </View>
-
-    <View style={styles.bentoValueRow}>
-      <Text style={styles.bentoValue}>{Math.round(proteinTotal)}g</Text>
-      <Text style={styles.bentoTarget}> / {targets.protein}g</Text>
-    </View>
-
-    <View style={styles.progressBarBg}>
-      <View
-        style={[
-          styles.progressBarFill,
-          {
-            width: `${proteinPercent}%`,
-            backgroundColor: '#004B6B',
-          },
-        ]}
-      />
-    </View>
-  </View>
-
-  {/* Carbs Card */}
-  <View style={[styles.bentoCard, styles.carbsCard]}>
-    <View style={styles.labelRow}>
-      <View style={styles.carbsDot} />
-      <Text style={styles.bentoCardLabel}>CARBS</Text>
-    </View>
-
-    <View style={styles.bentoValueRow}>
-      <Text style={styles.bentoValue}>{Math.round(carbsTotal)}g</Text>
-      <Text style={styles.bentoTarget}> / {targets.carbs}g</Text>
-    </View>
-
-    <View style={styles.progressBarBg}>
-      <View
-        style={[
-          styles.progressBarFill,
-          {
-            width: `${carbsPercent}%`,
-            backgroundColor: '#006591',
-          },
-        ]}
-      />
-    </View>
-  </View>
-
-  {/* Fats Card */}
-  <View style={[styles.bentoCard, styles.fatsCard]}>
-    <View style={styles.labelRow}>
-      <View style={styles.fatsDot} />
-      <Text style={styles.bentoCardLabel}>FATS</Text>
-    </View>
-
-    <View style={styles.bentoValueRow}>
-      <Text style={styles.bentoValue}>{Math.round(fatsTotal)}g</Text>
-      <Text style={styles.bentoTarget}> / {targets.fats}g</Text>
-    </View>
-
-    <View style={styles.progressBarBg}>
-      <View
-        style={[
-          styles.progressBarFill,
-          {
-            width: `${fatsPercent}%`,
-            backgroundColor: '#4A93B5',
-          },
-        ]}
-      />
-    </View>
-  </View>
-
-  {/* Log Weight Card */}
-  <TouchableOpacity
-    style={[styles.bentoCard, styles.weightCard]}
-    onPress={async () => {
-      if (!userId) return;
-      // load today's entry if present
-      try {
-        const today = normalizeRecordedDate(new Date().toISOString());
-        const todayRow = await getBodyProgressByUserAndDate(userId, today);
-        if (todayRow) {
-          setWeightText(
-            weightUnit === 'lbs'
-              ? (todayRow.weight_kg * 2.20462).toFixed(1)
-              : String(todayRow.weight_kg ?? '')
-          );
-        } else {
-          setWeightText('');
-        }
-        setWeightModalVisible(true);
-      } catch (e) {
-        console.warn('[HomeTab] failed to open weight modal', e);
-      }
-    }}
-    activeOpacity={0.8}
-    accessibilityRole="button"
-    accessibilityLabel="Log weight"
-    accessibilityHint="Updates your current weight for today"
-  >
-    <View style={styles.weightCardInner}>
-      <View style={styles.weightHeader}>
-        <View style={styles.weightHeaderLeft}>
-          <View style={styles.weightDot} />
-          <Text style={styles.bentoCardLabel}>WEIGHT</Text>
-        </View>
-        <Edit size={10} color={Colors.onSurfaceVariant} style={styles.weightEdit} />
-      </View>
-
-      <View style={styles.weightValueRow}>
-        <Text style={styles.weightValue}>{displayWeight}</Text>
-        <Text style={styles.weightUnit}>{weightUnit}</Text>
-      </View>
-
-      
-    </View>
-  </TouchableOpacity>
-  {/* Weight Modal */}
-  <Modal
-    visible={weightModalVisible}
-    animationType="slide"
-    transparent
-    onRequestClose={() => setWeightModalVisible(false)}
-  >
-    <View style={styles.modalOverlay}>
-      <View style={styles.modalContent}>
-        <TouchableOpacity
-          style={styles.modalClose}
-          onPress={() => setWeightModalVisible(false)}
-          accessibilityRole="button"
-          accessibilityLabel="Close"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Text style={styles.modalCloseText}>✕</Text>
-        </TouchableOpacity>
-        <Text style={styles.modalTitle}>Update Weight</Text>
-
-        <Text style={styles.currentLabel}>Current weight</Text>
-        <Text style={styles.currentValue}>
-          {currentWeight
-            ? `${(
-                weightUnit === 'lbs' ? currentWeight * 2.20462 : currentWeight
-              ).toFixed(1)} ${weightUnit}`
-            : '—'}
-        </Text>
-
-        <Text style={styles.newLabel}>New weight</Text>
-
-        <View style={styles.unitRow}>
-          <TouchableOpacity
-            style={[
-              styles.unitButton,
-              weightUnit === 'kg' && styles.unitButtonActive,
-            ]}
-            onPress={() => setWeightUnit('kg')}
-          >
-          <Text>kg</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.unitButton,
-            weightUnit === 'lbs' && styles.unitButtonActive,
-          ]}
-          onPress={() => setWeightUnit('lbs')}
-  >
-    <Text>lbs</Text>
-  </TouchableOpacity>
-</View>
-        <TextInput
-          style={styles.modalInput}
-          value={weightText}
-          onChangeText={setWeightText}
-          placeholder="e.g. 72.8"
-          placeholderTextColor="rgba(0,0,0,0.35)"
-          keyboardType="numeric"
-          returnKeyType="done"
-        />
-
-        <View style={styles.modalButtonsCenter}>
-          <TouchableOpacity
-            style={[styles.modalButtonPrimary]}
-            onPress={async () => {
-              if (!userId) return;
-              const parsed = parseFloat(weightText.replace(',', '.'));
-              if (!Number.isFinite(parsed) || parsed <= 0) {
-                return;
-              }
-              setIsSavingWeight(true);
-              try {
-                const recordedAt = new Date().toISOString();
-                const weightKg = weightUnit === 'lbs' ? parsed * 0.453592 : parsed;
-
-                await recordWeightLocalFirst({
-                  userId,
-                  weightKg,
-                  recordedAt,
-                });
-                // refresh profile so UI updates
-                void useAuthStore.getState().fetchProfile();
-                setWeightText('');
-                setSaveSuccess(true);
-                setTimeout(() => setSaveSuccess(false), 1600);
-                setTimeout(() => setWeightModalVisible(false), 800);
-              } catch (err) {
-                console.warn('[HomeTab] failed to save weight', err);
-              } finally {
-                setIsSavingWeight(false);
-              }
-            }}
-          >
-            {isSavingWeight ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.modalButtonPrimaryText}>Save weight</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {saveSuccess && (
-          <View style={styles.successToast}>
-            <Text style={styles.successText}>✓ Weight updated</Text>
+      {/* Macro Bento Grid (2 Columns on Mobile) */}
+      <View style={styles.bentoGrid}>
+        {/* Protein Card */}
+        <View style={[styles.bentoCard, styles.proteinCard]}>
+          <View style={styles.labelRow}>
+            <View style={styles.proteinDot} />
+            <Text style={styles.bentoCardLabel}>PROTEIN</Text>
           </View>
-        )}
+
+          <View style={styles.bentoValueRow}>
+            <Text style={styles.bentoValue}>{Math.round(proteinTotal)}g</Text>
+            <Text style={styles.bentoTarget}> / {targets.protein}g</Text>
+          </View>
+
+          <View style={styles.progressBarBg}>
+            <View
+              style={[
+                styles.progressBarFill,
+                {
+                  width: `${proteinPercent}%`,
+                  backgroundColor: '#004B6B',
+                },
+              ]}
+            />
+          </View>
+        </View>
+
+        {/* Carbs Card */}
+        <View style={[styles.bentoCard, styles.carbsCard]}>
+          <View style={styles.labelRow}>
+            <View style={styles.carbsDot} />
+            <Text style={styles.bentoCardLabel}>CARBS</Text>
+          </View>
+
+          <View style={styles.bentoValueRow}>
+            <Text style={styles.bentoValue}>{Math.round(carbsTotal)}g</Text>
+            <Text style={styles.bentoTarget}> / {targets.carbs}g</Text>
+          </View>
+
+          <View style={styles.progressBarBg}>
+            <View
+              style={[
+                styles.progressBarFill,
+                {
+                  width: `${carbsPercent}%`,
+                  backgroundColor: '#006591',
+                },
+              ]}
+            />
+          </View>
+        </View>
+
+        {/* Fats Card */}
+        <View style={[styles.bentoCard, styles.fatsCard]}>
+          <View style={styles.labelRow}>
+            <View style={styles.fatsDot} />
+            <Text style={styles.bentoCardLabel}>FATS</Text>
+          </View>
+
+          <View style={styles.bentoValueRow}>
+            <Text style={styles.bentoValue}>{Math.round(fatsTotal)}g</Text>
+            <Text style={styles.bentoTarget}> / {targets.fats}g</Text>
+          </View>
+
+          <View style={styles.progressBarBg}>
+            <View
+              style={[
+                styles.progressBarFill,
+                {
+                  width: `${fatsPercent}%`,
+                  backgroundColor: '#4A93B5',
+                },
+              ]}
+            />
+          </View>
+        </View>
+
+        {/* Log Weight Card */}
+        <TouchableOpacity
+          style={[styles.bentoCard, styles.weightCard]}
+          onPress={async () => {
+            if (!userId) return;
+            // load today's entry if present
+            try {
+              const today = normalizeRecordedDate(new Date().toISOString());
+              const todayRow = await getBodyProgressByUserAndDate(userId, today);
+              if (todayRow) {
+                setWeightText(
+                  weightUnit === 'lbs'
+                    ? (todayRow.weight_kg * 2.20462).toFixed(1)
+                    : String(todayRow.weight_kg ?? '')
+                );
+              } else {
+                setWeightText('');
+              }
+              setWeightModalVisible(true);
+            } catch (e) {
+              console.warn('[HomeTab] failed to open weight modal', e);
+            }
+          }}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Log weight"
+          accessibilityHint="Updates your current weight for today"
+        >
+          <View style={styles.weightCardInner}>
+            <View style={styles.weightHeader}>
+              <View style={styles.weightHeaderLeft}>
+                <View style={styles.weightDot} />
+                <Text style={styles.bentoCardLabel}>WEIGHT</Text>
+              </View>
+              <Edit size={10} color={Colors.onSurfaceVariant} style={styles.weightEdit} />
+            </View>
+
+            <View style={styles.weightValueRow}>
+              <Text style={styles.weightValue}>{displayWeight}</Text>
+              <Text style={styles.weightUnit}>{weightUnit}</Text>
+            </View>
+
+
+          </View>
+        </TouchableOpacity>
+        {/* Weight Modal */}
+        <Modal
+          visible={weightModalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setWeightModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <TouchableOpacity
+                style={styles.modalClose}
+                onPress={() => setWeightModalVisible(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+              <Text style={styles.modalTitle}>Update Weight</Text>
+
+              <Text style={styles.currentLabel}>Current weight</Text>
+              <Text style={styles.currentValue}>
+                {currentWeight
+                  ? `${(
+                    weightUnit === 'lbs' ? currentWeight * 2.20462 : currentWeight
+                  ).toFixed(1)} ${weightUnit}`
+                  : '—'}
+              </Text>
+
+              <Text style={styles.newLabel}>New weight</Text>
+
+              <View style={styles.unitRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.unitButton,
+                    weightUnit === 'kg' && styles.unitButtonActive,
+                  ]}
+                  onPress={() => setWeightUnit('kg')}
+                >
+                  <Text>kg</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.unitButton,
+                    weightUnit === 'lbs' && styles.unitButtonActive,
+                  ]}
+                  onPress={() => setWeightUnit('lbs')}
+                >
+                  <Text>lbs</Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={styles.modalInput}
+                value={weightText}
+                onChangeText={setWeightText}
+                placeholder="e.g. 72.8"
+                placeholderTextColor="rgba(0,0,0,0.35)"
+                keyboardType="numeric"
+                returnKeyType="done"
+              />
+
+              <View style={styles.modalButtonsCenter}>
+                <TouchableOpacity
+                  style={[styles.modalButtonPrimary]}
+                  onPress={async () => {
+                    if (!userId) return;
+                    const parsed = parseFloat(weightText.replace(',', '.'));
+                    if (!Number.isFinite(parsed) || parsed <= 0) {
+                      return;
+                    }
+                    setIsSavingWeight(true);
+                    try {
+                      const recordedAt = new Date().toISOString();
+                      const weightKg = weightUnit === 'lbs' ? parsed * 0.453592 : parsed;
+
+                      await recordWeightLocalFirst({
+                        userId,
+                        weightKg,
+                        recordedAt,
+                      });
+                      // refresh profile so UI updates
+                      void useAuthStore.getState().fetchProfile();
+                      setWeightText('');
+                      setSaveSuccess(true);
+                      setTimeout(() => setSaveSuccess(false), 1600);
+                      setTimeout(() => setWeightModalVisible(false), 800);
+                    } catch (err) {
+                      console.warn('[HomeTab] failed to save weight', err);
+                    } finally {
+                      setIsSavingWeight(false);
+                    }
+                  }}
+                >
+                  {isSavingWeight ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.modalButtonPrimaryText}>Save weight</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {saveSuccess && (
+                <View style={styles.successToast}>
+                  <Text style={styles.successText}>✓ Weight updated</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
       </View>
-    </View>
-  </Modal>
-</View>
-        
+
 
       {/* AI Recovery Insight Card */}
       <View style={styles.insightCard}>
@@ -432,7 +432,7 @@ export function HomeTab({
           </View>
           <Sparkles size={16}
             color={Colors.primary}
-            fill={Colors.primary} 
+            fill={Colors.primary}
           />
         </View>
         {renderFormattedText(`"${whisperText}"`, styles.insightQuote)}
@@ -565,18 +565,18 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   bentoCard: {
-  flex: 1,
-  minWidth: '46%',
-  height: 120,
-  backgroundColor: Colors.surfaceContainerLowest,
-  borderRadius: 20,
-  padding: spacing.base,
+    flex: 1,
+    minWidth: '46%',
+    height: 120,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 20,
+    padding: spacing.base,
 
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 6 },
-  shadowOpacity: 0.08,
-  shadowRadius: 12,
-  elevation: 5, 
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 5,
   },
   fullWidthBento: {
     minWidth: '100%',
@@ -707,31 +707,31 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   labelRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: 6,
-},
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
 
-proteinDot: {
-  width: 8,
-  height: 8,
-  borderRadius: 4,
-  backgroundColor: '#004B6B',
-},
+  proteinDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#004B6B',
+  },
 
-carbsDot: {
-  width: 8,
-  height: 8,
-  borderRadius: 4,
-  backgroundColor: '#006591',
-},
+  carbsDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#006591',
+  },
 
-fatsDot: {
-  width: 8,
-  height: 8,
-  borderRadius: 4,
-  backgroundColor: '#4A93B5',
-},
+  fatsDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#4A93B5',
+  },
 
   modalOverlay: {
     flex: 1,
@@ -836,6 +836,7 @@ fatsDot: {
 
   unitButtonActive: {
     backgroundColor: Colors.primary,
+    color: Colors.onPrimary
   },
   successToast: {
     marginTop: spacing.sm,

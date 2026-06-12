@@ -534,8 +534,8 @@ export function FoodSearchModal({
                   <>
                     {/* 1. Energy Summary Accordion */}
                     <View style={[styles.accordionCard, { marginTop: spacing.lg }]}>
-                      <TouchableOpacity 
-                        onPress={() => setIsEnergyExpanded(!isEnergyExpanded)} 
+                      <TouchableOpacity
+                        onPress={() => setIsEnergyExpanded(!isEnergyExpanded)}
                         style={styles.accordionHeaderRow}
                         activeOpacity={0.7}
                       >
@@ -630,8 +630,8 @@ export function FoodSearchModal({
 
                     {/* 2. Macronutrient Targets Accordion */}
                     <View style={styles.accordionCard}>
-                      <TouchableOpacity 
-                        onPress={() => setIsMacrosExpanded(!isMacrosExpanded)} 
+                      <TouchableOpacity
+                        onPress={() => setIsMacrosExpanded(!isMacrosExpanded)}
                         style={styles.accordionHeaderRow}
                         activeOpacity={0.7}
                       >
@@ -690,8 +690,8 @@ export function FoodSearchModal({
 
                     {/* 3. Highlighted Targets Accordion */}
                     <View style={styles.accordionCard}>
-                      <TouchableOpacity 
-                        onPress={() => setIsMicrosExpanded(!isMicrosExpanded)} 
+                      <TouchableOpacity
+                        onPress={() => setIsMicrosExpanded(!isMicrosExpanded)}
                         style={styles.accordionHeaderRow}
                         activeOpacity={0.7}
                       >
@@ -766,8 +766,8 @@ export function FoodSearchModal({
 
                     {/* 4. Complete Nutrient Summary Accordion */}
                     <View style={styles.accordionCard}>
-                      <TouchableOpacity 
-                        onPress={() => setIsAllMicrosExpanded(!isAllMicrosExpanded)} 
+                      <TouchableOpacity
+                        onPress={() => setIsAllMicrosExpanded(!isAllMicrosExpanded)}
                         style={styles.accordionHeaderRow}
                         activeOpacity={0.7}
                       >
@@ -1187,6 +1187,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.12)',
     overflow: 'visible',
+    zIndex: 10,
   },
   detailCardRow: {
     flexDirection: 'row',

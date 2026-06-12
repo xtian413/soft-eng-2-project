@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  LayoutAnimation,
   Modal,
   Platform,
   ScrollView,
@@ -9,15 +10,37 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View,
   StyleProp,
   TextStyle,
 } from 'react-native';
-import { MessageCircle, RefreshCw, Send, Sparkles, X } from 'lucide-react-native';
+import {
+  ChevronDown,
+  ChevronUp,
+  Dumbbell,
+  FileText,
+  MessageCircle,
+  RefreshCw,
+  Send,
+  Sparkles,
+  Target,
+  Utensils,
+  X,
+} from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '@/theme/colors';
 import { fontWeight, layout, radius, spacing, typography } from '@/theme/typography';
 import type { FitnessInsight, FitnessInsightChatMessage } from '@/ai/insights/fitnessInsight';
 import { useAuthStore } from '@/store/authStore';
+
+// Enable LayoutAnimation for Android
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 type InsightsTabProps = {
   insight: FitnessInsight;
@@ -54,6 +77,82 @@ function renderFormattedText(
   );
 }
 
+type AccordionCardProps = {
+  label: string;
+  isExpanded: boolean;
+  onToggle: () => void;
+  icon: React.ComponentType<{ size: number; color: string }>;
+  isNextStep?: boolean;
+  children: React.ReactNode;
+};
+
+function AccordionCard({
+  label,
+  isExpanded,
+  onToggle,
+  icon: IconComponent,
+  isNextStep = false,
+  children,
+}: AccordionCardProps) {
+  const handleToggle = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    onToggle();
+  };
+
+  const headerBg = isNextStep ? Colors.surfaceContainer : Colors.surfaceContainerLowest;
+  const labelColor = isNextStep ? Colors.primary : Colors.onSurface;
+  const iconColor = isNextStep ? Colors.primary : Colors.outline;
+
+  return (
+    <View style={[
+      styles.accordionCard,
+      isNextStep && styles.nextAccordionCard
+    ]}>
+      <TouchableOpacity
+        style={[styles.accordionHeader, { backgroundColor: headerBg }]}
+        onPress={handleToggle}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel={`${isExpanded ? 'Collapse' : 'Expand'} ${label}`}
+      >
+        <View style={styles.accordionHeaderLeft}>
+          <IconComponent size={18} color={iconColor} />
+          <Text style={[styles.accordionLabel, { color: labelColor }]}>{label}</Text>
+        </View>
+        {isExpanded ? (
+          <ChevronUp size={18} color={iconColor} />
+        ) : (
+          <ChevronDown size={18} color={iconColor} />
+        )}
+      </TouchableOpacity>
+      {isExpanded && (
+        <View style={[styles.accordionContent, { backgroundColor: headerBg }]}>
+          {children}
+        </View>
+      )}
+    </View>
+  );
+}
+
+type ChatFABProps = {
+  onPress: () => void;
+};
+
+function ChatFAB({ onPress }: ChatFABProps) {
+  return (
+    <TouchableOpacity
+      style={styles.chatFab}
+      onPress={onPress}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel="Ask Gemi"
+    >
+      <MessageCircle size={20} color={Colors.onPrimary} />
+      <Text style={styles.chatFabLabel}>Ask Gemi</Text>
+    </TouchableOpacity>
+  );
+}
+
 export function InsightsTab({
   insight,
   isLoading,
@@ -68,6 +167,20 @@ export function InsightsTab({
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatSending, setChatSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+
+  const [expandedSections, setExpandedSections] = useState({
+    summary: false,
+    training: false,
+    nutrition: false,
+    nextStep: false,
+  });
+
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [section]: !prev[section],
+    }));
+  };
 
   const cleanInsight = {
     title: insight.title.replace(/^[\s*"'`•#-]+|[\s*"'`•#-]+$/g, '').trim(),
@@ -117,87 +230,96 @@ export function InsightsTab({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerBand}>
-          <View style={styles.headerText}>
-            <Text style={styles.eyebrow}>ON-DEVICE RAG</Text>
-            <Text style={styles.title}>{cleanInsight.title}</Text>
-            <Text style={styles.subtitle}>{cleanInsight.summary}</Text>
-          </View>
-          <View style={styles.sparkleBadge}>
-            {isLoading ? (
-              <ActivityIndicator color={Colors.onPrimary} />
-            ) : (
-              <Sparkles size={22} color={Colors.onPrimary} fill={Colors.onPrimary} />
-            )}
-          </View>
+        <View style={styles.heroBanner}>
+          <LinearGradient
+            colors={[Colors.primary, '#003f5e']}
+            style={styles.headerBand}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.headerText}>
+              <Text style={styles.title}>Today's Insight</Text>
+              <Text style={styles.metaText}>
+                {lastGeneratedAt
+                  ? `Generated ${lastGeneratedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : isLoading
+                    ? 'Generating once from local data'
+                    : 'Waiting for a usable on-device model output'}
+              </Text>
+            </View>
+            <View style={styles.sparkleBadge}>
+              {isLoading ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Sparkles size={24} color="#ffffff" fill="#ffffff" />
+              )}
+            </View>
+          </LinearGradient>
+
+          {lastGenerationSource === 'local' && (
+            <View style={styles.fallbackBanner}>
+              <Text style={styles.fallbackBannerText}>
+                {aiMode === 'local'
+                  ? '⚡ Running on-device Local AI'
+                  : '⚡ Running on-device Local AI (Offline fallback)'}
+              </Text>
+            </View>
+          )}
+
+          <TouchableOpacity
+            style={styles.regenerateButton}
+            onPress={onRegenerate}
+            disabled={isLoading || isChatSending}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Regenerate fitness insight"
+          >
+            <RefreshCw size={15} color={Colors.onPrimary} />
+            <Text style={styles.regenerateText}>{isLoading ? 'Generating' : 'Regenerate Insights'}</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.metaRow}>
-          <Text style={styles.metaText}>
-            {lastGeneratedAt
-              ? `Generated ${lastGeneratedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Reused until your data changes.`
-              : isLoading
-                ? 'Generating once from local data'
-                : 'Waiting for a usable on-device model output'}
-          </Text>
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={() => setChatOpen(true)}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="Open insight chat"
-            >
-              <MessageCircle size={17} color={Colors.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.regenerateButton}
-              onPress={onRegenerate}
-              disabled={isLoading || isChatSending}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="Regenerate fitness insight"
-            >
-              <RefreshCw size={15} color={Colors.primary} />
-              <Text style={styles.regenerateText}>{isLoading ? 'Generating' : 'Regenerate'}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <View style={styles.accordionContainer}>
+          <AccordionCard
+            label="Summary"
+            icon={FileText}
+            isExpanded={expandedSections.summary}
+            onToggle={() => toggleSection('summary')}
+          >
+            {renderFormattedText(cleanInsight.summary, styles.cardText)}
+          </AccordionCard>
 
-        {lastGenerationSource === 'local' && (
-          <View style={styles.fallbackBanner}>
-            <Text style={styles.fallbackBannerText}>
-              {aiMode === 'local'
-                ? '⚡ Running on-device Local AI'
-                : '⚡ Running on-device Local AI (Offline fallback)'}
-            </Text>
-          </View>
-        )}
+          <AccordionCard
+            label="Training"
+            icon={Dumbbell}
+            isExpanded={expandedSections.training}
+            onToggle={() => toggleSection('training')}
+          >
+            {renderFormattedText(cleanInsight.training, styles.cardText)}
+          </AccordionCard>
 
-        <View style={styles.insightCard}>
-          <Text style={styles.cardLabel}>Summary</Text>
-          {renderFormattedText(cleanInsight.summary, styles.cardText)}
-        </View>
+          <AccordionCard
+            label="Nutrition"
+            icon={Utensils}
+            isExpanded={expandedSections.nutrition}
+            onToggle={() => toggleSection('nutrition')}
+          >
+            {renderFormattedText(cleanInsight.nutrition, styles.cardText)}
+          </AccordionCard>
 
-        <View style={styles.insightCard}>
-          <Text style={styles.cardLabel}>Nutrition</Text>
-          {renderFormattedText(cleanInsight.nutrition, styles.cardText)}
-        </View>
-
-        <View style={styles.insightCard}>
-          <Text style={styles.cardLabel}>Training</Text>
-          {renderFormattedText(cleanInsight.training, styles.cardText)}
-        </View>
-
-        <View style={styles.nextCard}>
-          <Text style={styles.cardLabel}>Next Step</Text>
-          {renderFormattedText(cleanInsight.nextStep, styles.nextText, { fontWeight: fontWeight.bold })}
-        </View>
-
-        <View style={styles.confidenceCard}>
-          <Text style={styles.confidenceText}>Confidence: {cleanInsight.confidence}</Text>
+          <AccordionCard
+            label="Next Step"
+            icon={Target}
+            isExpanded={expandedSections.nextStep}
+            onToggle={() => toggleSection('nextStep')}
+            isNextStep
+          >
+            {renderFormattedText(cleanInsight.nextStep, styles.nextText, { fontWeight: fontWeight.bold })}
+          </AccordionCard>
         </View>
       </ScrollView>
+
+      <ChatFAB onPress={() => setChatOpen(true)} />
 
       <Modal
         visible={isChatOpen}
@@ -207,7 +329,8 @@ export function InsightsTab({
       >
         <KeyboardAvoidingView
           style={styles.chatOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'android' ? 24 : 0}
         >
           <View style={styles.chatSheet}>
             <View style={styles.chatHandle} />
@@ -326,12 +449,12 @@ const styles = StyleSheet.create({
     maxWidth: layout.modalMaxWidth,
     alignSelf: 'center',
   },
+  heroBanner: {
+    marginBottom: spacing.base,
+  },
   headerBand: {
     minHeight: 168,
     borderRadius: radius.lg,
-    backgroundColor: Colors.surfaceContainer,
-    borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.16)',
     padding: spacing.base,
     flexDirection: 'row',
     alignItems: 'center',
@@ -342,97 +465,75 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  eyebrow: {
-    fontSize: typography.xs,
-    fontWeight: fontWeight.bold,
-    color: Colors.primary,
-    letterSpacing: 1,
+  title: {
+    fontSize: typography.xxl,
+    fontWeight: fontWeight.extraBold,
+    color: '#ffffff',
+    letterSpacing: -0.5,
     marginBottom: spacing.xs,
   },
-  title: {
-    fontSize: typography.xl,
-    fontWeight: fontWeight.extraBold,
-    color: Colors.onSurface,
-    letterSpacing: 0,
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    fontSize: typography.base,
-    lineHeight: 22,
-    color: Colors.onSurfaceVariant,
-  },
   sparkleBadge: {
-    width: 54,
-    height: 54,
+    width: 64,
+    height: 64,
     borderRadius: radius.full,
-    backgroundColor: Colors.primaryContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    marginBottom: spacing.base,
-  },
-  metaText: {
-    flex: 1,
-    fontSize: typography.xs,
-    color: Colors.outline,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  iconButton: {
-    width: layout.minTouchTarget,
-    height: layout.minTouchTarget,
-    borderRadius: radius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.24)',
-    backgroundColor: Colors.surfaceContainerLowest,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   regenerateButton: {
+    width: '100%',
     minHeight: layout.minTouchTarget,
     borderRadius: radius.full,
     paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.24)',
-    backgroundColor: Colors.surfaceContainerLowest,
+    backgroundColor: Colors.primaryContainer,
+    marginTop: spacing.xs,
   },
   regenerateText: {
     fontSize: typography.xs,
     fontWeight: fontWeight.bold,
-    color: Colors.primary,
+    color: Colors.onPrimary,
   },
-  insightCard: {
+  accordionContainer: {
+    width: '100%',
+  },
+  accordionCard: {
     borderRadius: radius.lg,
-    padding: spacing.base,
     backgroundColor: Colors.surfaceContainerLowest,
     borderWidth: 1,
     borderColor: 'rgba(190, 200, 210, 0.15)',
-    marginBottom: spacing.base,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
   },
-  nextCard: {
-    borderRadius: radius.lg,
+  nextAccordionCard: {
+    backgroundColor: Colors.surfaceContainer,
+    borderWidth: 0,
+  },
+  accordionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     padding: spacing.base,
-    backgroundColor: Colors.primaryContainer,
-    marginBottom: spacing.base,
   },
-  cardLabel: {
+  accordionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  accordionLabel: {
     fontSize: typography.xs,
     fontWeight: fontWeight.bold,
-    color: Colors.outline,
     letterSpacing: 1,
-    marginBottom: spacing.sm,
     textTransform: 'uppercase',
+  },
+  accordionContent: {
+    paddingHorizontal: spacing.base,
+    paddingBottom: spacing.base,
   },
   cardText: {
     fontSize: typography.base,
@@ -442,19 +543,8 @@ const styles = StyleSheet.create({
   nextText: {
     fontSize: typography.base,
     lineHeight: 22,
-    color: Colors.onPrimary,
+    color: Colors.onSurface,
     fontWeight: fontWeight.semiBold,
-  },
-  confidenceCard: {
-    borderRadius: radius.md,
-    padding: spacing.md,
-    backgroundColor: 'rgba(14, 165, 233, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.12)',
-  },
-  confidenceText: {
-    fontSize: typography.xs,
-    color: Colors.onSurfaceVariant,
   },
   chatOverlay: {
     flex: 1,
@@ -462,7 +552,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(11, 28, 48, 0.28)',
   },
   chatSheet: {
-    maxHeight: '86%',
+    flex: 1,
+    marginTop: 64,
     width: '100%',
     maxWidth: layout.modalMaxWidth,
     alignSelf: 'center',
@@ -550,8 +641,7 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semiBold,
   },
   chatMessages: {
-    minHeight: 180,
-    maxHeight: 360,
+    flex: 1,
   },
   chatMessagesContent: {
     paddingVertical: spacing.xs,
@@ -660,5 +750,39 @@ const styles = StyleSheet.create({
     color: '#D97706',
     fontSize: typography.xs,
     fontWeight: fontWeight.bold,
+  },
+  chatFab: {
+    position: 'absolute',
+    bottom: 88,
+    right: spacing.base,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: Colors.primaryContainer,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.base,
+    height: 48,
+    elevation: 6,
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 4px 12px rgba(14, 165, 235, 0.35)',
+      },
+      default: {
+        shadowColor: Colors.primaryContainer,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 6,
+      },
+    }),
+  },
+  chatFabLabel: {
+    fontSize: typography.sm,
+    fontWeight: fontWeight.bold,
+    color: Colors.onPrimary,
+  },
+  metaText: {
+    fontSize: typography.xs,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: spacing.xs,
   },
 });
