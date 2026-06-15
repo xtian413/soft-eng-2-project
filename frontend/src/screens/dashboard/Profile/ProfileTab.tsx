@@ -5,8 +5,9 @@ import { useAuthStore } from '@/store/authStore';
 import { typography, fontWeight, radius, spacing, layout } from '@/theme/typography';
 import { type GoalKey, type MacroTargets, type ActivityLevel, GOAL_LABELS, MACRO_PRESETS, type MacroRatios } from '@/screens/dashboard/types';
 import { calculateMacros, calculateTDEE } from '@/utils/macroCalculator';
-import { Dumbbell, TrendingDown, Activity, LogOut } from 'lucide-react-native';
+import { Dumbbell, TrendingDown, Activity, LogOut, HelpCircle } from 'lucide-react-native';
 import { useProfileStats } from './hooks/useProfileStats';
+import { useTutorial } from '@/context/TutorialContext';
 import { StatsRow } from './subcomponents/StatsRow';
 import { WeightTrendCard } from './subcomponents/WeightTrendCard';
 import { TrainingCalendar } from './subcomponents/TrainingCalendar';
@@ -65,6 +66,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
     .slice(0, 2);
 
   const { updatePhysicalStats, profile, user, aiMode, setAiMode } = useAuthStore();
+  const { startTutorial } = useTutorial();
   const [isEditModalVisible, setEditModalVisible] = useState(false);
   const [isSignOutModalVisible, setSignOutModalVisible] = useState(false);
   const [editHeight, setEditHeight] = useState(String(heightCm));
@@ -262,6 +264,11 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
 
   const handleSignOut = () => {
     setSignOutModalVisible(true);
+  };
+
+  const handleViewTutorialAgain = async () => {
+    console.log('[Tutorial] User requested to view tutorial again');
+    startTutorial();
   };
 
   useEffect(() => {
@@ -543,6 +550,19 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
         </View>
       </View>
 
+      {/* View Tutorial Again */}
+      <TouchableOpacity
+        style={styles.tutorialBtn}
+        onPress={handleViewTutorialAgain}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="View tutorial again"
+      >
+        <View style={styles.signOutBtnContent}>
+          <HelpCircle size={16} color={Colors.onPrimary} style={{ marginRight: 6 }} />
+          <Text style={styles.tutorialBtnText}>View Tutorial Again</Text>
+        </View>
+      </TouchableOpacity>
 
       {/* Sign Out */}
       <TouchableOpacity
@@ -1084,6 +1104,19 @@ const styles = StyleSheet.create({
     borderColor: Colors.error,
     marginBottom: spacing.md,
     minHeight: layout.minTouchTarget,
+  },
+  tutorialBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    minHeight: layout.minTouchTarget,
+  },
+  tutorialBtnText: {
+    color: Colors.onPrimary,
+    fontSize: typography.base,
+    fontWeight: fontWeight.semiBold,
   },
   signOutBtnContent: {
     flexDirection: 'row',

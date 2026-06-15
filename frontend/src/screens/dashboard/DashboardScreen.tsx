@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -57,6 +57,8 @@ import { buildFitnessInsightSignature } from '@/ai/insights/fitnessInsightCache'
 import { getDailyLogsByUser } from '@/local/repositories/dailyLogsRepository';
 import type { LocalDailyLog, LocalAiInsight } from '@/local/schema';
 import { format } from 'date-fns';
+import { useTutorial } from '@/context/TutorialContext';
+import { InteractiveTutorial } from '@/screens/dashboard/tutorial/InteractiveTutorial';
 
 type TabType = 'dashboard' | 'food' | 'insights' | 'lift' | 'profile';
 
@@ -96,10 +98,20 @@ function isSameIsoDay(left: Date, right: Date) {
 
 export default function DashboardScreen() {
   const { user, signOut, profile, fetchProfile } = useAuthStore();
+  const { startTutorial, hasSeenTutorial, isLoading: isTutorialLoading } = useTutorial();
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastOpacity = useState(new Animated.Value(0))[0];
   const pulseAnim = useState(new Animated.Value(1))[0];
+
+  // Tab button refs for tutorial highlighting
+  const tabButtonRefs = useRef<Record<TabType, React.RefObject<View | null>>>({
+    dashboard: React.createRef(),
+    food: React.createRef(),
+    insights: React.createRef(),
+    lift: React.createRef(),
+    profile: React.createRef(),
+  }).current;
   const [foodLogs, setFoodLogs] = useState<FoodLogEntry[]>([]);
   const [workouts, setWorkouts] = useState<WorkoutLog[]>([]);
   const [historyDailyLogs, setHistoryDailyLogs] = useState<LocalDailyLog[]>([]);
@@ -231,6 +243,50 @@ export default function DashboardScreen() {
     });
     return () => subscription.remove();
   }, [loadTodayLogs]);
+
+  // Auto-start tutorial on first app load if user hasn't seen it (new users only)
+  useEffect(() => {
+    console.log('=== DASHBOARD TUTORIAL AUTO-START CHECK ===');
+    console.log('[Dashboard] Current state:');
+    console.log('  - isTutorialLoading:', isTutorialLoading);
+    console.log('  - hasSeenTutorial:', hasSeenTutorial);
+
+    if (isTutorialLoading) {
+      console.log('[Dashboard] ⏳ Still loading tutorial status from Supabase...');
+      console.log('[Tutorial][DashboardAutoStart] Tutorial will not start yet', {
+        reason: 'TutorialContext is still loading.',
+      });
+      return;
+    }
+
+    if (!hasSeenTutorial) {
+      console.log('[Dashboard] ✓ New user detected (hasSeenTutorial = false)');
+      console.log('[Dashboard] ⏳ Will auto-start tutorial after 1 second');
+      console.log('[Tutorial][DashboardAutoStart] Tutorial scheduled to auto-start', {
+        hasSeenTutorial,
+        isTutorialLoading,
+        reason: 'TutorialContext reported incomplete automatic tutorial.',
+      });
+      // Delay slightly to ensure UI is fully rendered
+      const timer = setTimeout(() => {
+        console.log('[Dashboard] ✓ Calling startTutorial()');
+        console.log('[Tutorial][DashboardAutoStart] Calling startTutorial with persisted completion', {
+          persistCompletion: true,
+        });
+        startTutorial({ persistCompletion: true });
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else {
+      console.log('[Dashboard] ✓ User has already seen tutorial (hasSeenTutorial = true)');
+      console.log('[Dashboard] ✓ Skipping auto-start');
+      console.log('[Tutorial][DashboardAutoStart] Tutorial will not auto-start', {
+        hasSeenTutorial,
+        isTutorialLoading,
+        reason: 'TutorialContext reported tutorial already seen or user not eligible for automatic tutorial.',
+      });
+    }
+    console.log('=== DASHBOARD TUTORIAL AUTO-START CHECK END ===');
+  }, [hasSeenTutorial, isTutorialLoading, startTutorial]);
 
   const loadWorkoutLogs = useCallback(async () => {
     if (!user?.id) {
@@ -742,6 +798,7 @@ export default function DashboardScreen() {
                 <View key={tab.key} style={styles.coachButtonWrapper}>
                   <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
                     <TouchableOpacity
+                      ref={tabButtonRefs.insights}
                       style={styles.coachButton}
                       onPress={() => setActiveTab('insights')}
                       activeOpacity={0.8}
@@ -762,6 +819,7 @@ export default function DashboardScreen() {
 
             return (
               <TouchableOpacity
+                ref={tabButtonRefs[tab.key]}
                 key={tab.key}
                 style={styles.tabItem}
                 onPress={() => setActiveTab(tab.key)}
@@ -782,6 +840,13 @@ export default function DashboardScreen() {
           })}
         </View>
       </View>
+
+      {/* Interactive Tutorial Overlay */}
+      <InteractiveTutorial
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        tabButtonRefs={tabButtonRefs}
+      />
     </SafeAreaView>
   );
 }

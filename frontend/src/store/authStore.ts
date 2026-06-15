@@ -32,6 +32,7 @@ interface ProfileState {
   macroProteinPct: number | null;
   macroCarbsPct: number | null;
   macroFatsPct: number | null;
+  hasSeenOnboarding: boolean;
 }
 
 interface AuthState {
@@ -84,7 +85,8 @@ let authSubscription: { unsubscribe: () => void } | null = null;
 
 function localProfileToState(
   profile: LocalProfile,
-  latestWeightKg: number | null
+  latestWeightKg: number | null,
+  hasSeenOnboarding: boolean = false
 ): ProfileState {
   return {
     fullName: profile.full_name,
@@ -100,6 +102,7 @@ function localProfileToState(
     macroProteinPct: profile.macro_protein_pct,
     macroCarbsPct: profile.macro_carbs_pct,
     macroFatsPct: profile.macro_fats_pct,
+    hasSeenOnboarding: hasSeenOnboarding,
   };
 }
 
@@ -241,6 +244,13 @@ export const useAuthStore = create<AuthState>()(
           // If signup is successful and we have metadata, save to public.profiles and public.body_progress
           const userId = data.user?.id;
           if (userId && metadata) {
+            try {
+              await AsyncStorage.setItem('gemi:pendingAutoTutorialUserId', userId);
+              console.log('[SignUp] Set pending auto tutorial user ID in AsyncStorage:', userId);
+            } catch (err) {
+              console.warn('[SignUp] Failed to write pending auto tutorial ID to AsyncStorage:', err);
+            }
+
             // Safety-net upsert: if the DB trigger already created the row,
             // this updates it; if not, this creates it. No duplicate-key errors.
             const { error: profileError } = await supabase
@@ -255,6 +265,7 @@ export const useAuthStore = create<AuthState>()(
                 age: metadata.age ?? null,
                 activity_level: metadata.activityLevel ?? null,
                 target_weight_kg: metadata.targetWeightKg ?? metadata.weight,
+                has_seen_onboarding: false,
               });
 
             if (profileError) {
@@ -310,6 +321,7 @@ export const useAuthStore = create<AuthState>()(
                 macroProteinPct: null,
                 macroCarbsPct: null,
                 macroFatsPct: null,
+                hasSeenOnboarding: false,
               }
             });
           }
@@ -370,7 +382,7 @@ export const useAuthStore = create<AuthState>()(
           });
 
           set({
-            profile: localProfileToState(localProfile, weightKg)
+            profile: localProfileToState(localProfile, weightKg, currentProfile?.hasSeenOnboarding ?? false)
           });
 
           void retryPendingProfileSync(userId);
@@ -390,14 +402,15 @@ export const useAuthStore = create<AuthState>()(
           const localProfile = await getProfileByUser(userId);
           if (localProfile) {
             const localWeightKg = await getLatestLocalWeightKg(userId, localProfile);
-            set({ profile: localProfileToState(localProfile, localWeightKg) });
+            const currentHasSeen = get().profile?.hasSeenOnboarding ?? false;
+            set({ profile: localProfileToState(localProfile, localWeightKg, currentHasSeen) });
           }
 
           void retryPendingProfileSync(userId);
 
           const { data, error } = await supabase
             .from('profiles')
-            .select('full_name, height_cm, weight_kg, goal, gender, age, activity_level, target_weight_kg, macro_protein_pct, macro_carbs_pct, macro_fats_pct')
+            .select('full_name, height_cm, weight_kg, goal, gender, age, activity_level, target_weight_kg, macro_protein_pct, macro_carbs_pct, macro_fats_pct, has_seen_onboarding')
             .eq('id', userId)
             .maybeSingle();
 
@@ -466,7 +479,8 @@ export const useAuthStore = create<AuthState>()(
           set({
             profile: localProfileToState(
               finalLocalProfile,
-              finalWeightKg ?? finalLocalProfile.weight_kg ?? remoteWeightKg
+              finalWeightKg ?? finalLocalProfile.weight_kg ?? remoteWeightKg,
+              data?.has_seen_onboarding === true
             )
           });
         } catch (e) {
@@ -475,7 +489,8 @@ export const useAuthStore = create<AuthState>()(
               const localProfile = await getProfileByUser(userId);
               if (localProfile) {
                 const localWeightKg = await getLatestLocalWeightKg(userId, localProfile);
-                set({ profile: localProfileToState(localProfile, localWeightKg) });
+                const currentHasSeen = get().profile?.hasSeenOnboarding ?? false;
+                set({ profile: localProfileToState(localProfile, localWeightKg, currentHasSeen) });
               }
             } catch (localError) {
               console.warn('[Gemi] Failed to read cached user profile:', localError);
