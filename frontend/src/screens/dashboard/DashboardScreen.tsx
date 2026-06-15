@@ -656,7 +656,8 @@ export default function DashboardScreen() {
 
         const prompt = buildFitnessInsightChatPrompt(fitnessInsightInput, fitnessInsight, history, question);
         const response = await generateInsightChatResponse(prompt);
-        const answer = response.trim();
+        let answer = response.trim();
+        answer = answer.replace(/^(?:DATA|SIGNALS|CURRENT_INSIGHT|RAG|GEMI|TITLE|SUMMARY|NUTRITION|TRAINING|NEXT|CONFIDENCE)\s*:\s*/i, '');
         if (!answer) {
           throw new Error('The on-device model returned an empty chat response.');
         }

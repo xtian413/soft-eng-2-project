@@ -65,6 +65,125 @@
       "doi": "10.1136/bjsports-2023-106994",
       "url": "https://bjsm.bmj.com/content/57/17/1073",
       "scope": "Female and male athletes; health and performance consequences associated with problematic low energy availability."
+    },
+    {
+      "title": "Sleep and athletic performance: the effects of sleep loss on exercise performance, and physiological and cognitive responses to exercise",
+      "organization": "Sports Medicine",
+      "year": 2015,
+      "sourceType": "systematic_review",
+      "doi": "10.1007/s40279-014-0260-0",
+      "pmid": "25315456",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/25315456/",
+      "scope": "Athletes; impact of sleep loss on exercise and cognitive performance."
+    },
+    {
+      "title": "The effects of sleep extension on the athletic performance of collegiate basketball players",
+      "organization": "Sleep",
+      "year": 2011,
+      "sourceType": "rct",
+      "doi": "10.5665/SLEEP.1132",
+      "pmid": "21731144",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/21731144/",
+      "scope": "Collegiate basketball players; effects of extended sleep on athletic performance."
+    },
+    {
+      "title": "International Society of Sports Nutrition position stand: safety and efficacy of creatine supplementation in exercise, sport, and medicine",
+      "organization": "Journal of the International Society of Sports Nutrition",
+      "year": 2017,
+      "sourceType": "position_stand",
+      "doi": "10.1186/s12970-017-0173-z",
+      "pmid": "28615996",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/28615996/",
+      "scope": "Athletes and general population; safety and efficacy of creatine."
+    },
+    {
+      "title": "Prevalence of vitamin D inadequacy in athletes: a systematic-review and meta-analysis",
+      "organization": "Sports Medicine",
+      "year": 2015,
+      "sourceType": "meta_analysis",
+      "doi": "10.1007/s40279-014-0267-6",
+      "pmid": "25277808",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/25277808/",
+      "scope": "Athletes; prevalence of vitamin D inadequacy and implications for health and performance."
+    },
+    {
+      "title": "Overtraining syndrome: a practical guide",
+      "organization": "Sports Health",
+      "year": 2012,
+      "sourceType": "systematic_review",
+      "doi": "10.1177/1941738111434406",
+      "pmid": "23016079",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/23016079/",
+      "scope": "Athletes; practical guidance on identifying and managing overtraining syndrome."
+    },
+    {
+      "title": "The training-injury prevention paradox: should athletes be training smarter and harder?",
+      "organization": "British Journal of Sports Medicine",
+      "year": 2016,
+      "sourceType": "systematic_review",
+      "doi": "10.1136/bjsports-2015-095422",
+      "pmid": "26758673",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/26758673/",
+      "scope": "Athletes; training loads, acute to chronic workload ratios, and injury prevention."
+    },
+    {
+      "title": "A systematic review of dietary protein during caloric restriction in resistance trained lean athletes: a case for higher intakes",
+      "organization": "International Journal of Sport Nutrition and Exercise Metabolism",
+      "year": 2014,
+      "sourceType": "systematic_review",
+      "doi": "10.1123/ijsnem.2013-0054",
+      "pmid": "24092765",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/24092765/",
+      "scope": "Resistance trained lean athletes; protein needs during caloric restriction."
+    },
+    {
+      "title": "International society of sports nutrition position stand: nutrient timing",
+      "organization": "Journal of the International Society of Sports Nutrition",
+      "year": 2017,
+      "sourceType": "position_stand",
+      "doi": "10.1186/s12970-017-0189-4",
+      "pmid": "28919842",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/28919842/",
+      "scope": "Athletes and active individuals; timing of macronutrient ingestion."
+    },
+    {
+      "title": "The mechanisms of muscle hypertrophy and their application to resistance training",
+      "organization": "Journal of Strength and Conditioning Research",
+      "year": 2010,
+      "sourceType": "systematic_review",
+      "doi": "10.1519/JSC.0b013e3181e840f3",
+      "pmid": "20847704",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/20847704/",
+      "scope": "Resistance trained individuals; mechanisms driving muscle hypertrophy."
+    },
+    {
+      "title": "Stimuli and sensors that initiate skeletal muscle hypertrophy following resistance exercise",
+      "organization": "Journal of Applied Physiology",
+      "year": 2019,
+      "sourceType": "systematic_review",
+      "doi": "10.1152/japplphysiol.00685.2018",
+      "pmid": "30335577",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/30335577/",
+      "scope": "Healthy adults; molecular signaling and stimuli for hypertrophy."
+    },
+    {
+      "title": "Is Postexercise Muscle Soreness a Valid Indicator of Muscular Adaptations?",
+      "organization": "Strength and Conditioning Journal",
+      "year": 2013,
+      "sourceType": "systematic_review",
+      "pmid": "UNVERIFIED - manual check required",
+      "url": "https://journals.lww.com/nsca-scj/Abstract/2013/10000/Is_Postexercise_Muscle_Soreness_a_Valid_Indicator.2.aspx",
+      "scope": "Resistance trained individuals; relationship between DOMS and muscle hypertrophy."
+    },
+    {
+      "title": "Effects of different intensities of resistance training with equated volume load on muscle strength and hypertrophy",
+      "organization": "European Journal of Applied Physiology",
+      "year": 2018,
+      "sourceType": "rct",
+      "doi": "10.1007/s00421-018-3844-5",
+      "pmid": "29564973",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/29564973/",
+      "scope": "Healthy men; comparing low vs high load resistance training on muscle adaptations."
     }
   ],
   "cards": [
@@ -1326,6 +1445,404 @@
       },
       "evidenceLevel": "moderate",
       "lastReviewedAt": "2026-05-31"
+    },
+    {
+      "id": "sleep-restriction-performance",
+      "topic": "sleep loss and performance",
+      "tags": [
+        "sleep",
+        "performance",
+        "recovery",
+        "strength"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "athletes",
+        "healthy adults"
+      ],
+      "claim": "Sleep restriction can negatively impact cognitive function and may impair specific aspects of physical performance, immunity, and recovery.",
+      "practicalAdvice": [
+        "Prioritize consistent sleep to maintain cognitive focus and support optimal exercise recovery.",
+        "Avoid accumulating sleep debt, especially during periods of heavy training."
+      ],
+      "source": {
+        "title": "Sleep and athletic performance: the effects of sleep loss on exercise performance, and physiological and cognitive responses to exercise",
+        "organization": "Sports Medicine",
+        "year": 2015,
+        "sourceType": "systematic_review",
+        "doi": "10.1007/s40279-014-0260-0",
+        "pmid": "25315456",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/25315456/",
+        "scope": "Athletes; impact of sleep loss on exercise and cognitive performance."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-06-15"
+    },
+    {
+      "id": "sleep-extension-benefits",
+      "topic": "sleep extension",
+      "tags": [
+        "sleep extension",
+        "performance",
+        "recovery",
+        "speed",
+        "accuracy"
+      ],
+      "audience": "intermediate",
+      "applicablePopulation": [
+        "athletes",
+        "highly active individuals"
+      ],
+      "claim": "Extending sleep to 10 hours per night can significantly improve athletic performance metrics such as sprint speed, shooting accuracy, and reaction time in athletes.",
+      "practicalAdvice": [
+        "If training volume is high or you are preparing for competition, try to extend your sleep duration to maximize physical and mental readiness.",
+        "More sleep directly translates to improved performance and reduced fatigue."
+      ],
+      "source": {
+        "title": "The effects of sleep extension on the athletic performance of collegiate basketball players",
+        "organization": "Sleep",
+        "year": 2011,
+        "sourceType": "rct",
+        "doi": "10.5665/SLEEP.1132",
+        "pmid": "21731144",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/21731144/",
+        "scope": "Collegiate basketball players; effects of extended sleep on athletic performance."
+      },
+      "evidenceLevel": "moderate",
+      "lastReviewedAt": "2026-06-15",
+      "dosage": {
+        "note": "A target of 9-10 hours in bed was used to achieve these specific performance benefits."
+      }
+    },
+    {
+      "id": "creatine-efficacy-safety",
+      "topic": "creatine monohydrate",
+      "tags": [
+        "creatine",
+        "supplementation",
+        "strength",
+        "hypertrophy"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "healthy adults performing resistance training",
+        "athletes"
+      ],
+      "claim": "Creatine monohydrate is a safe, effective, and well-tolerated nutritional ergogenic aid for enhancing high-intensity exercise performance and training adaptations.",
+      "practicalAdvice": [
+        "A daily dose of 3-5 grams of creatine monohydrate is effective for maintaining elevated muscle creatine stores over time.",
+        "It is one of the most researched supplements and is safe for long-term use in healthy individuals."
+      ],
+      "source": {
+        "title": "International Society of Sports Nutrition position stand: safety and efficacy of creatine supplementation in exercise, sport, and medicine",
+        "organization": "Journal of the International Society of Sports Nutrition",
+        "year": 2017,
+        "sourceType": "position_stand",
+        "doi": "10.1186/s12970-017-0173-z",
+        "pmid": "28615996",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/28615996/",
+        "scope": "Athletes and general population; safety and efficacy of creatine."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-06-15",
+      "dosage": {
+        "note": "Standard maintenance dose is 3-5 g/day. A loading phase (e.g., 20 g/day for 5-7 days) is optional for faster saturation."
+      },
+      "excludedPopulation": [
+        "users with pre-existing kidney disease should consult a doctor"
+      ]
+    },
+    {
+      "id": "vitamin-d-deficiency",
+      "topic": "vitamin D in athletes",
+      "tags": [
+        "vitamin D",
+        "deficiency",
+        "bone health",
+        "immunity"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "athletes",
+        "healthy adults"
+      ],
+      "claim": "Vitamin D inadequacy is highly prevalent among athletes, which can negatively impact bone health, immune function, and potentially muscle function.",
+      "practicalAdvice": [
+        "If you live in a region with low sunlight, train indoors, or have darker skin, consider having your Vitamin D levels checked.",
+        "Supplementation may be necessary if blood levels are found to be insufficient or deficient."
+      ],
+      "source": {
+        "title": "Prevalence of vitamin D inadequacy in athletes: a systematic-review and meta-analysis",
+        "organization": "Sports Medicine",
+        "year": 2015,
+        "sourceType": "meta_analysis",
+        "doi": "10.1007/s40279-014-0267-6",
+        "pmid": "25277808",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/25277808/",
+        "scope": "Athletes; prevalence of vitamin D inadequacy and implications for health and performance."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-06-15",
+      "limitations": [
+        "Supplementation is primarily beneficial if a deficiency exists; excessive supplementation does not confer additional athletic benefits."
+      ]
+    },
+    {
+      "id": "overtraining-syndrome-diagnosis",
+      "topic": "overtraining syndrome",
+      "tags": [
+        "overtraining",
+        "fatigue",
+        "recovery",
+        "performance decline"
+      ],
+      "audience": "intermediate",
+      "applicablePopulation": [
+        "athletes",
+        "highly active adults"
+      ],
+      "claim": "Overtraining syndrome is a severe condition characterized by a persistent, unexplained decline in performance despite continued training and adequate rest, often accompanied by mood disturbances.",
+      "practicalAdvice": [
+        "True overtraining syndrome takes weeks or months to recover from; prevention through careful load management is critical.",
+        "If performance drops persistently over weeks alongside severe fatigue and irritability, consult a professional to rule out medical issues."
+      ],
+      "source": {
+        "title": "Overtraining syndrome: a practical guide",
+        "organization": "Sports Health",
+        "year": 2012,
+        "sourceType": "systematic_review",
+        "doi": "10.1177/1941738111434406",
+        "pmid": "23016079",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/23016079/",
+        "scope": "Athletes; practical guidance on identifying and managing overtraining syndrome."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-06-15",
+      "limitations": [
+        "Overtraining syndrome is a diagnosis of exclusion and must be differentiated from functional overreaching or medical conditions like anemia."
+      ]
+    },
+    {
+      "id": "acute-chronic-workload",
+      "topic": "workload progression",
+      "tags": [
+        "training load",
+        "injury prevention",
+        "acute:chronic workload ratio",
+        "progression"
+      ],
+      "audience": "advanced",
+      "applicablePopulation": [
+        "athletes",
+        "active adults"
+      ],
+      "claim": "Rapid spikes in acute training load relative to chronic training capacity (an acute:chronic workload ratio >=1.5) are strongly associated with an increased risk of injury.",
+      "practicalAdvice": [
+        "Avoid sudden, drastic increases in training volume or intensity from week to week.",
+        "A progressive, controlled approach to increasing your training load builds resilience and protects against injuries better than undertraining."
+      ],
+      "source": {
+        "title": "The training-injury prevention paradox: should athletes be training smarter and harder?",
+        "organization": "British Journal of Sports Medicine",
+        "year": 2016,
+        "sourceType": "systematic_review",
+        "doi": "10.1136/bjsports-2015-095422",
+        "pmid": "26758673",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/26758673/",
+        "scope": "Athletes; training loads, acute to chronic workload ratios, and injury prevention."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-06-15"
+    },
+    {
+      "id": "protein-caloric-deficit",
+      "topic": "protein in a caloric deficit",
+      "tags": [
+        "protein",
+        "caloric deficit",
+        "fat loss",
+        "muscle preservation"
+      ],
+      "audience": "intermediate",
+      "applicablePopulation": [
+        "healthy adults performing resistance training",
+        "lean athletes"
+      ],
+      "claim": "For resistance-trained, lean athletes undergoing a caloric restriction to lose fat, dietary protein needs are elevated to 2.3-3.1 g/kg of fat-free mass to prevent muscle loss.",
+      "practicalAdvice": [
+        "When eating in a calorie deficit, prioritize high protein intake to signal your body to retain muscle mass while losing fat.",
+        "The leaner you are and the larger the deficit, the more protein you need to protect your muscle tissue."
+      ],
+      "source": {
+        "title": "A systematic review of dietary protein during caloric restriction in resistance trained lean athletes: a case for higher intakes",
+        "organization": "International Journal of Sport Nutrition and Exercise Metabolism",
+        "year": 2014,
+        "sourceType": "systematic_review",
+        "doi": "10.1123/ijsnem.2013-0054",
+        "pmid": "24092765",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/24092765/",
+        "scope": "Resistance trained lean athletes; protein needs during caloric restriction."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-06-15",
+      "dosage": {
+        "note": "2.3 to 3.1 g/kg of fat-free mass (FFM) is generally higher than standard protein recommendations."
+      }
+    },
+    {
+      "id": "nutrient-timing-carbs",
+      "topic": "carbohydrate timing",
+      "tags": [
+        "carbohydrates",
+        "nutrient timing",
+        "workout fuel",
+        "recovery"
+      ],
+      "audience": "intermediate",
+      "applicablePopulation": [
+        "athletes",
+        "healthy adults performing intense exercise"
+      ],
+      "claim": "Consuming carbohydrates alongside protein near the training window can maximize glycogen resynthesis and support prolonged, high-volume exercise performance.",
+      "practicalAdvice": [
+        "If you are training intensely multiple times a day or doing very prolonged sessions, prioritize consuming carbohydrates immediately after and during workouts.",
+        "For a standard 1-hour lifting session, total daily carbohydrate intake matters more than exact pre- or post-workout timing."
+      ],
+      "source": {
+        "title": "International society of sports nutrition position stand: nutrient timing",
+        "organization": "Journal of the International Society of Sports Nutrition",
+        "year": 2017,
+        "sourceType": "position_stand",
+        "doi": "10.1186/s12970-017-0189-4",
+        "pmid": "28919842",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/28919842/",
+        "scope": "Athletes and active individuals; timing of macronutrient ingestion."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-06-15"
+    },
+    {
+      "id": "hypertrophy-three-mechanisms",
+      "topic": "three mechanisms of hypertrophy",
+      "tags": [
+        "hypertrophy",
+        "mechanical tension",
+        "metabolic stress",
+        "muscle damage"
+      ],
+      "audience": "advanced",
+      "applicablePopulation": [
+        "healthy adults performing resistance training"
+      ],
+      "claim": "Muscle hypertrophy is theorized to be mediated by three primary factors: mechanical tension, metabolic stress, and to a lesser extent, muscle damage.",
+      "practicalAdvice": [
+        "Focus on mechanical tension (lifting progressively heavier weights) as the main driver of your growth.",
+        "Metabolic stress (the 'pump') can be a secondary stimulus, but muscle damage should not be the main goal."
+      ],
+      "source": {
+        "title": "The mechanisms of muscle hypertrophy and their application to resistance training",
+        "organization": "Journal of Strength and Conditioning Research",
+        "year": 2010,
+        "sourceType": "systematic_review",
+        "doi": "10.1519/JSC.0b013e3181e840f3",
+        "pmid": "20847704",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/20847704/",
+        "scope": "Resistance trained individuals; mechanisms driving muscle hypertrophy."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-06-15"
+    },
+    {
+      "id": "hypertrophy-mechanism-tension",
+      "topic": "mechanisms of hypertrophy",
+      "tags": [
+        "hypertrophy",
+        "mechanical tension",
+        "muscle growth",
+        "mechanotransduction"
+      ],
+      "audience": "advanced",
+      "applicablePopulation": [
+        "healthy adults performing resistance training"
+      ],
+      "claim": "Muscle hypertrophy is driven primarily by mechanical tension activating mTOR signaling pathways, not by microscopic muscle tears. Muscle damage is a training byproduct, not the primary growth mechanism.",
+      "practicalAdvice": [
+        "You do not need to intentionally cause muscle damage to grow. Consistent progressive overload (mechanical tension) is the most reliable driver of muscle growth.",
+        "Avoid changing exercises too often just to 'shock' the muscles into being damaged."
+      ],
+      "source": {
+        "title": "Stimuli and sensors that initiate skeletal muscle hypertrophy following resistance exercise",
+        "organization": "Journal of Applied Physiology",
+        "year": 2019,
+        "sourceType": "systematic_review",
+        "doi": "10.1152/japplphysiol.00685.2018",
+        "pmid": "30335577",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/30335577/",
+        "scope": "Healthy adults; molecular signaling and stimuli for hypertrophy."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-06-15"
+    },
+    {
+      "id": "doms-not-required",
+      "topic": "muscle soreness and growth",
+      "tags": [
+        "DOMS",
+        "soreness",
+        "muscle damage",
+        "hypertrophy"
+      ],
+      "audience": "general",
+      "applicablePopulation": [
+        "healthy adults performing resistance training"
+      ],
+      "claim": "Delayed onset muscle soreness (DOMS) correlates poorly with muscle hypertrophy and is not a valid or reliable indicator of muscular adaptations.",
+      "practicalAdvice": [
+        "You do not need to feel sore after a workout for it to have stimulated muscle growth.",
+        "Do not judge the quality of your workout by how sore you are the next day; track your strength progression instead."
+      ],
+      "source": {
+        "title": "Is Postexercise Muscle Soreness a Valid Indicator of Muscular Adaptations?",
+        "organization": "Strength and Conditioning Journal",
+        "year": 2013,
+        "sourceType": "systematic_review",
+        "pmid": "UNVERIFIED - manual check required",
+        "url": "https://journals.lww.com/nsca-scj/Abstract/2013/10000/Is_Postexercise_Muscle_Soreness_a_Valid_Indicator.2.aspx",
+        "scope": "Resistance trained individuals; relationship between DOMS and muscle hypertrophy."
+      },
+      "evidenceLevel": "high",
+      "lastReviewedAt": "2026-06-15"
+    },
+    {
+      "id": "low-load-hypertrophy",
+      "topic": "low load hypertrophy",
+      "tags": [
+        "hypertrophy",
+        "low load",
+        "muscle growth",
+        "effort"
+      ],
+      "audience": "intermediate",
+      "applicablePopulation": [
+        "healthy adults performing resistance training"
+      ],
+      "claim": "Resistance training with low loads (e.g., 20% of 1RM) can produce comparable muscle hypertrophy to high-load training, provided the sets are taken near muscular failure.",
+      "practicalAdvice": [
+        "You can still build muscle using lighter weights if you take your sets close to failure.",
+        "This is highly beneficial for periods when you need to avoid heavy loading due to joint stress or limited equipment."
+      ],
+      "source": {
+        "title": "Effects of different intensities of resistance training with equated volume load on muscle strength and hypertrophy",
+        "organization": "European Journal of Applied Physiology",
+        "year": 2018,
+        "sourceType": "rct",
+        "doi": "10.1007/s00421-018-3844-5",
+        "pmid": "29564973",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/29564973/",
+        "scope": "Healthy men; comparing low vs high load resistance training on muscle adaptations."
+      },
+      "evidenceLevel": "moderate",
+      "lastReviewedAt": "2026-06-15"
     }
   ]
 }

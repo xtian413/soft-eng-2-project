@@ -260,7 +260,7 @@ async function generateResponseWithTimeout(
             top_k: topK,
             repeat_penalty: repeatPenalty,
             num_predict: maxTokens,
-            num_ctx: 2048, // Limit context window allocation to speed up processing
+            num_ctx: 4096, // 4K context to fit RAG evidence cards, verbose data facts, and chat history without truncation
           },
         }),
       });
