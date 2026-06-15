@@ -35,13 +35,14 @@ export interface CalendarDay {
 }
 
 export interface ProfileStats {
-  volumeTodayKg: number;
-  volumeWeekKg: number;
-  volumeMonthKg: number;
-  volumeAllTimeKg: number;
+  setsToday: number;
+  setsWeek: number;
+  setsMonth: number;
+  setsAllTime: number;
   weekStreak: number;
   weightEntries: ProgressEntry[];
   calendarDays: CalendarDay[];
+  muscleGroupWeeklySets: Record<string, number>;
   loading: boolean;
   error: string | null;
   refetch: () => void;
@@ -131,7 +132,7 @@ function buildCalendar(workouts: LocalWorkoutWithSets[]): CalendarDay[] {
   });
 }
 
-function calculateVolumes(workouts: LocalWorkoutWithSets[]) {
+function calculateSetCounts(workouts: LocalWorkoutWithSets[]) {
   const now = new Date();
   const todayStr = format(now, 'yyyy-MM-dd');
   const curWeekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
@@ -141,6 +142,7 @@ function calculateVolumes(workouts: LocalWorkoutWithSets[]) {
   let week = 0;
   let month = 0;
   let allTime = 0;
+  const muscleGroupCount: Record<string, number> = {};
 
   workouts.forEach((w) => {
     const wDate = parseISO(w.performed_at);
@@ -148,45 +150,58 @@ function calculateVolumes(workouts: LocalWorkoutWithSets[]) {
     const wWeekStart = format(startOfWeek(wDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
     const wMonthStr = format(wDate, 'yyyy-MM');
 
-    let wVolume = 0;
+    let wSets = 0;
     if (w.sets) {
-      w.sets.forEach((set) => {
-        if (typeof set.reps === 'number' && typeof set.weight_kg === 'number') {
-          wVolume += set.reps * set.weight_kg;
-        }
-      });
+      wSets = w.sets.length;
+      if (wWeekStart === curWeekStart) {
+        w.sets.forEach((set) => {
+          if (set.muscle_group) {
+            muscleGroupCount[set.muscle_group] = (muscleGroupCount[set.muscle_group] || 0) + 1;
+          }
+        });
+      }
     }
 
-    allTime += wVolume;
+    allTime += wSets;
     if (wDateStr === todayStr) {
-      today += wVolume;
+      today += wSets;
     }
     if (wWeekStart === curWeekStart) {
-      week += wVolume;
+      week += wSets;
     }
     if (wMonthStr === curMonthStr) {
-      month += wVolume;
+      month += wSets;
     }
   });
 
+  // Sort by count descending
+  const sorted = Object.entries(muscleGroupCount)
+    .sort(([, a], [, b]) => b - a)
+    .reduce((acc, [key, val]) => {
+      acc[key] = val;
+      return acc;
+    }, {} as Record<string, number>);
+
   return {
-    today: Math.round(today),
-    week: Math.round(week),
-    month: Math.round(month),
-    allTime: Math.round(allTime),
+    today,
+    week,
+    month,
+    allTime,
+    muscleGroupWeeklySets: sorted,
   };
 }
 
 /** Main hook — fetches all profile stats in parallel */
 export function useProfileStats(): ProfileStats {
   const userId = useAuthStore((state) => state.user?.id ?? null);
-  const [volumeTodayKg, setVolumeTodayKg] = useState(0);
-  const [volumeWeekKg, setVolumeWeekKg] = useState(0);
-  const [volumeMonthKg, setVolumeMonthKg] = useState(0);
-  const [volumeAllTimeKg, setVolumeAllTimeKg] = useState(0);
+  const [setsToday, setSetsToday] = useState(0);
+  const [setsWeek, setSetsWeek] = useState(0);
+  const [setsMonth, setSetsMonth] = useState(0);
+  const [setsAllTime, setSetsAllTime] = useState(0);
   const [weekStreak, setWeekStreak] = useState(0);
   const [weightEntries, setWeightEntries] = useState<ProgressEntry[]>([]);
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
+  const [muscleGroupWeeklySets, setMuscleGroupWeeklySets] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -258,31 +273,31 @@ export function useProfileStats(): ProfileStats {
         if (cancelled) return;
 
         if (userId) {
-          // Sync remote workouts (which now include sets) to local SQLite database
-          await Promise.all(
-            remoteWorkouts.map((rw) =>
-              upsertRemoteWorkoutForUser(userId, {
-                id: rw.id,
-                name: rw.name,
-                notes: rw.notes,
-                performed_at: rw.performed_at,
-                created_at: rw.created_at,
-                workout_sets: rw.workout_sets,
-              })
-            )
-          );
+          // Sync remote workouts (which now include sets) to local SQLite database sequentially
+          // to prevent concurrent transaction attempts in SQLite (cannot start a transaction within a transaction)
+          for (const rw of remoteWorkouts) {
+            await upsertRemoteWorkoutForUser(userId, {
+              id: rw.id,
+              name: rw.name,
+              notes: rw.notes,
+              performed_at: rw.performed_at,
+              created_at: rw.created_at,
+              workout_sets: rw.workout_sets,
+            });
+          }
         }
 
         // Fetch all local workouts with their sets from local SQLite DB
         const workouts = userId ? await getWorkoutsByUser(userId) : [];
         if (cancelled) return;
 
-        // Calculate volumes client-side
-        const volumes = calculateVolumes(workouts);
-        setVolumeTodayKg(volumes.today);
-        setVolumeWeekKg(volumes.week);
-        setVolumeMonthKg(volumes.month);
-        setVolumeAllTimeKg(volumes.allTime);
+        // Calculate sets client-side
+        const setCounts = calculateSetCounts(workouts);
+        setSetsToday(setCounts.today);
+        setSetsWeek(setCounts.week);
+        setSetsMonth(setCounts.month);
+        setSetsAllTime(setCounts.allTime);
+        setMuscleGroupWeeklySets(setCounts.muscleGroupWeeklySets);
 
         // Week streak
         setWeekStreak(calcStreak(workouts));
@@ -370,13 +385,14 @@ export function useProfileStats(): ProfileStats {
   }, [retryAndRefreshLocalBodyProgress, userId]);
 
   return {
-    volumeTodayKg,
-    volumeWeekKg,
-    volumeMonthKg,
-    volumeAllTimeKg,
+    setsToday,
+    setsWeek,
+    setsMonth,
+    setsAllTime,
     weekStreak,
     weightEntries,
     calendarDays,
+    muscleGroupWeeklySets,
     loading,
     error,
     refetch,

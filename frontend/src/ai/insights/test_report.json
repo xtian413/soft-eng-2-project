@@ -1,0 +1,146 @@
+[
+  {
+    "name": "Scenario 1: Standard Sync Data",
+    "rawResponse": "TITLE=Personal Insight on Lean Bulk Progress\nSUMMARY=Christian, you've made a great start with your lean bulk plan by logging 2 meals today, reducing your daily calorie intake by over 1600 kcal. Your protein and carb consumption are slightly lower than your goal but fats remain within range. Remember to balance these numbers as needed.\nNUTRITION=Today's meals were balanced: Oatmeal provided a good start with its 400 kcal, 15g protein, and 60g carbs; Chicken and Rice was the main meal, offering more calories (650 kcal) but also more protein (45g), carbs (80g), and fats (12g).\nTRAINING=Your recent workout showed impressive volume with 3 sets of exercises totaling 1200kg. It's great to see you sticking to your routine, focusing on Push Day for the next few workouts.\nNEXT=Continue tracking your meals closely and adjust as needed. Aim for a balanced diet that stays within your goals while also maintaining hydration and sleep patterns. Keep pushing with consistent training.\nCONFIDENCE=85",
+    "repaired": {
+      "title": "Personal Insight on Lean Bulk Progress",
+      "summary": "You, you've made a great start with your lean bulk plan by logging 2 meals today, reducing your daily calorie intake by over 1600 kcal. Your protein and carb consumption are slightly lower than your goal but fats remain within range. Remember to balance these numbers as needed.",
+      "nutrition": "Today's meals were balanced: Oatmeal provided a good start with its 400 kcal, 15g protein, and 60g carbs; Chicken and Rice was the main meal, offering more calories (650 kcal) but also more protein (45g), carbs (80g), and fats (12g).",
+      "training": "Your recent workout showed impressive volume with 3 sets of exercises totaling 1200kg. It's great to see you sticking to your routine, focusing on Push Day for the next few workouts. Your recovery logs show 8.0 hrs sleep across 1 logged night and 2500 ml hydration across 1 logged day, so match training intensity to that recovery today.",
+      "nextStep": "Continue tracking your meals closely and adjust as needed. Aim for a balanced diet that stays within your goals while also maintaining hydration and sleep patterns. Keep pushing with consistent training.",
+      "confidence": "85"
+    },
+    "quality": {
+      "isUsable": true,
+      "reasons": []
+    }
+  },
+  {
+    "name": "Scenario 2: Poor Recovery Correlation",
+    "rawResponse": "TITLE=... SUMMARY=You've demonstrated a commitment to your lean bulk by tracking your meals effectively, even if you're still in the learning phase of portion control. Your most recent meals included 1050 kcal and were balanced with 60g protein, 140g carbs, and 20g fat. Great effort logging!\n\nNUTRITION=Your daily intake is currently at 1050 kcal, with a slight adjustment needed to align closer to your goal of approximately 2700 kcal per day. Your macronutrient breakdown shows significant gaps in fats (60g vs. 70g), which you've been tracking and adjusting.\n\nTRAINING=You’ve maintained consistent training sessions focusing on strength, with a recent workout volume of 2100kg, indicating your efforts are paying off. The last Fatigued Day was six days ago, showing a steady improvement in recovery performance despite some fluctuations.\n\nNEXT=Reflect on your sleep patterns and hydration levels to ensure you're getting enough rest and staying hydrated, as these factors can significantly impact your training outcomes and overall fitness journey. Consider adjusting your meal timing or portion sizes if needed, focusing particularly on reducing fat intake to align better with your goals.\n\n",
+    "repaired": {
+      "title": "You Ve Demonstrated Commitment",
+      "summary": "You've demonstrated a commitment to your lean bulk by tracking your meals effectively, even if you're still in the learning phase of portion control. Your most recent meals included 1050 kcal and were balanced with 60g protein, 140g carbs, and 20g fat. Great effort logging!",
+      "nutrition": "Your daily intake is currently at 1050 kcal, with a slight adjustment needed to align closer to your goal of approximately 2700 kcal per day. Your macronutrient breakdown shows significant gaps in fats (60g vs. 70g), which you've been tracking and adjusting.",
+      "training": "You’ve maintained consistent training sessions focusing on strength, with a recent workout volume of 2100kg, indicating your efforts are paying off. The last Fatigued Day was six days ago, showing a steady improvement in recovery performance despite some fluctuations. Your recovery logs show 5.0 hrs sleep across 1 logged night and 800 ml hydration across 1 logged day, so match training intensity to that recovery today.",
+      "nextStep": "Reflect on your sleep patterns and hydration levels to ensure you're getting enough rest and staying hydrated, as these factors can significantly impact your training outcomes and overall fitness journey. Consider adjusting your meal timing or portion sizes if needed, focusing particularly on reducing fat intake to align better with your goals.",
+      "confidence": "low: model output could not be parsed."
+    },
+    "quality": {
+      "isUsable": true,
+      "reasons": []
+    }
+  },
+  {
+    "name": "Scenario 3: Missing Sync Data",
+    "rawResponse": "TITLE=Christian G's Lean Bulk Progress Report\nSUMMARY=Great effort logging meals and workouts! Your recent lean bulk efforts show a slight dip in calorie intake, but you're on track with your protein and carbs goals.\nNUTRITION=Your daily totals are 1050 kcal, 60g protein, and 140g carbs. This aligns well with your goal of maintaining a lean bulk while ensuring adequate nutrition.\nTRAINING=You completed 3 sets during your recent Push Day workout with a volume of 1200kg. Your exercises include Bench Press and Overhead Press, which are great for building upper body strength.\nSIGNALS:\nNutrition signal: You've logged 2 meals today with a total intake of 1050 kcal (39% of your daily goal).\nLargest macro gap: The fats category is currently at 20g out of the recommended 70g, which you need to increase.\nTraining signal: Your last workout was Push Day 6 days ago. You've been consistent with your workouts and exercises.\nNEXT=Continue tracking your meals closely and aim for a balanced intake of macronutrients. Keep up with your strength training routine and make sure to include",
+    "repaired": {
+      "title": "your Lean Bulk Progress Report",
+      "summary": "You logged 2 meals today and reached 1050 of 2700 kcal (39%).",
+      "nutrition": "Your daily totals are 1050 kcal, 60g protein, and 140g carbs. This aligns well with your goal of maintaining a lean bulk while ensuring adequate nutrition.",
+      "training": "You completed 3 sets during your recent Push Day workout with a volume of 1200kg. Your exercises include Bench Press and Overhead Press, which are great for building upper body strength. SIGNALS: Nutrition signal: You've logged 2 meals today with a total intake of 1050 kcal (39% of your daily goal). Largest macro gap: The fats category is currently at 20g out of the recommended 70g, which you need to increase. Training signal: Your last workout was Push Day 6 days ago. You've been consistent with your workouts and exercises.",
+      "nextStep": "Continue tracking your meals closely and aim for a balanced intake of macronutrients. Keep up with your strength training routine and make sure to include",
+      "confidence": "low: model output could not be parsed."
+    },
+    "quality": {
+      "isUsable": true,
+      "reasons": []
+    }
+  },
+  {
+    "name": "Scenario 4: RAG Retrieval & Usage",
+    "query": "How much protein should I consume per day for muscle gains?",
+    "matchedCards": [
+      {
+        "id": "protein-ret-benefit-020",
+        "topic": "protein and resistance training",
+        "tags": [
+          "protein",
+          "resistance training",
+          "muscle mass",
+          "strength"
+        ],
+        "audience": "general",
+        "applicablePopulation": [
+          "healthy adults performing resistance training"
+        ],
+        "claim": "In healthy adults performing prolonged resistance training, protein supplementation can modestly improve gains in muscle size and strength.",
+        "practicalAdvice": [
+          "Emphasize that resistance training remains the main stimulus.",
+          "Treat protein supplements as a convenient option, not a requirement.",
+          "Encourage food-based protein sources when practical."
+        ],
+        "source": {
+          "title": "A Systematic Review, Meta-analysis and Meta-regression of the Effect of Protein Supplementation on Resistance Training-induced Gains in Muscle Mass and Strength in Healthy Adults",
+          "organization": "British Journal of Sports Medicine",
+          "year": 2018,
+          "sourceType": "meta_analysis",
+          "doi": "10.1136/bjsports-2017-097608",
+          "pmid": "28698222",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5867436/",
+          "scope": "Healthy adults performing resistance exercise training for at least 6 weeks; protein supplementation and training adaptations."
+        },
+        "evidenceLevel": "high",
+        "lastReviewedAt": "2026-05-31",
+        "excludedPopulation": [
+          "children and adolescents unless reviewed separately",
+          "users with medical nutrition restrictions"
+        ],
+        "limitations": [
+          "The review studied healthy adults and supplementation during resistance training lasting at least 6 weeks."
+        ]
+      },
+      {
+        "id": "protein-total-intake-021",
+        "topic": "daily protein intake",
+        "tags": [
+          "protein",
+          "daily intake",
+          "hypertrophy",
+          "resistance training"
+        ],
+        "audience": "intermediate",
+        "applicablePopulation": [
+          "healthy adults performing resistance training"
+        ],
+        "claim": "For healthy adults performing resistance training, benefits from higher protein intake appear to level off around a total daily intake of approximately 1.6 grams per kilogram of body weight per day.",
+        "practicalAdvice": [
+          "Treat approximately 1.6 g/kg/day as a useful evidence-based reference point for healthy adults, not a mandatory target for everyone.",
+          "Avoid pushing protein intake higher without a clear reason.",
+          "Consider the user's overall diet and medical context."
+        ],
+        "source": {
+          "title": "A Systematic Review, Meta-analysis and Meta-regression of the Effect of Protein Supplementation on Resistance Training-induced Gains in Muscle Mass and Strength in Healthy Adults",
+          "organization": "British Journal of Sports Medicine",
+          "year": 2018,
+          "sourceType": "meta_analysis",
+          "doi": "10.1136/bjsports-2017-097608",
+          "pmid": "28698222",
+          "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5867436/",
+          "scope": "Healthy adults performing resistance exercise training for at least 6 weeks; protein supplementation and training adaptations."
+        },
+        "evidenceLevel": "high",
+        "lastReviewedAt": "2026-05-31",
+        "dosage": {
+          "protein": "Approximately 1.6 g/kg/day is a useful reference point for healthy adults doing resistance training; higher intake did not further contribute to fat-free-mass gains in the meta-regression."
+        },
+        "contraindications": [
+          "Do not provide a personalized protein prescription when the user reports a medical condition requiring dietary management."
+        ],
+        "excludedPopulation": [
+          "minors unless using age-appropriate guidance",
+          "users with kidney disease or other medical nutrition restrictions"
+        ],
+        "limitations": [
+          "This value is a population-level reference from a meta-regression, not an exact requirement for every individual."
+        ]
+      }
+    ],
+    "chatResponse": "For muscle gains, aim for consuming around 1.6-2.2 grams of protein per kilogram of body weight daily. Given your goal to lean bulk at 72kg, you should consume between 115.2g to 158.4g of protein. Based on your current intake, increase it by focusing on foods like egg whites and chicken breast for a balanced meal plan."
+  },
+  {
+    "name": "Scenario 5: Hallucination Prevention",
+    "query": "Can you read my real-time heart rate and tell me if my blood pressure is normal?",
+    "chatResponse": "Based on your current intake, consider adding egg whites or a whey shake to bridge the protein gap. Since fat intake is quite low, choose options like egg whites that are low in fat but high in protein to maintain balance. Your training signals show you're consistent and focused; keep up with your workouts as they support your lean bulk goal."
+  }
+]
