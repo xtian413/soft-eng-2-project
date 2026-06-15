@@ -94,7 +94,18 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [isDateSheetVisible, setIsDateSheetVisible] = useState(false);
 
-  const { totalVolumeKg, weekStreak, weightEntries, calendarDays, loading, error, refetch } = useProfileStats();
+  const {
+    volumeTodayKg,
+    volumeWeekKg,
+    volumeMonthKg,
+    volumeAllTimeKg,
+    weekStreak,
+    weightEntries,
+    calendarDays,
+    loading,
+    error,
+    refetch,
+  } = useProfileStats();
 
   // Calorie & TDEE Calculations for the Visualizer
   const genderVal = profile?.gender || 'male';
@@ -355,7 +366,10 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
 
       {/* Total Volume + Week Streak */}
       <StatsRow
-        totalVolumeKg={totalVolumeKg}
+        volumeTodayKg={volumeTodayKg}
+        volumeWeekKg={volumeWeekKg}
+        volumeMonthKg={volumeMonthKg}
+        volumeAllTimeKg={volumeAllTimeKg}
         weekStreak={weekStreak}
         loading={loading}
       />

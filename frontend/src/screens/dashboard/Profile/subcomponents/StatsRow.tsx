@@ -1,51 +1,116 @@
-import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { Dumbbell, Flame } from 'lucide-react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Modal } from 'react-native';
+import { Dumbbell, Flame, ChevronDown, Check } from 'lucide-react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '@/theme/colors';
 import { typography, fontWeight, radius, spacing } from '@/theme/typography';
 
 interface StatsRowProps {
-  totalVolumeKg: number;
+  volumeTodayKg: number;
+  volumeWeekKg: number;
+  volumeMonthKg: number;
+  volumeAllTimeKg: number;
   weekStreak: number;
   loading: boolean;
 }
 
-function formatVolume(kg: number): { value: string; suffix: string } {
-  if (kg >= 1000) {
-    return { value: (kg / 1000).toFixed(kg >= 10000 ? 0 : 1), suffix: 'k' };
-  }
-  return { value: String(Math.round(kg)), suffix: '' };
+const OPTIONS = [
+  { value: 'today', label: 'Today', cardLabel: "TODAY'S VOLUME" },
+  { value: 'week', label: 'This Week', cardLabel: 'WEEKLY VOLUME' },
+  { value: 'month', label: 'This Month', cardLabel: 'MONTHLY VOLUME' },
+  { value: 'all', label: 'All Time', cardLabel: 'TOTAL VOLUME' },
+] as const;
+
+type FilterType = typeof OPTIONS[number]['value'];
+
+function formatVolume(value: number): string {
+  return Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
-/** Renders Total Volume and Streak side by side */
-export function StatsRow({ totalVolumeKg, weekStreak, loading }: StatsRowProps) {
-  const vol = formatVolume(totalVolumeKg);
+/** Renders Total Volume (with period selector & unit toggle) and Streak side by side */
+export function StatsRow({
+  volumeTodayKg,
+  volumeWeekKg,
+  volumeMonthKg,
+  volumeAllTimeKg,
+  weekStreak,
+  loading,
+}: StatsRowProps) {
+  const [selectedFilter, setSelectedFilter] = useState<FilterType>('week');
+  const [isLbs, setIsLbs] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('gemi_profile_volume_unit').then((val) => {
+      if (val === 'lbs') {
+        setIsLbs(true);
+      }
+    });
+  }, []);
+
+  const changeUnit = async (toLbs: boolean) => {
+    setIsLbs(toLbs);
+    await AsyncStorage.setItem('gemi_profile_volume_unit', toLbs ? 'lbs' : 'kg');
+  };
+
+  const activeOption = OPTIONS.find((o) => o.value === selectedFilter) || OPTIONS[1];
+
+  const getVolumeValue = () => {
+    switch (selectedFilter) {
+      case 'today':
+        return volumeTodayKg;
+      case 'week':
+        return volumeWeekKg;
+      case 'month':
+        return volumeMonthKg;
+      case 'all':
+        return volumeAllTimeKg;
+    }
+  };
+
+  const rawVolumeKg = getVolumeValue();
+  const convertedVolume = isLbs ? rawVolumeKg * 2.20462 : rawVolumeKg;
+  const formattedVol = formatVolume(convertedVolume);
 
   return (
     <View style={styles.row}>
-      {/* Total Volume */}
+      {/* Total Volume Card */}
       <View style={styles.card}>
-        <View style={[styles.iconWrap, { backgroundColor: 'rgba(14,165,233,0.1)' }]}>
-          <Dumbbell size={18} color={Colors.primary} />
+        <View style={styles.cardHeader}>
+          <View style={[styles.iconWrap, { backgroundColor: 'rgba(14,165,233,0.1)' }]}>
+            <Dumbbell size={18} color={Colors.primary} />
+          </View>
+          
+          {/* Dropdown Filter Pill */}
+          <TouchableOpacity
+            style={styles.filterPill}
+            onPress={() => setShowDropdown(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.filterText}>{activeOption.label}</Text>
+            <ChevronDown size={11} color={Colors.outline} />
+          </TouchableOpacity>
         </View>
+
         {loading ? (
           <ActivityIndicator color={Colors.primary} style={styles.loader} />
         ) : (
           <View style={styles.valueRow}>
-            <Text style={styles.value}>{vol.value}</Text>
-            {!!vol.suffix && (
-              <Text style={styles.valueSuffix}>{vol.suffix}</Text>
-            )}
+            <Text style={styles.value}>{formattedVol}</Text>
+            <Text style={styles.unitSuffix}> {isLbs ? 'lbs' : 'kg'}</Text>
           </View>
         )}
-        <Text style={styles.label}>TOTAL VOLUME</Text>
+        <Text style={styles.label}>{activeOption.cardLabel}</Text>
       </View>
 
-      {/* Streak */}
+      {/* Streak Card */}
       <View style={styles.card}>
-        <View style={[styles.iconWrap, { backgroundColor: 'rgba(157,67,0,0.1)' }]}>
-          <Flame size={18} color={Colors.secondaryContainer} />
+        <View style={styles.cardHeader}>
+          <View style={[styles.iconWrap, { backgroundColor: 'rgba(157,67,0,0.1)' }]}>
+            <Flame size={18} color={Colors.secondaryContainer} />
+          </View>
         </View>
+
         {loading ? (
           <ActivityIndicator color={Colors.secondaryContainer} style={styles.loader} />
         ) : (
@@ -53,6 +118,63 @@ export function StatsRow({ totalVolumeKg, weekStreak, loading }: StatsRowProps) 
         )}
         <Text style={styles.label}>STREAK</Text>
       </View>
+
+      {/* Dropdown Modal Selector */}
+      <Modal
+        visible={showDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDropdown(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDropdown(false)}
+        >
+          <View style={styles.menuContainer}>
+            <Text style={styles.menuTitle}>Select Volume Period</Text>
+            {OPTIONS.map((opt) => {
+              const isSelected = opt.value === selectedFilter;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.menuItem, isSelected && styles.menuItemActive]}
+                  onPress={() => {
+                    setSelectedFilter(opt.value);
+                    setShowDropdown(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.menuItemText, isSelected && styles.menuItemTextActive]}>
+                    {opt.label}
+                  </Text>
+                  {isSelected && <Check size={14} color={Colors.primary} />}
+                </TouchableOpacity>
+              );
+            })}
+
+            <View style={styles.menuDivider} />
+
+            <Text style={styles.menuTitle}>Weight Unit</Text>
+            <View style={styles.unitToggleRow}>
+              <TouchableOpacity
+                style={[styles.unitButton, !isLbs && styles.unitButtonActive]}
+                onPress={() => changeUnit(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.unitButtonText, !isLbs && styles.unitButtonTextActive]}>KG</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.unitButton, isLbs && styles.unitButtonActive]}
+                onPress={() => changeUnit(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.unitButtonText, isLbs && styles.unitButtonTextActive]}>LBS</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -76,13 +198,35 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
   iconWrap: {
     width: 32,
     height: 32,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+  },
+  filterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(190,200,210,0.1)',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(190,200,210,0.15)',
+    gap: 4,
+  },
+  filterText: {
+    fontSize: 10,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    letterSpacing: 0.5,
   },
   loader: {
     marginVertical: spacing.sm,
@@ -97,11 +241,12 @@ const styles = StyleSheet.create({
     color: Colors.onSurface,
     lineHeight: typography.xxxl * 1.1,
   },
-  valueSuffix: {
-    fontSize: typography.xl,
-    color: Colors.outlineVariant,
-    fontWeight: fontWeight.bold,
+  unitSuffix: {
+    fontSize: typography.sm,
+    color: Colors.outline,
+    fontWeight: fontWeight.medium,
     marginBottom: 4,
+    marginLeft: 2,
   },
   label: {
     fontSize: typography.xs,
@@ -109,5 +254,88 @@ const styles = StyleSheet.create({
     color: Colors.outline,
     letterSpacing: 0.8,
     marginTop: spacing.xs,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuContainer: {
+    width: 240,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(190,200,210,0.15)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+  menuTitle: {
+    fontSize: typography.xs,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.md,
+  },
+  menuItemActive: {
+    backgroundColor: 'rgba(14,165,233,0.06)',
+  },
+  menuItemText: {
+    fontSize: typography.sm,
+    color: Colors.onSurface,
+    fontWeight: fontWeight.medium,
+  },
+  menuItemTextActive: {
+    color: Colors.primary,
+    fontWeight: fontWeight.bold,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: 'rgba(190,200,210,0.15)',
+    marginVertical: spacing.md,
+  },
+  unitToggleRow: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(190,200,210,0.1)',
+    borderRadius: radius.md,
+    padding: 2,
+    marginTop: spacing.xs,
+  },
+  unitButton: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.sm,
+  },
+  unitButtonActive: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  unitButtonText: {
+    fontSize: 11,
+    fontWeight: fontWeight.bold,
+    color: Colors.outline,
+  },
+  unitButtonTextActive: {
+    color: Colors.primary,
   },
 });

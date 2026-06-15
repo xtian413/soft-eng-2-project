@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
-import { fetchWorkouts, type Workout } from '@/api/workoutApi';
+import { fetchWorkouts } from '@/api/workoutApi';
 import { fetchProgressEntries, type ProgressEntry } from '@/api/progressApi';
 import { supabase } from '@/lib/supabase';
 import { retryPendingProfileSync } from '@/local/profileSync';
@@ -13,7 +13,11 @@ import {
   upsertLocalProfile,
   getProfileByUser,
 } from '@/local/repositories/profilesRepository';
-import type { LocalBodyProgress } from '@/local/schema';
+import {
+  getWorkoutsByUser,
+  upsertRemoteWorkoutForUser,
+} from '@/local/repositories/workoutsRepository';
+import type { LocalBodyProgress, LocalWorkoutWithSets } from '@/local/schema';
 import { useAuthStore } from '@/store/authStore';
 import {
   startOfWeek, endOfWeek, isToday, parseISO, format
@@ -31,7 +35,10 @@ export interface CalendarDay {
 }
 
 export interface ProfileStats {
-  totalVolumeKg: number;
+  volumeTodayKg: number;
+  volumeWeekKg: number;
+  volumeMonthKg: number;
+  volumeAllTimeKg: number;
   weekStreak: number;
   weightEntries: ProgressEntry[];
   calendarDays: CalendarDay[];
@@ -69,7 +76,7 @@ function classifyWorkout(name: string): string {
 }
 
 /** Calculates consecutive week streak (Mon–Sun) from workout history */
-function calcStreak(workouts: Workout[]): number {
+function calcStreak(workouts: LocalWorkoutWithSets[]): number {
   if (workouts.length === 0) return 0;
 
   const weeksWithWorkout = new Set(
@@ -94,11 +101,11 @@ function calcStreak(workouts: Workout[]): number {
 }
 
 /** Builds 7 CalendarDay entries for the current week (Sun–Sat) */
-function buildCalendar(workouts: Workout[]): CalendarDay[] {
+function buildCalendar(workouts: LocalWorkoutWithSets[]): CalendarDay[] {
   const today = new Date();
   const weekStart = startOfWeek(today, { weekStartsOn: 0 });
 
-  const workoutMap = new Map<string, Workout>();
+  const workoutMap = new Map<string, LocalWorkoutWithSets>();
   workouts.forEach(w => {
     const key = w.performed_at.split('T')[0];
     workoutMap.set(key, w);
@@ -124,25 +131,59 @@ function buildCalendar(workouts: Workout[]): CalendarDay[] {
   });
 }
 
-/** Fetches total volume for current user via the user_workout_volume view */
-async function fetchTotalVolume(): Promise<number> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return 0;
+function calculateVolumes(workouts: LocalWorkoutWithSets[]) {
+  const now = new Date();
+  const todayStr = format(now, 'yyyy-MM-dd');
+  const curWeekStart = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  const curMonthStr = format(now, 'yyyy-MM');
 
-  const { data, error } = await supabase
-    .from('user_workout_volume')
-    .select('total_volume_kg')
-    .eq('user_id', user.id)
-    .maybeSingle();
+  let today = 0;
+  let week = 0;
+  let month = 0;
+  let allTime = 0;
 
-  if (error || !data) return 0;
-  return Number(data.total_volume_kg) ?? 0;
+  workouts.forEach((w) => {
+    const wDate = parseISO(w.performed_at);
+    const wDateStr = w.performed_at.split('T')[0];
+    const wWeekStart = format(startOfWeek(wDate, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const wMonthStr = format(wDate, 'yyyy-MM');
+
+    let wVolume = 0;
+    if (w.sets) {
+      w.sets.forEach((set) => {
+        if (typeof set.reps === 'number' && typeof set.weight_kg === 'number') {
+          wVolume += set.reps * set.weight_kg;
+        }
+      });
+    }
+
+    allTime += wVolume;
+    if (wDateStr === todayStr) {
+      today += wVolume;
+    }
+    if (wWeekStart === curWeekStart) {
+      week += wVolume;
+    }
+    if (wMonthStr === curMonthStr) {
+      month += wVolume;
+    }
+  });
+
+  return {
+    today: Math.round(today),
+    week: Math.round(week),
+    month: Math.round(month),
+    allTime: Math.round(allTime),
+  };
 }
 
 /** Main hook — fetches all profile stats in parallel */
 export function useProfileStats(): ProfileStats {
   const userId = useAuthStore((state) => state.user?.id ?? null);
-  const [totalVolumeKg, setTotalVolumeKg] = useState(0);
+  const [volumeTodayKg, setVolumeTodayKg] = useState(0);
+  const [volumeWeekKg, setVolumeWeekKg] = useState(0);
+  const [volumeMonthKg, setVolumeMonthKg] = useState(0);
+  const [volumeAllTimeKg, setVolumeAllTimeKg] = useState(0);
   const [weekStreak, setWeekStreak] = useState(0);
   const [weightEntries, setWeightEntries] = useState<ProgressEntry[]>([]);
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
@@ -213,15 +254,35 @@ export function useProfileStats(): ProfileStats {
       }
 
       try {
-        const [workouts, volume] = await Promise.all([
-          fetchWorkouts(),
-          fetchTotalVolume(),
-        ]);
-
+        const remoteWorkouts = await fetchWorkouts();
         if (cancelled) return;
 
-        // Total volume
-        setTotalVolumeKg(volume);
+        if (userId) {
+          // Sync remote workouts (which now include sets) to local SQLite database
+          await Promise.all(
+            remoteWorkouts.map((rw) =>
+              upsertRemoteWorkoutForUser(userId, {
+                id: rw.id,
+                name: rw.name,
+                notes: rw.notes,
+                performed_at: rw.performed_at,
+                created_at: rw.created_at,
+                workout_sets: rw.workout_sets,
+              })
+            )
+          );
+        }
+
+        // Fetch all local workouts with their sets from local SQLite DB
+        const workouts = userId ? await getWorkoutsByUser(userId) : [];
+        if (cancelled) return;
+
+        // Calculate volumes client-side
+        const volumes = calculateVolumes(workouts);
+        setVolumeTodayKg(volumes.today);
+        setVolumeWeekKg(volumes.week);
+        setVolumeMonthKg(volumes.month);
+        setVolumeAllTimeKg(volumes.allTime);
 
         // Week streak
         setWeekStreak(calcStreak(workouts));
@@ -308,5 +369,16 @@ export function useProfileStats(): ProfileStats {
     return () => subscription.remove();
   }, [retryAndRefreshLocalBodyProgress, userId]);
 
-  return { totalVolumeKg, weekStreak, weightEntries, calendarDays, loading, error, refetch };
+  return {
+    volumeTodayKg,
+    volumeWeekKg,
+    volumeMonthKg,
+    volumeAllTimeKg,
+    weekStreak,
+    weightEntries,
+    calendarDays,
+    loading,
+    error,
+    refetch,
+  };
 }

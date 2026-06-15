@@ -41,7 +41,7 @@ export interface WorkoutCreateInput {
 
 /** Fetches workouts from the backend API. */
 export async function fetchWorkouts() {
-  const response = await apiClient.get<{ data: Workout[] }>('/api/workouts');
+  const response = await apiClient.get<{ data: WorkoutWithSets[] }>('/api/workouts');
   return response.data.data;
 }
 

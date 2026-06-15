@@ -24,7 +24,7 @@ export interface WorkoutUpdateInput {
 export async function getWorkoutsForUser(userId: string) {
   const { data, error } = await supabaseAdmin
     .from('workouts')
-    .select('*')
+    .select('*, workout_sets(*)')
     .eq('user_id', userId)
     .order('performed_at', { ascending: false });
 
