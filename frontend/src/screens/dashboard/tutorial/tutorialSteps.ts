@@ -19,7 +19,7 @@ export interface TutorialStep {
 export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'welcome',
-    title: 'Welcome to AI Insight',
+    title: 'Welcome to Gemi',
     description: 'Let\'s take a quick tour of the main features to get you started!',
     tabToHighlight: null,
     tooltipText:

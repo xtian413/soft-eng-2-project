@@ -266,8 +266,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderRadius: radius.lg,
     padding: spacing.lg,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.primary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
