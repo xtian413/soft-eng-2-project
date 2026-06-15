@@ -9,6 +9,7 @@ import { Dumbbell, TrendingDown, Activity, LogOut, HelpCircle } from 'lucide-rea
 import { useProfileStats } from './hooks/useProfileStats';
 import { useTutorial } from '@/context/TutorialContext';
 import { StatsRow } from './subcomponents/StatsRow';
+import { MuscleGroupVolumeCard } from './subcomponents/MuscleGroupVolumeCard';
 import { WeightTrendCard } from './subcomponents/WeightTrendCard';
 import { TrainingCalendar } from './subcomponents/TrainingCalendar';
 import { fetchWorkouts, type Workout } from '@/api/workoutApi';
@@ -86,6 +87,7 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
   const [editFatsPct, setEditFatsPct] = useState(30);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [showMuscleDetails, setShowMuscleDetails] = useState(false);
   const [historyWorkouts, setHistoryWorkouts] = useState<Workout[]>([]);
   const [historyDietLogs, setHistoryDietLogs] = useState<DietLog[]>([]);
   const [historyDailyLogs, setHistoryDailyLogs] = useState<LocalDailyLog[]>([]);
@@ -95,13 +97,14 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
   const [isDateSheetVisible, setIsDateSheetVisible] = useState(false);
 
   const {
-    volumeTodayKg,
-    volumeWeekKg,
-    volumeMonthKg,
-    volumeAllTimeKg,
+    setsToday,
+    setsWeek,
+    setsMonth,
+    setsAllTime,
     weekStreak,
     weightEntries,
     calendarDays,
+    muscleGroupWeeklySets,
     loading,
     error,
     refetch,
@@ -364,15 +367,22 @@ export function ProfileTab({ fullName, email, goal, heightCm, weightKg, targets,
         </View>
       )}
 
-      {/* Total Volume + Week Streak */}
+      {/* Total Sets + Week Streak */}
       <StatsRow
-        volumeTodayKg={volumeTodayKg}
-        volumeWeekKg={volumeWeekKg}
-        volumeMonthKg={volumeMonthKg}
-        volumeAllTimeKg={volumeAllTimeKg}
+        setsToday={setsToday}
+        setsWeek={setsWeek}
+        setsMonth={setsMonth}
+        setsAllTime={setsAllTime}
         weekStreak={weekStreak}
         loading={loading}
+        onToggleDetails={() => setShowMuscleDetails((prev) => !prev)}
+        showDetails={showMuscleDetails}
       />
+
+      {/* Weekly Muscle Group Volume Breakdown — expandable */}
+      {showMuscleDetails && (
+        <MuscleGroupVolumeCard muscleGroupWeeklySets={muscleGroupWeeklySets} />
+      )}
 
       {/* Current Weight Card */}
       <View style={styles.currentWeightCard}>

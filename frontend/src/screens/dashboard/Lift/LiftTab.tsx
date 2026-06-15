@@ -32,6 +32,7 @@ import { Image } from 'expo-image';
 import { createWorkout, fetchWorkoutById, type WorkoutSet } from '@/api/workoutApi';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
+import { useWeightUnitStore } from '@/store/weightUnitStore';
 import type { CompletedWorkoutInput, LocalRoutineWithExercises, LocalWorkoutWithSets } from '@/local/schema';
 import {
   completedWorkoutToRemoteCreateInput,
@@ -145,7 +146,7 @@ export function LiftTab({ triggerToast }: LiftTabProps) {
   useEffect(() => {
     isRunningRef.current = isRunning;
   }, [isRunning]);
-  const [isLbs, setIsLbs] = useState(true);
+  const { isLbs, setIsLbs } = useWeightUnitStore();
 
   // Routine state
   const [routines, setRoutines] = useState<Routine[]>([]);

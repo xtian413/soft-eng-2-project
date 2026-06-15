@@ -600,24 +600,69 @@ export async function upsertRemoteWorkoutForUser(
       }
 
       const now = new Date().toISOString();
-      await db.runAsync(
-        `UPDATE ${LOCAL_TABLES.workouts}
-         SET name = ?,
-             notes = ?,
-             performed_at = ?,
-             updated_at = ?,
-             sync_status = 'synced',
-             last_synced_at = ?
-         WHERE id = ? AND user_id = ? AND remote_id = ? AND deleted_at IS NULL AND sync_status = 'synced'`,
-        remoteWorkout.name.trim(),
-        normalizeNullableText(remoteWorkout.notes),
-        remoteWorkout.performed_at,
-        now,
-        now,
-        existing.id,
-        userId,
-        remoteWorkout.id
-      );
+      await db.withTransactionAsync(async () => {
+        await db.runAsync(
+          `UPDATE ${LOCAL_TABLES.workouts}
+           SET name = ?,
+               notes = ?,
+               performed_at = ?,
+               updated_at = ?,
+               sync_status = 'synced',
+               last_synced_at = ?
+           WHERE id = ? AND user_id = ? AND remote_id = ? AND deleted_at IS NULL AND sync_status = 'synced'`,
+          remoteWorkout.name.trim(),
+          normalizeNullableText(remoteWorkout.notes),
+          remoteWorkout.performed_at,
+          now,
+          now,
+          existing.id,
+          userId,
+          remoteWorkout.id
+        );
+
+        // Re-sync sets: insert any missing sets from the remote payload
+        const existingSets = await getSetsForWorkout(userId, existing.id);
+        const existingRemoteIds = new Set(existingSets.map(s => s.remote_id).filter(Boolean));
+        for (const set of remoteWorkout.workout_sets ?? []) {
+          if (set.id && existingRemoteIds.has(set.id)) continue;
+          await db.runAsync(
+            `INSERT INTO ${LOCAL_TABLES.workoutSets} (
+              id,
+              user_id,
+              remote_id,
+              workout_id,
+              exercise_name,
+              muscle_group,
+              set_number,
+              reps,
+              weight_kg,
+              duration_seconds,
+              rir,
+              est_1rm,
+              created_at,
+              updated_at,
+              deleted_at,
+              sync_status,
+              last_synced_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?)`,
+            createLocalUuid(),
+            userId,
+            normalizeNullableText(set.id),
+            existing.id,
+            set.exercise_name.trim(),
+            normalizeNullableText(set.muscle_group),
+            Math.max(1, Math.trunc(set.set_number)),
+            normalizeNullableInteger(set.reps),
+            normalizeNullableNumber(set.weight_kg),
+            normalizeNullableInteger(set.duration_seconds),
+            normalizeNullableInteger(set.rir),
+            normalizeNullableNumber(set.est_1rm),
+            now,
+            now,
+            now
+          );
+        }
+      });
 
       const updated = await getWorkoutWithSetsByUserAndId(userId, existing.id);
       if (!updated) throw new Error('Updated remote workout could not be read back.');

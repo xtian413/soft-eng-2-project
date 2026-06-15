@@ -3,6 +3,7 @@ import { retrieveEvidence } from '@/ai/rag/retrieveEvidence';
 import type { EvidenceCard } from '@/ai/rag/evidenceTypes';
 import type { RoutedCoachIntent } from '@/ai/router/intentTypes';
 import type { WorkoutLog } from '@/ai/prompts';
+import { routeCoachIntent } from '@/ai/router/intentRouter';
 import type { LocalDailyLog } from '@/local/schema';
 
 export type FitnessInsightInput = {
@@ -345,16 +346,18 @@ function buildFactBlock(input: FitnessInsightInput, mode: 'full' | 'compact' = '
   ].join('\n');
 }
 
-function buildEvidenceBlock(input: FitnessInsightInput) {
+function buildEvidenceBlock(input: FitnessInsightInput, chatQuestion?: string) {
   const facts = buildFactBlock(input);
   const compactFacts = buildFactBlock(input, 'compact');
   const signals = buildRankedSignals(input);
+  const query = chatQuestion ? [chatQuestion, signals].join('\n') : ['personal nutrition training insight', signals].join('\n');
+  const route = chatQuestion ? routeCoachIntent(chatQuestion) : INSIGHT_ROUTE;
   const evidenceCards = retrieveEvidence({
-    query: ['personal nutrition training insight', signals].join('\n'),
-    route: INSIGHT_ROUTE,
+    query,
+    route,
     userGoal: input.goal,
     recentContext: signals,
-    limit: 1,
+    limit: chatQuestion ? 2 : 1,
   });
 
   return {
@@ -370,20 +373,20 @@ const INSIGHT_SYSTEM_PROMPT = [
   'Always address the user in the second person (use "you", "your" — never use their name or say "he/she/they").',
   'Use DATA and SIGNALS first. RAG is only a small hint. Do not invent unlogged meals, workouts, sleep, or body weight.',
   'If SIGNALS includes a recovery-performance link or sleep/hydration signal, mention it in TRAINING or SUMMARY using the specific numbers given.',
-  'Open SUMMARY with brief positive acknowledgment of what the user logged (e.g. "Great effort logging..." or "You are on track with..."). Then include at least one key number from DATA.',
+  'If the user logged data today, open SUMMARY with brief positive acknowledgment. If they logged nothing today, gently encourage them to start tracking. Then include at least one key number from DATA.',
   'NUTRITION and TRAINING should each include at least one specific number. NEXT should be one concrete, friendly action.',
   'Your tone should be warm, motivating, and personal — like a real coach talking to someone they care about.',
   'Return exactly: TITLE=... SUMMARY=... NUTRITION=... TRAINING=... NEXT=... CONFIDENCE=...',
 ].join(' ');
 
 export function buildFitnessInsightPrompt(input: FitnessInsightInput) {
-  const { compactFacts, signals, evidence } = buildEvidenceBlock(input);
+  const { facts, signals, evidence } = buildEvidenceBlock(input);
 
   return buildChatMlPrompt(
     INSIGHT_SYSTEM_PROMPT,
     [
       'DATA:',
-      compactFacts,
+      facts,
       'SIGNALS:',
       signals,
       'RAG:',
@@ -398,13 +401,13 @@ export function buildFitnessInsightRepairPrompt(
   previousOutput: string,
   quality: FitnessInsightQuality,
 ) {
-  const { compactFacts, signals, evidence } = buildEvidenceBlock(input);
+  const { facts, signals, evidence } = buildEvidenceBlock(input);
 
   return buildChatMlPrompt(
     INSIGHT_SYSTEM_PROMPT,
     [
       'DATA:',
-      compactFacts,
+      facts,
       'SIGNALS:',
       signals,
       'RAG:',
@@ -424,7 +427,7 @@ const INSIGHT_CHAT_SYSTEM_PROMPT = [
   'Answer only from DATA, CURRENT_INSIGHT, and RAG. If data is missing, say so kindly.',
   'Do not invent medical diagnoses, body changes, or unlogged sessions.',
   'Keep your answer under 4 short, actionable sentences.',
-  'When suggesting food to close a protein or carb gap, check the remaining fat budget first — suggest low-fat options (egg whites, chicken breast, whey shake) when remaining fat is under 20g.',
+  'When discussing nutrition, focus on macronutrient targets (protein, carbs, fats) and general food categories rather than prescribing specific meals or recipes, unless the user explicitly asks for meal ideas.',
   'Start your reply directly with the answer. Never begin with a label like DATA:, SIGNALS:, CURRENT_INSIGHT:, or any uppercase prefix followed by a colon.',
 ].join(' ');
 
@@ -434,7 +437,7 @@ export function buildFitnessInsightChatPrompt(
   history: FitnessInsightChatMessage[],
   question: string,
 ) {
-  const { compactFacts, signals, evidence } = buildEvidenceBlock(input);
+  const { facts, signals, evidence } = buildEvidenceBlock(input, question);
   const recentHistory = history.slice(-4).map((message) => {
     const label = message.role === 'user' ? 'USER' : 'GEMI';
     return `${label}: ${message.content}`;
@@ -444,7 +447,7 @@ export function buildFitnessInsightChatPrompt(
     INSIGHT_CHAT_SYSTEM_PROMPT,
     [
       'DATA:',
-      compactFacts,
+      facts,
       'SIGNALS:',
       signals,
       'CURRENT_INSIGHT:',

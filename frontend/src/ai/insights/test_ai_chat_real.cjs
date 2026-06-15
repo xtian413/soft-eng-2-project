@@ -62,7 +62,7 @@ async function queryOllama(prompt) {
         options: {
           temperature: 0.4,
           num_predict: 256,
-          num_ctx: 2048,
+          num_ctx: 4096,
         },
       }),
     });
