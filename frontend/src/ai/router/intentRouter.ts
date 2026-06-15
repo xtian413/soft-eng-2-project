@@ -86,6 +86,11 @@ const CLEARLY_OUT_OF_SCOPE_PATTERNS = [
   /\b(recipe for|write an essay|translate|summari[sz]e this article)\b/,
 ];
 
+const MEDICAL_METRIC_PATTERNS = [
+  /\b(heart rate|blood pressure|oxygen saturation|spo2|pulse rate|ecg|ekg|arrhythmia|bpm)\b/,
+  /\b(read my|check my|measure my)\b.*\b(heart|pulse|blood|oxygen)\b/,
+];
+
 function normalizeMessage(message: string) {
   return message
     .trim()
@@ -192,6 +197,8 @@ export function routeCoachIntent(userMessage: string): RoutedCoachIntent {
     intent = 'general_coaching';
   } else if (matchesAny(normalized, WORKOUT_RECOMMENDATION_PATTERNS)) {
     intent = 'workout_recommendation';
+  } else if (matchesAny(normalized, MEDICAL_METRIC_PATTERNS) && !hasFitnessDomain(normalized)) {
+    intent = 'out_of_scope';
   } else if (matchesAny(normalized, CLEARLY_OUT_OF_SCOPE_PATTERNS) && !hasFitnessDomain(normalized)) {
     intent = 'out_of_scope';
   }

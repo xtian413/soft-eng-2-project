@@ -131,12 +131,17 @@ function buildMealSummary(foodLogs: FoodLogEntry[], limit = 3) {
     return 'No meals logged today.';
   }
 
-  return foodLogs
-    .slice(-limit)
-    .map((item) =>
-      `${item.name}: ${roundNumber(item.calories)} kcal, ${roundNumber(item.protein)}g protein, ${roundNumber(item.carbs)}g carbs, ${roundNumber(item.fat)}g fat`,
-    )
-    .join('\n');
+  const totals = sumFood(foodLogs);
+  const totalsLine = `Daily totals: ${roundNumber(totals.calories)} kcal, ${roundNumber(totals.protein)}g protein, ${roundNumber(totals.carbs)}g carbs, ${roundNumber(totals.fats)}g fat.`;
+
+  return [
+    totalsLine,
+    ...foodLogs
+      .slice(-limit)
+      .map((item) =>
+        `${item.name}: ${roundNumber(item.calories)} kcal, ${roundNumber(item.protein)}g protein, ${roundNumber(item.carbs)}g carbs, ${roundNumber(item.fat)}g fat`,
+      ),
+  ].join('\n');
 }
 
 function buildRecoverySignals(
@@ -365,8 +370,9 @@ const INSIGHT_SYSTEM_PROMPT = [
   'Always address the user in the second person (use "you", "your" — never use their name or say "he/she/they").',
   'Use DATA and SIGNALS first. RAG is only a small hint. Do not invent unlogged meals, workouts, sleep, or body weight.',
   'If SIGNALS includes a recovery-performance link or sleep/hydration signal, mention it in TRAINING or SUMMARY using the specific numbers given.',
-  'SUMMARY, NUTRITION, TRAINING, and NEXT must each include at least one number from DATA or SIGNALS.',
-  'Your tone should be motivating and supportive. Celebrate logged progress.',
+  'Open SUMMARY with brief positive acknowledgment of what the user logged (e.g. "Great effort logging..." or "You are on track with..."). Then include at least one key number from DATA.',
+  'NUTRITION and TRAINING should each include at least one specific number. NEXT should be one concrete, friendly action.',
+  'Your tone should be warm, motivating, and personal — like a real coach talking to someone they care about.',
   'Return exactly: TITLE=... SUMMARY=... NUTRITION=... TRAINING=... NEXT=... CONFIDENCE=...',
 ].join(' ');
 
@@ -418,8 +424,8 @@ const INSIGHT_CHAT_SYSTEM_PROMPT = [
   'Answer only from DATA, CURRENT_INSIGHT, and RAG. If data is missing, say so kindly.',
   'Do not invent medical diagnoses, body changes, or unlogged sessions.',
   'Keep your answer under 4 short, actionable sentences.',
-  'Do not include any headers, labels (like "DATA:", "CURRENT_INSIGHT:"), or markdown in your response.',
   'When suggesting food to close a protein or carb gap, check the remaining fat budget first — suggest low-fat options (egg whites, chicken breast, whey shake) when remaining fat is under 20g.',
+  'Start your reply directly with the answer. Never begin with a label like DATA:, SIGNALS:, CURRENT_INSIGHT:, or any uppercase prefix followed by a colon.',
 ].join(' ');
 
 export function buildFitnessInsightChatPrompt(
