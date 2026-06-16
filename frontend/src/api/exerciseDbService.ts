@@ -1,7 +1,5 @@
-import { Asset } from 'expo-asset';
 import { LOCAL_GIFS } from './localGifs';
-
-const EXERCISE_CSV = require('../../assets/exercises.csv');
+import EXERCISES_JSON from './exercises.json';
 
 export interface Muscle {
   id: number;
@@ -263,70 +261,6 @@ const buildAliasIndex = () => {
 
 const ALIAS_INDEX = buildAliasIndex();
 
-const parseCsv = (text: string): string[][] => {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = '';
-  let inQuotes = false;
-
-  const source = text.replace(/^\uFEFF/, '');
-
-  for (let i = 0; i < source.length; i += 1) {
-    const char = source[i];
-
-    if (inQuotes) {
-      if (char === '"') {
-        if (source[i + 1] === '"') {
-          field += '"';
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += char;
-      }
-      continue;
-    }
-
-    if (char === '"') {
-      inQuotes = true;
-      continue;
-    }
-
-    if (char === ',') {
-      row.push(field);
-      field = '';
-      continue;
-    }
-
-    if (char === '\n') {
-      row.push(field);
-      rows.push(row);
-      row = [];
-      field = '';
-      continue;
-    }
-
-    if (char === '\r') continue;
-    field += char;
-  }
-
-  if (field.length > 0 || row.length > 0) {
-    row.push(field);
-    rows.push(row);
-  }
-
-  return rows;
-};
-
-const getArrayFromColumns = (record: Record<string, string>, prefix: string) => {
-  return Object.keys(record)
-    .filter((key) => key.startsWith(prefix))
-    .sort()
-    .map((key) => record[key])
-    .filter((value) => value && value.trim().length > 0);
-};
-
 const resolveMuscleIds = (values: string[]) => {
   const ids: number[] = [];
 
@@ -348,45 +282,26 @@ class ExerciseDbService {
   private async loadExercises(): Promise<ExerciseDbExercise[]> {
     if (this.exercisesCache) return this.exercisesCache;
 
-    const asset = Asset.fromModule(EXERCISE_CSV);
-    await asset.downloadAsync();
-    const response = await fetch(asset.uri);
-    const csvText = await response.text();
+    const exercises = (EXERCISES_JSON as any[]).map((item) => {
+      const secondaryMuscles = item.secondaryMuscles || [];
+      const muscleSignals = [item.target, item.bodyPart, ...secondaryMuscles].filter(Boolean);
+      const primaryMuscleIds = resolveMuscleIds([item.target, item.bodyPart].filter(Boolean));
+      const secondaryMuscleIds = resolveMuscleIds(secondaryMuscles);
+      const combined = resolveMuscleIds(muscleSignals);
 
-    const rows = parseCsv(csvText);
-    const [header, ...dataRows] = rows;
-    if (!header) return [];
-
-    const normalizedHeader = header.map((item) => item.trim());
-
-    const exercises = dataRows
-      .map((row) => {
-        const record: Record<string, string> = {};
-        normalizedHeader.forEach((key, index) => {
-          record[key] = row[index] ?? '';
-        });
-
-        const secondaryMuscles = getArrayFromColumns(record, 'secondaryMuscles/');
-        const instructions = getArrayFromColumns(record, 'instructions/');
-        const muscleSignals = [record.target, record.bodyPart, ...secondaryMuscles].filter(Boolean);
-        const primaryMuscleIds = resolveMuscleIds([record.target, record.bodyPart].filter(Boolean));
-        const secondaryMuscleIds = resolveMuscleIds(secondaryMuscles);
-        const combined = resolveMuscleIds(muscleSignals);
-
-        return {
-          id: record.id?.trim() || record.name?.trim() || String(Math.random()),
-          name: record.name?.trim() || 'Unnamed exercise',
-          bodyPart: record.bodyPart?.trim() || '',
-          target: record.target?.trim() || '',
-          equipment: record.equipment?.trim() || '',
-          gifUrl: record.gifUrl?.trim() || '',
-          secondaryMuscles,
-          instructions,
-          primaryMuscleIds: primaryMuscleIds.length > 0 ? primaryMuscleIds : combined,
-          secondaryMuscleIds,
-        } as ExerciseDbExercise;
-      })
-      .filter((exercise) => exercise.name.length > 0);
+      return {
+        id: item.id || 'Unnamed id',
+        name: item.name || 'Unnamed exercise',
+        bodyPart: item.bodyPart || '',
+        target: item.target || '',
+        equipment: item.equipment || '',
+        gifUrl: item.gifUrl || '',
+        secondaryMuscles,
+        instructions: item.instructions || [],
+        primaryMuscleIds: primaryMuscleIds.length > 0 ? primaryMuscleIds : combined,
+        secondaryMuscleIds,
+      } as ExerciseDbExercise;
+    });
 
     this.exercisesCache = exercises;
     return exercises;
