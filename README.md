@@ -1,6 +1,21 @@
 # Gemi
 
-Gemi is a fitness app for tracking workouts, meals, body progress, and AI-generated insights.
+## About the Project
+
+Gemi is a fitness and wellness mobile application designed to help users manage their daily health and training activities in one place. Users can record workouts, track meals and nutrition, monitor body weight and progress, and review their history over time.
+
+The app brings these records together to help users understand their habits and make more informed decisions about their fitness goals. It also provides AI-generated insights based on the user's workout, diet, and progress data. The AI service is designed to run locally through Ollama so that personal fitness data does not need to be sent to a third-party AI provider.
+
+Gemi uses a mobile frontend for the user experience, an Express API for backend functionality, and Supabase for authentication and data storage. The project is intended to provide a simple, organized way to maintain fitness records and follow progress consistently.
+
+## Features
+
+- Track workouts and exercise progress
+- Log meals and nutrition information
+- Record body weight and progress history
+- View fitness data and trends
+- Generate personalized fitness insights
+- Use the app on Android, iOS, or the web through Expo
 
 ## Stack
 
